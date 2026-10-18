@@ -1,0 +1,58 @@
+{
+  "_comment": "Каноническая нормализация лабораторных единиц. Ключ = код LOINC. canonical_value = value * conversions[unit]. Перевод задаётся ПО ПОКАЗАТЕЛЮ (масса<->моль требует своего коэффициента). Добавление показателя = одна запись.",
+  "8302-2": {
+    "name": "Гемоглобин",
+    "canonical_unit": "g/L",
+    "conversions": { "g/L": 1.0, "g/dL": 10.0 }
+  },
+  "6690-2": {
+    "name": "Лейкоциты",
+    "canonical_unit": "10*9/L",
+    "conversions": { "10*9/L": 1.0, "10*3/uL": 1.0, "/uL": 0.001 }
+  },
+  "731-0": {
+    "name": "Абсолютный лимфоцитоз",
+    "canonical_unit": "10*9/L",
+    "conversions": { "10*9/L": 1.0, "10*3/uL": 1.0, "/uL": 0.001 }
+  },
+  "751-8": {
+    "name": "Нейтрофилы (абс.)",
+    "canonical_unit": "10*9/L",
+    "conversions": { "10*9/L": 1.0, "10*3/uL": 1.0, "/uL": 0.001 }
+  },
+  "777-3": {
+    "name": "Тромбоциты",
+    "canonical_unit": "10*9/L",
+    "conversions": { "10*9/L": 1.0, "10*3/uL": 1.0, "/uL": 0.001 }
+  },
+  "2532-0": {
+    "name": "ЛДГ",
+    "canonical_unit": "U/L",
+    "conversions": { "U/L": 1.0 }
+  },
+  "1952-1": {
+    "name": "Бета-2-микроглобулин",
+    "canonical_unit": "mg/L",
+    "conversions": { "mg/L": 1.0, "ug/mL": 1.0 }
+  },
+  "2345-7": {
+    "name": "Глюкоза",
+    "canonical_unit": "mmol/L",
+    "conversions": { "mmol/L": 1.0, "mg/dL": 0.0555 }
+  },
+  "2160-0": {
+    "name": "Креатинин",
+    "canonical_unit": "umol/L",
+    "conversions": { "umol/L": 1.0, "mg/dL": 88.4 }
+  },
+  "1975-2": {
+    "name": "Билирубин общий",
+    "canonical_unit": "umol/L",
+    "conversions": { "umol/L": 1.0, "mg/dL": 17.1 }
+  },
+  "3084-1": {
+    "name": "Мочевая кислота",
+    "canonical_unit": "umol/L",
+    "conversions": { "umol/L": 1.0, "mg/dL": 59.48 }
+  }
+}

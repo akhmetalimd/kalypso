@@ -1,0 +1,90 @@
+{
+  "_comment": "Дерево WHO-HAEM5 = классификация И навигация. Добавить нозологию = добавить/активировать узел. status: active | coming_soon. module: id нозолого-специфичного модуля. codes: коды узла (наследуются вниз, переопределяются у ребёнка).",
+  "id": "lymphoid",
+  "name": "Лимфоидные новообразования (WHO-HAEM5)",
+  "children": [
+    {
+      "id": "mature_b",
+      "name": "Зрелые B-клеточные",
+      "children": [
+        {
+          "id": "cll_sll",
+          "name": "ХЛЛ / ЛМЛ",
+          "status": "active",
+          "module": "cll",
+          "codes": { "icd_o_3_2": "9823/3", "mkb10": "C91.1" },
+          "staging": ["Rai", "Binet"],
+          "index": "CLL-IPI",
+          "response_criteria": "iwCLL 2018",
+          "markers": ["IGHV", "TP53/del(17p)", "del(11q)", "+12", "del(13q)", "beta2m", "ALC"]
+        },
+        {
+          "id": "dlbcl",
+          "name": "Агрессивные B-НХЛ (DLBCL и др.)",
+          "status": "coming_soon",
+          "module": "dlbcl",
+          "codes": { "icd_o_3_2": "9680/3", "mkb10": "C83.3" },
+          "staging": ["Lugano"],
+          "index": "IPI/R-IPI",
+          "response_criteria": "Lugano 2014 + Deauville",
+          "markers": ["cell_of_origin", "MYC", "BCL2", "BCL6"]
+        },
+        {
+          "id": "follicular",
+          "name": "Индолентные B-НХЛ (фолликулярная, MZL)",
+          "status": "coming_soon",
+          "module": "follicular",
+          "codes": { "icd_o_3_2": "9690/3", "mkb10": "C82" },
+          "staging": ["Lugano"],
+          "index": "FLIPI",
+          "response_criteria": "Lugano 2014",
+          "markers": ["grade"]
+        },
+        {
+          "id": "mcl",
+          "name": "Мантийноклеточная",
+          "status": "coming_soon",
+          "module": "mcl",
+          "codes": { "icd_o_3_2": "9673/3", "mkb10": "C83.1" },
+          "staging": ["Lugano"],
+          "index": "MIPI",
+          "response_criteria": "Lugano 2014",
+          "markers": ["t(11;14)", "Ki-67", "TP53"]
+        },
+        {
+          "id": "waldenstrom",
+          "name": "Макроглобулинемия Вальденстрёма",
+          "status": "coming_soon",
+          "module": "waldenstrom",
+          "codes": { "icd_o_3_2": "9761/3", "mkb10": "C88.0" },
+          "staging": [],
+          "index": null,
+          "response_criteria": "критерии ответа Вальденстрёма",
+          "markers": ["MYD88", "CXCR4"]
+        }
+      ]
+    },
+    {
+      "id": "mature_tnk",
+      "name": "T-/NK-клеточные и кожные лимфомы, T-LGLL",
+      "status": "coming_soon",
+      "module": "tnk",
+      "codes": { "icd_o_3_2": "9702/3", "mkb10": "C84" },
+      "staging": ["Lugano"],
+      "index": null,
+      "response_criteria": "Lugano 2014 / кожные шкалы",
+      "markers": []
+    },
+    {
+      "id": "hodgkin",
+      "name": "Лимфома Ходжкина",
+      "status": "coming_soon",
+      "module": "hodgkin",
+      "codes": { "icd_o_3_2": "9650/3", "mkb10": "C81" },
+      "staging": ["Lugano"],
+      "index": "IPS",
+      "response_criteria": "Lugano 2014 + Deauville",
+      "markers": []
+    }
+  ]
+}
