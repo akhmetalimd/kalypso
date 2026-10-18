@@ -271,10 +271,10 @@ def register_patient(db: Database, hasher: IinHasher, p: Principal, data: dict) 
         raise ValidationError([str(e)]) from None
 
     with db.tx(p.user_id) as cur:
-        cur.execute("SELECT patient_id FROM patient WHERE iin_hash = %s", (iin_hash,))
-        hit = cur.fetchone()
-        if hit:
-            pid = hit["patient_id"]
+        # Под RLS врач не видит пациентов чужого филиала; функция БД сообщает только факт и id.
+        cur.execute("SELECT patient_id_by_hash(%s) AS pid", (iin_hash,))
+        pid = cur.fetchone()["pid"]
+        if pid:
             cur.execute("SELECT 1 FROM patient_branch WHERE patient_id = %s AND branch_code = %s",
                         (pid, p.branch_code))
             if cur.fetchone():
@@ -458,10 +458,44 @@ def get_card(db: Database, p: Principal, pid) -> dict:
 
 # ---------------------------------------------------------------------------
 # Клинические записи: линии, наблюдения, лабораторные, маркеры
+# Добавление и правка идут через одни и те же разборщики полей (_*_row).
 # ---------------------------------------------------------------------------
-def add_line(db: Database, p: Principal, pid, data: dict) -> Result:
+PROVENANCES = ("retrospective", "prospective")
+_KINDS = {"line": ("therapy_line", "line_id"), "observation": ("observation", "obs_id"),
+          "lab": ("lab", "lab_id"), "marker": ("module_data", "md_id")}
+
+
+def _reason(f: Form) -> str | None:
+    """Необязательная причина правки — уходит в audit_log.reason."""
+    return f.text("change_reason", "Причина правки", maxlen=500)
+
+
+def _update(cur, table: str, pk: str, rid, pid, row: dict) -> None:
+    sets = ", ".join(f"{k} = %s" for k in row)
+    cur.execute(f"UPDATE {table} SET {sets} WHERE {pk} = %s AND patient_id = %s AND deleted_at IS NULL",
+                [*row.values(), rid, pid])
+    if cur.rowcount == 0:
+        raise NotFound()
+
+
+def get_record(db: Database, p: Principal, pid, kind: str, rid) -> dict:
+    """Запись для формы правки (только действующая и только видимого пациента)."""
     p.require("patient.write")
-    f = Form(data)
+    if kind not in _KINDS:
+        raise NotFound()
+    table, pk = _KINDS[kind]
+    with db.tx(p.user_id) as cur:
+        _load_visible(cur, p, pid, "patient.write")
+        cur.execute(f"SELECT * FROM {table} WHERE {pk} = %s AND patient_id = %s AND deleted_at IS NULL",
+                    (rid, pid))
+        row = cur.fetchone()
+    if row is None:
+        raise NotFound()
+    return row
+
+
+# --- линии терапии ----------------------------------------------------------
+def _line_row(f: Form) -> dict:
     row = {
         "regimen": f.text("regimen", "Режим", required=True, maxlen=200),
         "drug": f.text("drug", "Препараты", maxlen=500),
@@ -473,26 +507,49 @@ def add_line(db: Database, p: Principal, pid, data: dict) -> Result:
         "end_date": f.date("end_date", "Окончание"),
         "end_precision": f.precision("end_precision"),
         "stop_reason": f.text("stop_reason", "Причина окончания", maxlen=300),
-        "provenance": f.choice("provenance", "Ретро/проспектив", ("retrospective", "prospective"), required=True),
+        "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES, required=True),
     }
     if row["start_date"] and row["end_date"] and row["end_date"] < row["start_date"]:
         f.errors.append("Окончание линии раньше начала")
+    return row
+
+
+def _check_line_start(row: dict, patient: dict) -> None:
+    if row["start_date"] < patient["dx_date"]:
+        raise ValidationError(["Начало линии раньше даты диагноза"])
+
+
+def add_line(db: Database, p: Principal, pid, data: dict) -> Result:
+    p.require("patient.write")
+    f = Form(data)
+    row = _line_row(f)
     f.check()
 
     def write():
         with db.tx(p.user_id) as cur:
-            patient = _load_visible(cur, p, pid, "patient.write")
-            if row["start_date"] < patient["dx_date"]:
-                raise ValidationError(["Начало линии раньше даты диагноза"])
+            _check_line_start(row, _load_visible(cur, p, pid, "patient.write"))
             cur.execute("SELECT coalesce(max(line_no), 0) + 1 AS n FROM therapy_line WHERE patient_id = %s", (pid,))
             row.update(patient_id=pid, line_no=cur.fetchone()["n"], source="manual")
             return _insert(cur, "therapy_line", row, "line_id")
     return Result("saved", _db_call(write))
 
 
-def add_observation(db: Database, p: Principal, pid, data: dict) -> Result:
+def update_line(db: Database, p: Principal, pid, rid, data: dict) -> Result:
     p.require("patient.write")
     f = Form(data)
+    row, reason = _line_row(f), _reason(f)
+    f.check()
+
+    def write():
+        with db.tx(p.user_id, reason=reason) as cur:
+            _check_line_start(row, _load_visible(cur, p, pid, "patient.write"))
+            _update(cur, "therapy_line", "line_id", rid, pid, row)
+    _db_call(write)
+    return Result("saved", rid)
+
+
+# --- наблюдения -------------------------------------------------------------
+def _obs_row(f: Form) -> dict:
     row = {
         "obs_date": f.date("obs_date", "Дата наблюдения", required=True),
         "obs_precision": f.precision("obs_precision"),
@@ -506,96 +563,171 @@ def add_observation(db: Database, p: Principal, pid, data: dict) -> Result:
         "pet_ct_report": f.free_text("pet_ct_report", "Заключение ПЭТ-КТ"),
         "deauville": f.int("deauville", "Deauville", 1, 5),
         "pacs_accession": f.text("pacs_accession", "PACS accession", maxlen=200),
-        "provenance": f.choice("provenance", "Ретро/проспектив", ("retrospective", "prospective"), required=True),
+        "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES, required=True),
     }
+    if row["line_id"]:
+        try:
+            row["line_id"] = UUID(str(row["line_id"]))
+        except ValueError:
+            f.errors.append("Неизвестная линия терапии")
     row["response_criteria"] = "iwCLL 2018" if row["response_value"] else None
     if row["response_value"] and not row["response_basis"]:
         f.errors.append("Для ответа укажите основание оценки")
-    if row["event_type"] != "none" and not row["event_date"]:
-        row["event_date"] = row["obs_date"]
+    if not row["response_value"]:
+        row["response_basis"] = None
     if row["event_type"] == "none":
         row["event_date"] = None
+    elif not row["event_date"]:
+        row["event_date"] = row["obs_date"]
     if row["event_type"] == "death" and not row["death_cause"]:
         f.errors.append("Для события «смерть» укажите причину (допустимо «неизвестно»)")
     if row["event_type"] != "death":
         row["death_cause"] = None
     if not row["response_value"] and row["event_type"] == "none" and not row["pet_ct_report"]:
         f.errors.append("Наблюдение пустое: укажите ответ, событие или заключение ПЭТ-КТ")
+    return row
+
+
+def _obs_effects(cur, pid, patient: dict, row: dict) -> None:
+    """Смерть закрывает наблюдение: статус и последний контакт — в той же транзакции."""
+    if row["event_type"] == "death":
+        cur.execute("""UPDATE patient SET status_last_contact = 'dead',
+                           last_contact_date = greatest(last_contact_date, %s)
+                       WHERE patient_id = %s""", (row["event_date"], pid))
+    elif row["obs_date"] > patient["last_contact_date"]:
+        cur.execute("UPDATE patient SET last_contact_date = %s WHERE patient_id = %s", (row["obs_date"], pid))
+
+
+def _obs_warnings(patient: dict, row: dict) -> list[str]:
+    return _quality({**patient, "response_date": row["obs_date"] if row["response_value"] else None,
+                     "event_date": row["event_date"], "event_type": row["event_type"],
+                     "death_cause": row["death_cause"]})
+
+
+def add_observation(db: Database, p: Principal, pid, data: dict) -> Result:
+    p.require("patient.write")
+    f = Form(data)
+    row = _obs_row(f)
     f.check()
 
     def write():
         with db.tx(p.user_id) as cur:
             patient = _load_visible(cur, p, pid, "patient.write")
-            if row["line_id"]:
-                try:
-                    row["line_id"] = UUID(str(row["line_id"]))
-                except ValueError:
-                    raise ValidationError(["Неизвестная линия терапии"]) from None
-            row.update(patient_id=pid, source="manual")
-            oid = _insert(cur, "observation", row, "obs_id")
-            if row["event_type"] == "death":
-                # Смерть закрывает наблюдение: статус и последний контакт — в той же транзакции.
-                cur.execute("""UPDATE patient SET status_last_contact = 'dead',
-                                   last_contact_date = greatest(last_contact_date, %s)
-                               WHERE patient_id = %s""", (row["event_date"], pid))
-            elif row["obs_date"] > patient["last_contact_date"]:
-                cur.execute("UPDATE patient SET last_contact_date = %s WHERE patient_id = %s",
-                            (row["obs_date"], pid))
+            oid = _insert(cur, "observation", {**row, "patient_id": pid, "source": "manual"}, "obs_id")
+            _obs_effects(cur, pid, patient, row)
             return oid, patient
     oid, patient = _db_call(write)
-    warnings = _quality({**patient, "response_date": row["obs_date"] if row["response_value"] else None,
-                         "event_date": row["event_date"], "event_type": row["event_type"],
-                         "death_cause": row["death_cause"]})
-    return Result("saved", oid, warnings)
+    return Result("saved", oid, _obs_warnings(patient, row))
+
+
+def update_observation(db: Database, p: Principal, pid, rid, data: dict) -> Result:
+    p.require("patient.write")
+    f = Form(data)
+    row, reason = _obs_row(f), _reason(f)
+    f.check()
+
+    def write():
+        with db.tx(p.user_id, reason=reason) as cur:
+            patient = _load_visible(cur, p, pid, "patient.write")
+            cur.execute("SELECT event_type FROM observation WHERE obs_id = %s AND patient_id = %s "
+                        "AND deleted_at IS NULL", (rid, pid))
+            old = cur.fetchone()
+            if old is None:
+                raise NotFound()
+            if old["event_type"] == "death" and row["event_type"] != "death":
+                raise ValidationError(["Смерть отменяется сменой статуса в карточке пациента (Правка карточки)"])
+            _update(cur, "observation", "obs_id", rid, pid, row)
+            _obs_effects(cur, pid, patient, row)
+            return patient
+    patient = _db_call(write)
+    return Result("saved", rid, _obs_warnings(patient, row))
+
+
+# --- лабораторные -----------------------------------------------------------
+def _lab_row(f: Form) -> tuple[dict, list[str]]:
+    loinc = f.choice("loinc", "Показатель", [k for k in core.LAB_UNITS if not k.startswith("_")], required=True)
+    value = f.num("value", "Значение", required=True)
+    unit = f.text("unit", "Единица", required=True, maxlen=30)
+    row = {"obs_date": f.date("obs_date", "Дата анализа", required=True), "loinc": loinc,
+           "value_raw": value, "unit_raw": unit,
+           "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES, required=True)}
+    if f.errors:
+        return row, []
+    c = core.canonicalize_lab(loinc, value, unit)  # исходное значение сохраняется рядом
+    row.update(value_canonical=c.value_canonical, unit_canonical=c.unit_canonical, flag=c.flag)
+    return row, [f"lab_{c.flag}"] if c.flag else []
 
 
 def add_lab(db: Database, p: Principal, pid, data: dict) -> Result:
     p.require("patient.write")
     f = Form(data)
-    loinc = f.choice("loinc", "Показатель", [k for k in core.LAB_UNITS if not k.startswith("_")], required=True)
-    value = f.num("value", "Значение", required=True)
-    unit = f.text("unit", "Единица", required=True, maxlen=30)
-    obs_date = f.date("obs_date", "Дата анализа", required=True)
-    provenance = f.choice("provenance", "Ретро/проспектив", ("retrospective", "prospective"), required=True)
+    row, warnings = _lab_row(f)
     f.check()
-    c = core.canonicalize_lab(loinc, value, unit)
 
     def write():
         with db.tx(p.user_id) as cur:
             _load_visible(cur, p, pid, "patient.write")
-            return _insert(cur, "lab", {
-                "patient_id": pid, "obs_date": obs_date, "loinc": loinc,
-                "value_raw": value, "unit_raw": unit, "value_canonical": c.value_canonical,
-                "unit_canonical": c.unit_canonical, "flag": c.flag,
-                "source": "manual", "provenance": provenance}, "lab_id")
-    return Result("saved", _db_call(write), [f"lab_{c.flag}"] if c.flag else [])
+            return _insert(cur, "lab", {**row, "patient_id": pid, "source": "manual"}, "lab_id")
+    return Result("saved", _db_call(write), warnings)
+
+
+def update_lab(db: Database, p: Principal, pid, rid, data: dict) -> Result:
+    p.require("patient.write")
+    f = Form(data)
+    (row, warnings), reason = _lab_row(f), _reason(f)
+    f.check()
+
+    def write():
+        with db.tx(p.user_id, reason=reason) as cur:
+            _load_visible(cur, p, pid, "patient.write")
+            _update(cur, "lab", "lab_id", rid, pid, row)
+    _db_call(write)
+    return Result("saved", rid, warnings)
+
+
+# --- маркеры ----------------------------------------------------------------
+def _marker_row(f: Form, key: str | None = None) -> dict:
+    fields = {cf["key"]: cf for cf in core_fields(CLL)}
+    if key is None:
+        key = f.choice("field_key", "Маркер", list(fields), required=True)
+    value = f.choice("value", "Результат", fields[key]["values"]) if key in fields else None
+    missing = f.choice("missing", "Код пропуска", MISSING)
+    if key and (value is None) == (missing is None):
+        f.errors.append("Укажите либо результат, либо код пропуска")
+    test_date = f.date("test_date", "Дата теста")
+    return {"field_key": key, "value": value, "missing": missing, "test_date": test_date,
+            "test_date_precision": f.precision("test_date_precision") if test_date else None,
+            "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES, required=True)}
 
 
 def add_marker(db: Database, p: Principal, pid, data: dict) -> Result:
     p.require("patient.write")
     f = Form(data)
-    fields = {cf["key"]: cf for cf in core_fields(CLL)}
-    key = f.choice("field_key", "Маркер", list(fields), required=True)
-    value = f.choice("value", "Результат", fields[key]["values"]) if key else None
-    missing = f.choice("missing", "Код пропуска", MISSING)
-    if key and (value is None) == (missing is None):
-        f.errors.append("Укажите либо результат, либо код пропуска")
-    test_date = f.date("test_date", "Дата теста")
-    provenance = f.choice("provenance", "Ретро/проспектив", ("retrospective", "prospective"), required=True)
+    row = _marker_row(f)
     f.check()
 
     def write():
         with db.tx(p.user_id) as cur:
             _load_visible(cur, p, pid, "patient.write")
-            return _insert(cur, "module_data", {
-                "patient_id": pid, "module": "cll", "field_key": key, "value": value, "missing": missing,
-                "test_date": test_date, "test_date_precision": f.precision("test_date_precision") if test_date else None,
-                "source": "manual", "provenance": provenance}, "md_id")
+            return _insert(cur, "module_data", {**row, "patient_id": pid, "module": "cll",
+                                                "source": "manual"}, "md_id")
     return Result("saved", _db_call(write))
 
 
-_KINDS = {"line": ("therapy_line", "line_id"), "observation": ("observation", "obs_id"),
-          "lab": ("lab", "lab_id"), "marker": ("module_data", "md_id")}
+def update_marker(db: Database, p: Principal, pid, rid, data: dict) -> Result:
+    """Маркер остаётся тем же (ключ не меняется); правятся результат, код пропуска и дата."""
+    p.require("patient.write")
+    key = get_record(db, p, pid, "marker", rid)["field_key"]
+    f = Form(data)
+    row, reason = _marker_row(f, key), _reason(f)
+    f.check()
+
+    def write():
+        with db.tx(p.user_id, reason=reason) as cur:
+            _load_visible(cur, p, pid, "patient.write")
+            _update(cur, "module_data", "md_id", rid, pid, row)
+    _db_call(write)
+    return Result("saved", rid)
 
 
 def soft_delete(db: Database, p: Principal, pid, kind: str, record_id) -> Result:

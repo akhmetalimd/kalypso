@@ -147,6 +147,8 @@ class Registry:
                               "VALUES ('admin', 'Админ', 'x', 'admin') RETURNING user_id")
         self.doc = self.one("INSERT INTO app_user (login, display_name, password_hash, role_code, branch_code) "
                             "VALUES ('doc.a', 'Врач A', 'x', 'physician', 'synth_a') RETURNING user_id")
+        self.doc_b = self.one("INSERT INTO app_user (login, display_name, password_hash, role_code, branch_code) "
+                              "VALUES ('doc.b', 'Врач B', 'x', 'physician', 'synth_b') RETURNING user_id")
         con.commit()
 
     def one(self, sql: str, *params):
@@ -169,17 +171,19 @@ class Registry:
         return self.one(f"INSERT INTO {table} ({cols}) VALUES ({ph}) RETURNING {returning}",
                         *row.values())
 
-    def patient(self, iin: str, **kw):
-        self.as_app()
-        return self._insert("patient", {**self.PATIENT, "iin_hash": iin_hash(iin), **kw}, "patient_id")
+    def patient(self, iin: str, user=None, **kw):
+        """Пациент от имени врача; филиал synth_b — врачом B (иначе отсечёт RLS)."""
+        row = {**self.PATIENT, "iin_hash": iin_hash(iin), **kw}
+        self.as_app(user or (self.doc_b if row["branch"] == "synth_b" else self.doc))
+        return self._insert("patient", row, "patient_id")
 
     def line(self, pid, line_no: int = 1, **kw):
         self.as_app()
         row = dict(patient_id=pid, line_no=line_no, source="manual", provenance="retrospective")
         return self._insert("therapy_line", {**row, **kw}, "line_id")
 
-    def obs(self, pid, obs_date: str = "2021-11-01", **kw):
-        self.as_app()
+    def obs(self, pid, obs_date: str = "2021-11-01", user=None, **kw):
+        self.as_app(user)
         row = dict(patient_id=pid, obs_date=obs_date, source="manual", provenance="retrospective")
         return self._insert("observation", {**row, **kw}, "obs_id")
 

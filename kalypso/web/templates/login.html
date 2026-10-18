@@ -4,6 +4,7 @@
 <section class="card narrow">
   <h1>Вход в регистр</h1>
   <form method="post" action="/login" class="stack">
+    <input type="hidden" name="csrf" value="{{ login_csrf }}">
     <label>Логин <input name="login" value="{{ login or '' }}" autocomplete="username" required autofocus></label>
     <label>Пароль <input type="password" name="password" autocomplete="current-password" required></label>
     <button class="primary">Войти</button>

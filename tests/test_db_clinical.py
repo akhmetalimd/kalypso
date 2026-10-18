@@ -72,7 +72,7 @@ def test_observation_line_must_belong_to_patient(reg, pid):
     other = reg.patient("990000000202", branch="synth_b")
     reg.con.commit()
     with rejected(reg.con, "observation_line_fkey"):
-        reg.obs(other, line_id=lid)
+        reg.obs(other, line_id=lid, user=reg.doc_b)
 
 
 def test_response_per_line_and_progression(reg, pid):
@@ -148,8 +148,8 @@ def test_v_survival_and_soft_delete(reg, pid):
     assert reg.one("SELECT event_or_censor_date::text FROM v_survival WHERE patient_id = %s",
                    other) == "2024-06-01"
 
-    reg.as_app()
+    reg.as_app(reg.doc_b)
     reg.cur.execute("UPDATE patient SET deleted_at = now(), deleted_by = %s WHERE patient_id = %s",
-                    (reg.doc, other))
+                    (reg.doc_b, other))
     reg.con.commit()
     assert reg.one("SELECT count(*) FROM v_survival") == 1

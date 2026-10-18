@@ -29,6 +29,8 @@
 </span>
 {% endmacro %}
 
+{% macro edit_link(pid, kind, rid) %}<a href="/patients/{{ pid }}/edit/{{ kind }}/{{ rid }}">изменить</a>{% endmacro %}
+
 {% macro delete_button(pid, kind, rid) %}
 <form method="post" action="/patients/{{ pid }}/delete/{{ kind }}/{{ rid }}" class="inline">
   {{ csrf_field() }}<button class="link danger" title="Пометить удалённой (запись остаётся в аудите)">удалить</button>

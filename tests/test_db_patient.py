@@ -1,7 +1,7 @@
 """Пациент: идентификация, коды, умные поля, версионность диагноза (B1, I1, I3, I4, I6)."""
 import pytest
 
-from conftest import rejected
+from conftest import iin_hash, rejected
 
 
 def test_patient_created_by_app_role(reg):
@@ -16,7 +16,6 @@ def test_patient_created_by_app_role(reg):
     ("короткий хэш", {"iin_hash": "abc123"}, "iin_hash_format"),
     ("русский код пола", {"sex": "М"}, "sex_check"),
     ("русский статус", {"status_last_contact": "жив"}, "status_last_contact_check"),
-    ("неизвестный филиал", {"branch": "nowhere"}, "patient_branch_fkey"),
     ("стадия Rai 'A'", {"stage_system": "Rai", "stage_value": "A"}, "stage_rai"),
     ("стадия Binet 'IV'", {"stage_system": "Binet", "stage_value": "IV"}, "stage_binet"),
     ("стадия без системы", {"stage_value": "B"}, "stage_pair"),
@@ -89,3 +88,12 @@ def test_physician_requires_branch(reg):
     with rejected(reg.con, "physician_branch"):
         reg.cur.execute("INSERT INTO app_user (login, display_name, password_hash, role_code) "
                         "VALUES ('doc.x', 'X', 'x', 'physician')")
+
+
+def test_unknown_branch_rejected(reg):
+    # Мимо RLS (владелец): проверяется именно внешний ключ на справочник филиалов.
+    with rejected(reg.con, "patient_branch_fkey"):
+        reg.cur.execute("INSERT INTO patient (iin_hash, branch, sex, who_haem5, icd_o_3_2, mkb, dx_date, "
+                        "last_contact_date, provenance, status_last_contact, source) VALUES "
+                        "(%s, 'nowhere', 'M', 'cll_sll', '9823/3', 'C91.1', '2021-03-01', '2024-06-01', "
+                        "'retrospective', 'alive', 'manual')", (iin_hash("990000000009"),))

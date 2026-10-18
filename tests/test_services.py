@@ -234,3 +234,86 @@ def test_synthetic_cohort_leaves_no_iin(world, caplog):
     leaked = [i for i in summary["iins"] if i in dump or i in caplog.text]
     assert leaked == []
     assert len(registry.list_patients(world.db, world.curator)) == 12
+
+
+# --- правка клинических записей ---------------------------------------------
+def _audit(world, table, rid):
+    with world.db.tx() as cur:
+        cur.execute("RESET ROLE")
+        cur.execute("SELECT field, old_value, new_value, reason FROM audit_log "
+                    "WHERE table_name = %s AND row_id = %s AND action = 'update' ORDER BY audit_id", (table, str(rid)))
+        return [tuple(r.values()) for r in cur.fetchall()]
+
+
+LINE = {"regimen": "BR", "start_date": "2021-04-01", "end_date": "2021-10-01", "provenance": "retrospective"}
+
+
+def test_update_line_audited_with_reason(world):
+    pid = world.register().record_id
+    lid = registry.add_line(world.db, world.doc_a, pid, LINE).record_id
+    registry.update_line(world.db, world.doc_a, pid, lid,
+                         {**LINE, "end_date": "2021-12-01", "cycles": "6", "change_reason": "уточнено по выписке"})
+    rec = registry.get_record(world.db, world.doc_a, pid, "line", lid)
+    assert (str(rec["end_date"]), rec["cycles"], rec["duration_days"], rec["line_no"]) == ("2021-12-01", 6, 244, 1)
+    changed = {f: (old, new, why) for f, old, new, why in _audit(world, "therapy_line", lid)}
+    assert changed["end_date"] == ("2021-10-01", "2021-12-01", "уточнено по выписке")
+    assert changed["cycles"] == (None, "6", "уточнено по выписке")
+    with pytest.raises(ValidationError, match="раньше даты диагноза"):
+        registry.update_line(world.db, world.doc_a, pid, lid, {**LINE, "start_date": "2020-01-01", "end_date": None})
+
+
+def test_update_observation_and_death_rules(world):
+    pid = world.register().record_id
+    obs = {"obs_date": "2022-01-01", "event_type": "progression", "provenance": "retrospective"}
+    oid = registry.add_observation(world.db, world.doc_a, pid, obs).record_id
+    registry.update_observation(world.db, world.doc_a, pid, oid, {**obs, "event_type": "relapse"})
+    assert registry.get_record(world.db, world.doc_a, pid, "observation", oid)["event_type"] == "relapse"
+
+    registry.update_observation(world.db, world.doc_a, pid, oid,
+                                {**obs, "obs_date": "2025-01-05", "event_type": "death", "death_cause": "unknown"})
+    card = registry.get_card(world.db, world.doc_a, pid)
+    assert card["patient"]["status_last_contact"] == "dead"
+    assert str(card["patient"]["last_contact_date"]) == "2025-01-05"
+    with pytest.raises(ValidationError, match="сменой статуса"):
+        registry.update_observation(world.db, world.doc_a, pid, oid, obs)
+
+
+def test_update_lab_recanonicalizes(world):
+    pid = world.register().record_id
+    lab = {**LAB, "loinc": "8302-2", "value": "140", "unit": "g/L"}
+    rid = registry.add_lab(world.db, world.doc_a, pid, lab).record_id
+    res = registry.update_lab(world.db, world.doc_a, pid, rid, {**lab, "value": "12.5", "unit": "g/dL"})
+    rec = registry.get_record(world.db, world.doc_a, pid, "lab", rid)
+    assert (float(rec["value_raw"]), rec["unit_raw"], float(rec["value_canonical"]), rec["flag"]) == (12.5, "g/dL", 125.0, None)
+    assert res.warnings == []
+    res = registry.update_lab(world.db, world.doc_a, pid, rid, {**lab, "unit": "g/pL"})
+    assert res.warnings == ["lab_unknown_unit"]
+    assert registry.get_record(world.db, world.doc_a, pid, "lab", rid)["value_canonical"] is None
+
+
+def test_update_marker_keeps_key(world):
+    pid = world.register().record_id
+    m = {"field_key": "TP53", "value": "wild_type", "provenance": "retrospective"}
+    rid = registry.add_marker(world.db, world.doc_a, pid, m).record_id
+    registry.update_marker(world.db, world.doc_a, pid, rid,
+                           {"field_key": "IGHV", "missing": "done_unavailable", "provenance": "retrospective"})
+    rec = registry.get_record(world.db, world.doc_a, pid, "marker", rid)
+    assert (rec["field_key"], rec["value"], rec["missing"]) == ("TP53", None, "done_unavailable")
+    with pytest.raises(ValidationError, match="результат"):
+        registry.update_marker(world.db, world.doc_a, pid, rid, {"value": "detected", "provenance": "retrospective"})
+
+
+def test_edit_access_rules(world):
+    pid = world.register().record_id
+    rid = registry.add_lab(world.db, world.doc_a, pid, {**LAB, "loinc": "8302-2", "value": "140", "unit": "g/L"}).record_id
+    data = {**LAB, "loinc": "8302-2", "value": "141", "unit": "g/L"}
+    with pytest.raises(NotFound):  # чужой филиал
+        registry.update_lab(world.db, world.doc_b, pid, rid, data)
+    with pytest.raises(AccessDenied):
+        registry.update_lab(world.db, world.curator, pid, rid, data)
+    other = world.register().record_id
+    with pytest.raises(NotFound):  # запись другого пациента
+        registry.update_lab(world.db, world.doc_a, other, rid, data)
+    registry.soft_delete(world.db, world.doc_a, pid, "lab", rid)
+    with pytest.raises(NotFound):  # удалённую не правят
+        registry.update_lab(world.db, world.doc_a, pid, rid, data)

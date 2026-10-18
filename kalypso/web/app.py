@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 from urllib.parse import urlencode
 from uuid import UUID
@@ -24,6 +25,7 @@ from kalypso.registry import ValidationError
 
 HERE = Path(__file__).resolve().parent
 COOKIE = "kalypso_session"
+LOGIN_COOKIE = "kalypso_login"
 
 
 class LoginRequired(Exception):
@@ -131,13 +133,26 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             raise NotFound() from None
 
     # --- вход ---------------------------------------------------------------
+    # CSRF на форме входа (до появления сессии): случайный токен в cookie
+    # (SameSite=Strict, только /login) + его HMAC в скрытом поле формы.
+    def _login_page(request: Request, status_code=200, errors=None, login=""):
+        token = secrets.token_urlsafe(24)
+        resp = render(request, "login.html", None, status_code, errors=errors, login=login,
+                      login_csrf=auth.csrf_token(settings.session_secret, "login:" + token))
+        resp.set_cookie(LOGIN_COOKIE, token, httponly=True, samesite="strict", path="/login",
+                        secure=settings.secure_cookies, max_age=1800)
+        return resp
+
     @app.get("/login", response_class=HTMLResponse)
     def login_page(request: Request):
-        return render(request, "login.html", None)
+        return _login_page(request)
 
     @app.post("/login")
     async def login_submit(request: Request):
         form = await request.form()
+        token = request.cookies.get(LOGIN_COOKIE)
+        if not auth.csrf_valid(settings.session_secret, "login:" + token if token else None, form.get("csrf")):
+            return _login_page(request, 403, ["Форма входа устарела — повторите вход."], form.get("login", ""))
         try:
             token, p = auth.login(db, form.get("login", ""), form.get("password", ""),
                                   session_hours=settings.session_hours,
@@ -146,10 +161,11 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         except auth.LoginFailed as e:
             text = ("Слишком много неудачных попыток. Попробуйте через 15 минут."
                     if e.reason == "locked" else "Неверный логин или пароль.")
-            return render(request, "login.html", None, 401, errors=[text], login=form.get("login", ""))
+            return _login_page(request, 401, [text], form.get("login", ""))
         resp = RedirectResponse("/password" if p.must_change_password else "/patients", status_code=303)
         resp.set_cookie(COOKIE, token, httponly=True, samesite="lax", secure=settings.secure_cookies,
                         max_age=settings.session_hours * 3600)
+        resp.delete_cookie(LOGIN_COOKIE, path="/login")
         return resp
 
     @app.post("/logout")
@@ -267,6 +283,37 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     _record_route("observations", registry.add_observation)
     _record_route("labs", registry.add_lab)
     _record_route("markers", registry.add_marker)
+
+    editors = {"line": registry.update_line, "observation": registry.update_observation,
+               "lab": registry.update_lab, "marker": registry.update_marker}
+
+    def _record_form(request, p, pid, kind, rid, v, status_code=200, errors=None):
+        card = registry.get_card(db, p, pid_of(pid))
+        rec = registry.get_record(db, p, pid_of(pid), kind, pid_of(rid))
+        return render(request, "record_form.html", p, status_code, errors=errors, kind=kind, pid=pid, rid=rid,
+                      v=v, pt=card["patient"], lines=card["lines"], field_key=rec.get("field_key"))
+
+    @app.get("/patients/{pid}/edit/{kind}/{rid}", response_class=HTMLResponse)
+    def record_edit(request: Request, pid: str, kind: str, rid: str):
+        p = current(request)
+        if kind not in editors:
+            raise NotFound()
+        rec = dict(registry.get_record(db, p, pid_of(pid), kind, pid_of(rid)))
+        if kind == "lab":  # в форме — исходное значение и единица, как вводил врач
+            rec.update(value=rec["value_raw"], unit=rec["unit_raw"])
+        return _record_form(request, p, pid, kind, rid, rec)
+
+    @app.post("/patients/{pid}/edit/{kind}/{rid}")
+    async def record_update(request: Request, pid: str, kind: str, rid: str):
+        p = current(request)
+        if kind not in editors:
+            raise NotFound()
+        form = await form_of(request)
+        try:
+            res = editors[kind](db, p, pid_of(pid), pid_of(rid), form)
+        except ValidationError as e:
+            return _record_form(request, p, pid, kind, rid, form, 422, e.errors)
+        return back(f"/patients/{pid}", "saved", res.warnings)
 
     @app.post("/patients/{pid}/delete/{kind}/{rid}")
     async def record_delete(request: Request, pid: str, kind: str, rid: str):
