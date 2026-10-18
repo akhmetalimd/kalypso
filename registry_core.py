@@ -138,13 +138,13 @@ def validate_record(rec: dict) -> list[str]:
         flags.append("response_before_diagnosis")
     if dx and ev and ev < dx:
         flags.append("event_before_diagnosis")
-    if rec.get("status_last_contact") == "умер" and not rec.get("last_contact_date"):
+    if rec.get("status_last_contact") == "dead" and not rec.get("last_contact_date"):
         flags.append("death_without_date")
     stage_sys = rec.get("stage_system")
     who = rec.get("who_haem5")
     if who == "cll_sll" and stage_sys not in (None, "Rai", "Binet"):
         flags.append("staging_system_mismatch")
-    if rec.get("event_type") == "смерть" and not rec.get("death_cause"):
+    if rec.get("event_type") == "death" and not rec.get("death_cause"):
         flags.append("death_cause_missing")
     return flags
 
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     assert sb["high"]["n"] == 2 and sb["low"]["n"] == 1
 
     flags = validate_record({"dx_date": date(2020, 1, 1), "event_date": date(2019, 1, 1),
-                             "event_type": "смерть"})
+                             "event_type": "death"})
     assert "event_before_diagnosis" in flags and "death_cause_missing" in flags
 
     node = find_node(NOSOLOGY_TREE, "cll_sll")
