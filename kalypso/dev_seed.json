@@ -1,17 +1,62 @@
 {
   "_comment": "ТОЛЬКО для локальной разработки на синтетике (python -m kalypso.dev). Пароли — тестовые, в эксплуатации не использовать.",
   "branches": [
-    { "branch_code": "synth_a", "name_ru": "Синтетический филиал A" },
-    { "branch_code": "synth_b", "name_ru": "Синтетический филиал B" },
-    { "branch_code": "synth_c", "name_ru": "Синтетический филиал C" }
+    {
+      "branch_code": "synth_a",
+      "name_ru": "Синтетический филиал A"
+    },
+    {
+      "branch_code": "synth_b",
+      "name_ru": "Синтетический филиал B"
+    },
+    {
+      "branch_code": "synth_c",
+      "name_ru": "Синтетический филиал C"
+    }
   ],
   "users": [
-    { "login": "admin",   "display_name": "Администратор (синт.)", "role_code": "admin",     "branch_code": null,      "password": "dev-admin-2026" },
-    { "login": "curator", "display_name": "Куратор (синт.)",       "role_code": "curator",   "branch_code": null,      "password": "dev-curator-2026" },
-    { "login": "analyst", "display_name": "Аналитик (синт.)",      "role_code": "analyst",   "branch_code": null,      "password": "dev-analyst-2026" },
-    { "login": "doc.a",   "display_name": "Врач A (синт.)",        "role_code": "physician", "branch_code": "synth_a", "password": "dev-doctor-a-2026" },
-    { "login": "doc.b",   "display_name": "Врач B (синт.)",        "role_code": "physician", "branch_code": "synth_b", "password": "dev-doctor-b-2026" },
-    { "login": "doc.c",   "display_name": "Врач C (синт.)",        "role_code": "physician", "branch_code": "synth_c", "password": "dev-doctor-c-2026" }
+    {
+      "login": "admin",
+      "display_name": "Администратор (синт.)",
+      "role_code": "admin",
+      "branch_code": null,
+      "password": "dev-admin-2026"
+    },
+    {
+      "login": "curator",
+      "display_name": "Куратор (синт.)",
+      "role_code": "curator",
+      "branch_code": null,
+      "password": "dev-curator-2026"
+    },
+    {
+      "login": "analyst",
+      "display_name": "Аналитик (синт.)",
+      "role_code": "analyst",
+      "branch_code": null,
+      "password": "dev-analyst-2026"
+    },
+    {
+      "login": "doc.a",
+      "display_name": "Врач A (синт.)",
+      "role_code": "physician",
+      "branch_code": "synth_a",
+      "password": "dev-doctor-a-2026"
+    },
+    {
+      "login": "doc.b",
+      "display_name": "Врач B (синт.)",
+      "role_code": "physician",
+      "branch_code": "synth_b",
+      "password": "dev-doctor-b-2026"
+    },
+    {
+      "login": "doc.c",
+      "display_name": "Врач C (синт.)",
+      "role_code": "physician",
+      "branch_code": "synth_c",
+      "password": "dev-doctor-c-2026"
+    }
   ],
-  "synthetic_patients": 60
+  "synthetic_patients": 200
 }

@@ -285,6 +285,152 @@ def completeness_flags(rec: dict) -> list[str]:
     return flags
 
 
+# ---------------------------------------------------------------------------
+# 5. Конечные точки выживаемости (П3) — одинаковые для платформы и выгрузки
+# ---------------------------------------------------------------------------
+def impute_date(value, precision: Optional[str] = "day") -> Optional[date]:
+    """Неточная дата -> середина периода (месяц -> 15-е, год -> 1 июля). Только для расчёта."""
+    d = _as_date(value)
+    if d is None:
+        return None
+    if precision == "month":
+        return d.replace(day=15)
+    if precision == "year":
+        return date(d.year, 7, 1)
+    return d
+
+
+ENDPOINTS = {
+    "OS": "Общая выживаемость: от диагноза до смерти от любой причины",
+    "TTFT": "Время до первой терапии: от диагноза до старта 1-й линии (смерть без лечения — цензура)",
+    "PFS": "Выживаемость без прогрессирования: от старта линии до прогрессии, рецидива или смерти",
+    "mPFS": "Модифицированная PFS: как PFS, плюс старт следующей линии",
+    "EFS": "Бессобытийная выживаемость: от старта линии до прогрессии, рецидива, новой линии или смерти",
+    "TTNT": "Время до следующей терапии: от старта линии до старта следующей линии или смерти",
+}
+LINE_ENDPOINTS = {"PFS", "mPFS", "EFS", "TTNT"}
+_EVENT_TYPES = {
+    "OS": {"death"},
+    "PFS": {"progression", "relapse", "death"},
+    "mPFS": {"progression", "relapse", "death"},
+    "EFS": {"progression", "relapse", "death", "new_line_start"},
+    "TTNT": {"death"},
+}
+
+
+def endpoint(name: str, patient: dict, lines: list[dict], observations: list[dict],
+             line_no: int = 1) -> Optional[dict]:
+    """Длительность и событие одной конечной точки для пациента.
+
+    patient: dx_date, dx_date_precision, last_contact_date, last_contact_precision.
+    lines: [{line_no, start_date, start_precision}]; observations: [{event_type, event_date,
+    obs_precision}] — только действующие записи. Возвращает None, если точка неприменима
+    (нет линии N для PFS/EFS/TTNT), иначе {start, end, days, event, reason} или
+    {excluded: причина} при противоречии дат (такие записи не входят в расчёт)."""
+    if name not in ENDPOINTS:
+        raise ValueError(f"неизвестная конечная точка: {name}")
+    by_no = {l["line_no"]: l for l in lines}
+    if name in LINE_ENDPOINTS:
+        line = by_no.get(line_no)
+        if line is None or not line.get("start_date"):
+            return None
+        start = impute_date(line["start_date"], line.get("start_precision"))
+    else:
+        start = impute_date(patient["dx_date"], patient.get("dx_date_precision"))
+    censor = impute_date(patient["last_contact_date"], patient.get("last_contact_precision"))
+
+    candidates = []                       # (дата события, причина)
+    types = _EVENT_TYPES.get(name, set())
+    for o in observations:
+        if o.get("event_type") in types and o.get("event_date"):
+            d = impute_date(o["event_date"], o.get("obs_precision") if o.get("event_date") == o.get("obs_date") else "day")
+            if name in LINE_ENDPOINTS and d <= start:
+                continue                  # событие до/в день старта линии — повод для неё, не исход
+            candidates.append((d, o["event_type"]))
+    if name == "TTFT" and 1 in by_no and by_no[1].get("start_date"):
+        candidates.append((impute_date(by_no[1]["start_date"], by_no[1].get("start_precision")), "first_line"))
+    if name in {"mPFS", "EFS", "TTNT"} and (line_no + 1) in by_no and by_no[line_no + 1].get("start_date"):
+        nxt = by_no[line_no + 1]
+        candidates.append((impute_date(nxt["start_date"], nxt.get("start_precision")), "next_line"))
+
+    if candidates:
+        end, reason = min(candidates)
+        event = 1
+    else:
+        end, reason, event = censor, "censored", 0
+    if end is None or start is None:
+        return {"excluded": "нет даты начала или окончания"}
+    if end < start:
+        return {"excluded": "окончание раньше начала отсчёта"}
+    return {"start": start, "end": end, "days": (end - start).days, "event": event, "reason": reason}
+
+
+def km_estimate(durations: Iterable[float], events: Iterable[int], z: float = 1.96) -> dict:
+    """Каплан–Майер с ошибкой Гринвуда и 95 % ДИ (log-log), медиана с ДИ, число под риском.
+    Без p-value: сравнение групп (log-rank, Cox) — на выгрузке."""
+    import math
+    durations, events = list(durations), list(events)
+    base = kaplan_meier(durations, events)        # те же проверки входа
+    data = sorted(zip(durations, events))
+    n = len(data)
+    steps, censored_at = [], []
+    surv, greenwood, at_risk, i = 1.0, 0.0, n, 0
+    while i < n:
+        t = data[i][0]
+        d = c = 0
+        while i < n and data[i][0] == t:
+            d += data[i][1]
+            c += 1 - data[i][1]
+            i += 1
+        if d:
+            surv *= 1 - d / at_risk
+            if at_risk > d:
+                greenwood += d / (at_risk * (at_risk - d))
+            se = surv * math.sqrt(greenwood)
+            if 0 < surv < 1:
+                s_theta = math.sqrt(greenwood) / abs(math.log(surv))
+                low, high = surv ** math.exp(z * s_theta), surv ** math.exp(-z * s_theta)
+            else:
+                low = high = surv
+            steps.append({"t": t, "survival": round(surv, 6), "se": round(se, 6),
+                          "ci_low": round(low, 6), "ci_high": round(high, 6), "at_risk": at_risk, "events": d})
+        if c:
+            censored_at += [(t, surv)] * c
+        at_risk -= d + c
+
+    def first_below(key):
+        return next((s["t"] for s in steps if s[key] <= 0.5), None)
+
+    return {"n": n, "events": sum(events), "steps": steps,
+            "censored": [{"t": t, "survival": round(s, 6)} for t, s in censored_at],
+            "median": base["median"], "median_ci": (first_below("ci_low"), first_below("ci_high"))}
+
+
+def at_risk_table(durations: Iterable[float], times: Iterable[float]) -> list[int]:
+    """Число под риском (длительность ≥ t) в заданные моменты."""
+    durations = list(durations)
+    return [sum(1 for d in durations if d >= t) for t in times]
+
+
+_DOHNER_ORDER = ("del17p", "del11q", "tri12", "del13q")
+_NEGATIVE = {"not_detected", "normal_negative"}
+
+
+def dohner_group(markers: dict) -> str:
+    """Иерархия FISH по Döhner (2000): del(17p) > del(11q) > +12 > нормальный кариотип > del(13q) одна.
+    Если вышестоящая проба не исследована — группа не определена (unknown)."""
+    for key in _DOHNER_ORDER[:3]:
+        v = markers.get(key)
+        if v == "detected":
+            return key
+        if v not in _NEGATIVE:
+            return "unknown"
+    v = markers.get("del13q")
+    if v == "detected":
+        return "del13q_sole"
+    return "normal" if v in _NEGATIVE else "unknown"
+
+
 def cll_ipi(age: Optional[float], stage_system: Optional[str], stage_value: Optional[str],
             b2m_mg_l: Optional[float], ighv: Optional[str],
             tp53_abnormal: Optional[bool]) -> Optional[dict]:

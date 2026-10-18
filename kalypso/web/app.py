@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import registry_core as core
-from kalypso import admin, auth, documents, export, i18n, registry, review
+from kalypso import admin, analytics, auth, charts, docgen, documents, export, i18n, registry, review
 from kalypso.ai import fields as ai_fields
 from kalypso.config import Settings
 from kalypso.db import Database
@@ -250,7 +250,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     def patient_card(request: Request, pid: str):
         p = current(request)
         card = registry.get_card(db, p, pid_of(pid))
-        return render(request, "patient_card.html", p, c=card, pt=card["patient"])
+        return render(request, "patient_card.html", p, c=card, pt=card["patient"], timeline_svg=_timeline(card))
 
     @app.get("/patients/{pid}/edit", response_class=HTMLResponse)
     def patient_edit(request: Request, pid: str):
@@ -270,6 +270,24 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             return render(request, "patient_form.html", p, 422, errors=e.errors, v=form,
                           missing=_missing_from_form(form), is_new=False, pid=pid)
         return back(f"/patients/{pid}", "saved", res.warnings)
+
+    def _timeline(card: dict) -> str | None:
+        pt = card["patient"]
+        if not card["lines"] and not card["observations"]:
+            return None
+        imp = lambda d, prec="day": core.impute_date(d, prec)  # noqa: E731
+        lines = [{"label": f"Линия {l['line_no']}: {l['regimen']}", "short": f"{l['line_no']}: {l['regimen'][:18]}",
+                  "start": imp(l["start_date"], l["start_precision"]),
+                  "end": imp(l["end_date"], l["end_precision"]) if l["end_date"] else None} for l in card["lines"]]
+        events = [{"date": o["event_date"], "kind": o["event_type"], "label": f"{i18n.label('event_type', o['event_type'])} "
+                   f"{o['event_date']:%d.%m.%Y}", "short": i18n.label("event_type", o["event_type"]).lower()[:10]}
+                  for o in card["observations"] if o["event_type"] != "none" and o["event_date"]]
+        responses = [{"date": o["obs_date"], "label": f"Ответ {o['response_value']} ({o['obs_date']:%d.%m.%Y})",
+                      "short": o["response_value"]} for o in card["observations"] if o["response_value"]]
+        start = imp(pt["dx_date"], pt["dx_date_precision"])
+        end = max([imp(pt["last_contact_date"], pt["last_contact_precision"])]
+                  + [l["end"] or l["start"] for l in lines] + [e["date"] for e in events] + [r["date"] for r in responses])
+        return charts.timeline(start, end, lines, events, responses, "Таймлайн пациента")
 
     def _record_route(path: str, fn):
         @app.post(f"/patients/{{pid}}/{path}", name=f"add_{path}")
@@ -427,6 +445,79 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         except ValidationError as e:
             return _review_page(request, p, doc_id, 422, e.errors)
         return back(f"/review/{doc_id}", "decided")
+
+    # --- П3: дашборды и «Исследователь выживаемости» --------------------------
+    def _filters_text(f: dict) -> str:
+        parts = [f"филиал {f['branch']}" if f["branch"] else "все доступные филиалы"]
+        if f["year_from"] or f["year_to"]:
+            parts.append(f"диагноз {f['year_from'] or '…'}–{f['year_to'] or '…'}")
+        if f["sex"]:
+            parts.append(i18n.label("sex", f["sex"]).lower())
+        if f["binet"]:
+            parts.append(f"Binet {f['binet']}")
+        if f["provenance"]:
+            parts.append(i18n.label("provenance", f["provenance"]).lower())
+        return ", ".join(parts)
+
+    @app.get("/dashboard", response_class=HTMLResponse)
+    def dashboard(request: Request):
+        p = current(request)
+        f = analytics.parse_filters(dict(request.query_params))
+        d = analytics.overview(db, p, f)
+        return render(request, "dashboard.html", p, d=d, f=f, branches=admin.list_branches(db, p),
+                      charts=charts, filters_text=_filters_text(f))
+
+    @app.get("/dashboard/cll", response_class=HTMLResponse)
+    def dashboard_cll(request: Request):
+        p = current(request)
+        f = analytics.parse_filters(dict(request.query_params))
+        d = analytics.cll_dashboard(db, p, f)
+        return render(request, "dashboard_cll.html", p, d=d, f=f, branches=admin.list_branches(db, p),
+                      charts=charts, filters_text=_filters_text(f), response_groups=analytics.RESPONSE_GROUPS)
+
+    def _explore(request: Request, p):
+        q = dict(request.query_params)
+        f = analytics.parse_filters(q)
+        try:
+            line_no = max(1, min(int(q.get("line_no") or 1), 5))
+        except ValueError:
+            line_no = 1
+        try:
+            threshold = float(q["threshold"].replace(",", ".")) if q.get("threshold") else None
+        except ValueError:
+            threshold = None
+        loinc = q.get("lab") if q.get("lab") in core.LAB_UNITS and not q.get("lab", "_").startswith("_") else None
+        res = analytics.explore(db, p, q.get("endpoint") or "OS", line_no, q.get("grouping") or "none",
+                                f, loinc, threshold)
+        return res, f, q
+
+    @app.get("/survival", response_class=HTMLResponse)
+    def survival(request: Request):
+        p = current(request)
+        res, f, q = _explore(request, p)
+        grouping_label = analytics.GROUPINGS[res["grouping"]]
+        abstract = docgen.cohort_abstract(res, _filters_text(f), grouping_label) if res["groups"] else ""
+        return render(request, "survival.html", p, r=res, f=f, q=q, branches=admin.list_branches(db, p),
+                      charts=charts, endpoints=core.ENDPOINTS, line_endpoints=core.LINE_ENDPOINTS,
+                      groupings=analytics.GROUPINGS, abstract=abstract, grouping_label=grouping_label,
+                      csv_query=str(request.query_params))
+
+    @app.get("/survival.csv")
+    def survival_csv(request: Request):
+        p = current(request)
+        res, _, _ = _explore(request, p)
+        return Response("﻿" + analytics.explore_csv(res), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": 'attachment; filename="kalypso_survival.csv"'})
+
+    @app.get("/patients/{pid}/docs/{kind}", response_class=HTMLResponse)
+    def patient_doc(request: Request, pid: str, kind: str):
+        p = current(request)
+        if kind not in ("tumor-board", "epicrisis"):
+            raise NotFound()
+        card = registry.get_card(db, p, pid_of(pid))
+        s = docgen.patient_summary(card)
+        text = docgen.tumor_board_text(s) if kind == "tumor-board" else docgen.epicrisis_text(s)
+        return render(request, "patient_doc.html", p, s=s, text=text, kind=kind, pid=pid)
 
     # --- контроль полноты (FR-7) -------------------------------------------
     @app.get("/quality", response_class=HTMLResponse)

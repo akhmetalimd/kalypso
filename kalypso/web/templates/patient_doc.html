@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Резюме для Tumor Board' if kind == 'tumor-board' else 'Эпикриз (черновик)' }}{% endblock %}
+{% block content %}
+<div class="head no-print">
+  <h1>{{ 'Резюме для Tumor Board' if kind == 'tumor-board' else 'Эпикриз (черновик)' }}
+    <span class="muted">· пациент <a class="mono" href="/patients/{{ pid }}">{{ s.pid }}</a></span></h1>
+  <div class="actions">
+    <a class="button" href="/patients/{{ pid }}/docs/{{ 'epicrisis' if kind == 'tumor-board' else 'tumor-board' }}">{{ 'Эпикриз' if kind == 'tumor-board' else 'Tumor Board' }}</a>
+  </div>
+</div>
+<div class="note warn">Черновик, сформирован по шаблону из данных регистра (без AI). Проверьте и отредактируйте перед использованием.</div>
+{% if s.gaps %}<div class="note warn no-print"><strong>Пробелы в данных:</strong> {{ s.gaps|join('; ') }}</div>{% endif %}
+<section class="card">
+  <textarea rows="26" readonly class="doc-text">{{ text }}</textarea>
+  <small class="no-print">Выделите текст и скопируйте, или распечатайте страницу (Ctrl+P). Сформировано {{ s.generated }}.</small>
+</section>
+{% endblock %}

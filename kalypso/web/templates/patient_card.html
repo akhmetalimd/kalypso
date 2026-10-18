@@ -16,12 +16,17 @@
     <span class="badge">{{ label('status_last_contact', pt.status_last_contact) }}</span></h1>
   <div class="actions">
     {% if w %}<a class="button" href="/patients/{{ pid }}/edit">Правка карточки</a>{% endif %}
+    <a class="button" href="/patients/{{ pid }}/docs/tumor-board">Tumor Board</a>
+    <a class="button" href="/patients/{{ pid }}/docs/epicrisis">Эпикриз</a>
     {% if p.can('audit.read') %}<a class="button" href="/audit?table=patient&row_id={{ pid }}">История изменений</a>{% endif %}
   </div>
 </div>
 <p class="muted">Филиал регистрации: {{ pt.branch }} · ведётся в: {{ c.branches|join(', ') }} ·
   {{ label('provenance', pt.provenance) }} · источник: {{ label('source', pt.source) }} ·
   внесён {{ pt.entry_date.strftime('%d.%m.%Y') }}</p>
+
+{% if timeline_svg %}<section class="card"><h2>Таймлайн</h2>{{ timeline_svg|safe }}
+  <small>▲ прогрессия · △ рецидив · ◆ старт новой линии · ✕ смерть · точки — оценка ответа. Подробности — в таблицах ниже.</small></section>{% endif %}
 
 <section class="panels">
   <div class="panel {{ 'warn' if c.flags.completeness else 'ok' }}">

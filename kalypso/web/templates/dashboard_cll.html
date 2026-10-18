@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_viz.html" import filters, dist_table, tile with context %}
+{% block title %}ХЛЛ — дашборд{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>ХЛЛ / ЛМЛ <span class="muted">{{ d.n }} пациентов</span></h1>
+  <div class="actions"><a class="button" href="/dashboard">Обзор</a><a class="button" href="/survival">Исследователь выживаемости</a></div>
+</div>
+{{ filters('/dashboard/cll', f, branches) }}
+<p class="muted">{{ filters_text }}. Маркеры — последний результат или код пропуска; серым — пропуски и «не внесено».</p>
+
+<section class="tiles">
+  {{ tile('Получали терапию', d.treated[0], d.treated[1]) }}
+  <div class="tile"><div class="label">Медиана времени до 1-й терапии</div>
+    <div class="value">{{ d.ttft_median_months if d.ttft_median_months is not none else 'не достигнута' }}{% if d.ttft_median_months is not none %} мес.{% endif %}</div>
+    <div class="sub">TTFT, n={{ d.ttft_n }} · <a href="/survival?endpoint=TTFT">кривая</a></div></div>
+</section>
+
+<div class="two">
+  {% for key, title in [('IGHV', 'IGHV'), ('TP53', 'TP53 (мутация)'), ('del17p', 'del(17p)'), ('del11q', 'del(11q)'), ('tri12', 'Трисомия 12'), ('del13q', 'del(13q)')] %}
+  <section class="card"><h2>{{ title }}</h2>
+    {{ charts.bar_chart(d.markers[key], title, d.n)|safe }}{{ dist_table(d.markers[key], d.n) }}</section>
+  {% endfor %}
+  <section class="card"><h2>Иерархия FISH (Döhner)</h2>
+    {{ charts.bar_chart(d.dohner, 'Иерархия Döhner', d.n)|safe }}{{ dist_table(d.dohner, d.n) }}
+    <small>del(17p) &gt; del(11q) &gt; +12 &gt; нормальный &gt; del(13q) одна; без вышестоящей пробы — не определено.</small></section>
+  <section class="card"><h2>Стадия Binet</h2>
+    {{ charts.bar_chart(d.binet, 'Binet', d.n)|safe }}{{ dist_table(d.binet, d.n) }}</section>
+  <section class="card"><h2>CLL-IPI (в карточке)</h2>
+    {{ charts.bar_chart(d.ipi_stored, 'CLL-IPI', d.n)|safe }}{{ dist_table(d.ipi_stored, d.n) }}</section>
+  <section class="card"><h2>CLL-IPI: карточка и расчёт по данным</h2>
+    {{ charts.bar_chart(d.ipi_agree, 'Сверка CLL-IPI', d.n)|safe }}{{ dist_table(d.ipi_agree, d.n) }}</section>
+  <section class="card"><h2>Число линий терапии</h2>
+    {{ charts.bar_chart(d.lines_per, 'Линии', d.n)|safe }}{{ dist_table(d.lines_per, d.n) }}</section>
+  <section class="card"><h2>Режимы 1-й линии</h2>
+    {% if d.regimen1 %}{{ charts.bar_chart(d.regimen1, 'Режимы 1-й линии')|safe }}{{ dist_table(d.regimen1) }}{% else %}<p class="muted">Нет данных.</p>{% endif %}</section>
+</div>
+
+<section class="card"><h2>Ответ по линиям (iwCLL 2018, последняя оценка)</h2>
+  {% if d.responses %}
+  {{ charts.stacked_bars(d.responses, response_groups, 'Ответ по линиям')|safe }}
+  <details class="viz-table"><summary>Таблица</summary><table class="grid small">
+    <thead><tr><th>Линия</th>{% for k, name in response_groups %}<th>{{ name }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for line, counts in d.responses %}<tr><td>{{ line }}</td>{% for k, _ in response_groups %}<td>{{ counts.get(k, 0) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></details>
+  {% else %}<p class="muted">Оценок ответа нет.</p>{% endif %}
+</section>
+
+<section class="card"><h2>Причины смерти</h2>
+  {% if d.deaths %}{{ charts.bar_chart(d.deaths, 'Причины смерти')|safe }}{{ dist_table(d.deaths) }}{% else %}<p class="muted">Смертей не зарегистрировано.</p>{% endif %}
+</section>
+{% endblock %}

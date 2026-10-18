@@ -1,0 +1,32 @@
+{# Фильтры когорты и табличные двойники графиков. #}
+{% macro filters(action, f, branches) %}
+<form method="get" action="{{ action }}" class="filters">
+  {% set bopts = {} %}{% for b in branches %}{% set _ = bopts.update({b.branch_code: b.branch_code}) %}{% endfor %}
+  <label>Филиал <select name="branch"><option value="">все доступные</option>
+    {% for code in bopts %}<option value="{{ code }}"{% if f.branch == code %} selected{% endif %}>{{ code }}</option>{% endfor %}</select></label>
+  <label>Диагноз с <input type="number" name="year_from" min="1990" max="2100" value="{{ f.year_from or '' }}" placeholder="год"></label>
+  <label>по <input type="number" name="year_to" min="1990" max="2100" value="{{ f.year_to or '' }}" placeholder="год"></label>
+  <label>Пол <select name="sex"><option value="">все</option>
+    {% for code, t in options('sex').items() %}<option value="{{ code }}"{% if f.sex == code %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  <label>Binet <select name="binet"><option value="">все</option>
+    {% for s in ['A', 'B', 'C'] %}<option value="{{ s }}"{% if f.binet == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Данные <select name="provenance"><option value="">все</option>
+    {% for code, t in options('provenance').items() %}<option value="{{ code }}"{% if f.provenance == code %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  {% if caller %}{{ caller() }}{% endif %}
+  <button class="primary">Показать</button>
+</form>
+{% endmacro %}
+
+{% macro dist_table(items, total=None) %}
+{% set t = total if total is not none else (items|sum(attribute=1)) %}
+<details class="viz-table"><summary>Таблица</summary>
+  <table class="grid small"><thead><tr><th>Категория</th><th>n</th><th>%</th></tr></thead><tbody>
+  {% for name, n, muted in items %}<tr><td>{{ name }}</td><td>{{ n }}</td><td>{{ '%.0f'|format(100 * n / t) if t else '—' }}</td></tr>{% endfor %}
+  </tbody></table></details>
+{% endmacro %}
+
+{% macro tile(label_text, num, den, sub='') %}
+<div class="tile"><div class="label">{{ label_text }}</div>
+  <div class="value">{{ '%.0f %%'|format(100 * num / den) if den else '—' }}</div>
+  <div class="sub">{{ num }} из {{ den }}{% if sub %} · {{ sub }}{% endif %}</div></div>
+{% endmacro %}

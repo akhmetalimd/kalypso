@@ -59,6 +59,20 @@ def seed_if_empty(db: Database, hasher: IinHasher) -> dict | None:
     return summary
 
 
+def top_up_patients(db: Database, hasher: IinHasher) -> int:
+    """Довести синтетическую когорту до synthetic_patients (для существующей .devdb)."""
+    target = json.loads(SEED.read_text(encoding="utf-8"))["synthetic_patients"]
+    with db.tx() as cur:
+        cur.execute("RESET ROLE")
+        cur.execute("SELECT count(*) AS n FROM patient")
+        have = cur.fetchone()["n"]
+        cur.execute("SELECT * FROM app_user WHERE role_code = 'physician' ORDER BY login")
+        physicians = [auth._principal(r) for r in cur.fetchall()]
+    if have >= target or not physicians:
+        return 0
+    return synthetic.generate(db, hasher, physicians, n=target - have, seed=1000 + have, duplicates=0)["patients"]
+
+
 def seed_documents_if_empty(db: Database, ai_enabled: bool, n: int = 16) -> int:
     """Синтетические заключения для части пациентов — чтобы очередь сверки была не пустой."""
     import random
@@ -118,6 +132,9 @@ def main() -> None:
     summary = seed_if_empty(db, IinHasher(settings.hmac_key, settings.hash_key_version))
     if summary:
         print("Синтетика:", summary, "· учётные записи: kalypso/dev_seed.json")
+    added = top_up_patients(db, IinHasher(settings.hmac_key, settings.hash_key_version))
+    if added:
+        print(f"Синтетика: добавлено пациентов {added}")
     made = seed_documents_if_empty(db, settings.ai_enabled)
     if made:
         print(f"Синтетические документы: {made}")

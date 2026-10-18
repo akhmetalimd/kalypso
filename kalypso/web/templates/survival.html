@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_viz.html" import filters with context %}
+{% block title %}Исследователь выживаемости{% endblock %}
+{% block content %}
+<h1>Исследователь выживаемости</h1>
+<p class="muted">Каплан–Майер с 95 % ДИ (Гринвуд, log-log). <strong>p-value, log-rank и регрессия Кокса здесь не считаются</strong> —
+  сравнение групп требует поправки на факторы риска и выполняется на выгрузке. Это ассоциации, не причинность.</p>
+
+{% call filters('/survival', f, branches) %}
+  <label>Конечная точка <select name="endpoint">
+    {% for code, text in endpoints.items() %}<option value="{{ code }}" title="{{ text }}"{% if r.endpoint == code %} selected{% endif %}>{{ code }}</option>{% endfor %}</select></label>
+  <label>Линия (для PFS/mPFS/EFS/TTNT) <input type="number" name="line_no" min="1" max="5" value="{{ r.line_no }}"></label>
+  <label>Группировка <select name="grouping">
+    {% for code, text in groupings.items() %}<option value="{{ code }}"{% if r.grouping == code %} selected{% endif %}>{{ text }}</option>{% endfor %}</select></label>
+  <label>Показатель (для порога) <select name="lab"><option value="">—</option>
+    {% for code, spec in lab_units.items() if not code.startswith('_') %}<option value="{{ code }}"{% if r.lab_loinc == code %} selected{% endif %}>{{ spec.name }}, {{ spec.canonical_unit }}</option>{% endfor %}</select></label>
+  <label>Порог <input name="threshold" inputmode="decimal" value="{{ q.get('threshold', '') }}" placeholder="из литературы">
+    <small>Не подбирайте порог по этим данным.</small></label>
+{% endcall %}
+
+<section class="card">
+  <h2>{{ r.endpoint }}{% if r.endpoint in line_endpoints %} от старта {{ r.line_no }}-й линии{% endif %} · {{ grouping_label }}</h2>
+  <p class="muted">{{ endpoints[r.endpoint] }}. Когорта: {{ r.n_cohort }}; в анализе {{ r.groups|sum(attribute='n') }}{% if r.not_applicable %}, неприменимо {{ r.not_applicable }} (нет нужной линии){% endif %}{% if r.excluded %}, исключено {{ r.excluded|length }}{% endif %}.
+    {% if r.grouping not in ('none', 'sex', 'branch', 'binet', 'cll_ipi', 'line1_regimen') %}Признак берётся на момент начала отсчёта (окно {{ r.window_days }} дней), позже измеренное — «не определено на старте».{% endif %}</p>
+  {% for n in r.notes %}<div class="note warn">{{ n }}</div>{% endfor %}
+  {% if r.groups %}
+    {{ charts.km_chart(r.groups, 'Кривые Каплана–Майера')|safe }}
+    <table class="grid small">
+      <thead><tr><th>Группа</th><th>n</th><th>Событий</th><th>Медиана, мес.</th><th>95 % ДИ медианы</th></tr></thead>
+      <tbody>{% for g in r.groups %}<tr><td>{{ g.label }}</td><td>{{ g.n }}</td><td>{{ g.events }}</td>
+        <td>{{ g.median_months if g.median_months is not none else 'не достигнута' }}</td>
+        <td>{% if g.median_months is not none %}{{ g.median_ci_months[0] if g.median_ci_months[0] is not none else '—' }} – {{ g.median_ci_months[1] if g.median_ci_months[1] is not none else 'не достигнута' }}{% else %}—{% endif %}</td></tr>{% endfor %}</tbody>
+    </table>
+    <h3>Число под риском</h3>
+    <table class="grid small">
+      <thead><tr><th>Группа \ месяцы</th>{% for t in r.ticks %}<th>{{ t }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for g in r.groups %}<tr><td>{{ g.label }}</td>{% for n in g.at_risk %}<td>{{ n }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table>
+    <p><a class="button" href="/survival.csv?{{ csv_query }}">Скачать данные (CSV)</a>
+      <small>Длительности и события по пациентам (псевдоним ID) — для log-rank / Cox на выгрузке.</small></p>
+  {% else %}<p class="muted">Нет пациентов для этой конечной точки.</p>{% endif %}
+  {% if r.excluded %}<details><summary>Исключённые записи ({{ r.excluded|length }})</summary>
+    <ul>{% for e in r.excluded %}<li><a class="mono" href="/patients/{{ e.patient_id }}">{{ e.patient_id|short }}</a>: {{ e.reason }}</li>{% endfor %}</ul></details>{% endif %}
+</section>
+
+{% if abstract %}
+<section class="card"><h2>Тезисы (черновик)</h2>
+  <textarea rows="12" readonly class="doc-text">{{ abstract }}</textarea>
+  <small>Скопируйте и отредактируйте. Сформировано по шаблону из данных регистра, без AI.</small></section>
+{% endif %}
+{% endblock %}

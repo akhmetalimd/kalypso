@@ -106,3 +106,52 @@ mark sup { color: var(--warn); font-weight: 700; margin-left: 1px; }
 label.check { display: flex; gap: 8px; align-items: flex-start; }
 label.check input { width: auto; margin-top: 4px; }
 .grid tr.sel td { background: var(--badge); }
+
+/* --- П3: графики (палитра — навык dataviz, проверена валидатором на фонах карточек) --- */
+:root {
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a;
+  --series-4: #eda100; --series-5: #e87ba4; --series-6: #008300;
+  --viz-grid: #e1e0d9; --viz-axis: #c3c2b7; --viz-muted-fill: #b9b8b1;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
+    --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
+    --viz-grid: #2c2c2a; --viz-axis: #383835; --viz-muted-fill: #5c5c58;
+  }
+}
+svg.viz { width: 100%; height: auto; display: block; margin: 4px 0 8px; }
+svg.viz .viz-text { fill: var(--text); }
+svg.viz .viz-muted { fill: var(--muted); }
+svg.viz .grid { stroke: var(--viz-grid); stroke-width: 1; }
+svg.viz .axis { stroke: var(--viz-axis); stroke-width: 1; }
+svg.viz .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+svg.viz .tick { stroke-width: 2; }
+svg.viz .band { stroke: none; opacity: .12; }
+svg.viz .hit { fill: transparent; }
+svg.viz .dot { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; }
+svg.viz .muted-fill { fill: var(--viz-muted-fill); }
+svg.viz .s1 { stroke: var(--series-1); } svg.viz .bar.s1, svg.viz .seg.s1, svg.viz .band.s1 { fill: var(--series-1); }
+svg.viz .s2 { stroke: var(--series-2); } svg.viz .seg.s2, svg.viz .band.s2 { fill: var(--series-2); }
+svg.viz .s3 { stroke: var(--series-3); } svg.viz .seg.s3, svg.viz .band.s3 { fill: var(--series-3); }
+svg.viz .s4 { stroke: var(--series-4); } svg.viz .seg.s4, svg.viz .band.s4 { fill: var(--series-4); }
+svg.viz .s5 { stroke: var(--series-5); } svg.viz .seg.s5, svg.viz .band.s5 { fill: var(--series-5); }
+svg.viz .s6 { stroke: var(--series-6); } svg.viz .seg.s6, svg.viz .band.s6 { fill: var(--series-6); }
+svg.viz rect.seg, svg.viz path.bar { stroke: none; }
+.viz-table summary { font-size: .85rem; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.tile .label { color: var(--muted); font-size: .85rem; }
+.tile .value { font-size: 1.6rem; font-weight: 600; }
+.tile .sub { color: var(--muted); font-size: .8rem; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; margin-bottom: 8px; }
+.filters label { display: block; font-size: .85rem; color: var(--muted); }
+.filters input, .filters select { width: auto; min-width: 110px; color: var(--text); }
+textarea.doc-text { font-family: ui-monospace, Consolas, monospace; font-size: .9rem; }
+@media print {
+  .top, .no-print, .synthetic, .filters, .actions { display: none !important; }
+  body { background: #fff; color: #000; }
+  .card { border: 0; padding: 0; }
+  textarea.doc-text { border: 0; height: auto; overflow: visible; }
+}

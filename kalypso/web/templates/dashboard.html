@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% from "_viz.html" import filters, dist_table, tile with context %}
+{% block title %}Обзор{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Обзор регистра <span class="muted">{{ d.n }} пациентов</span></h1>
+  <div class="actions"><a class="button" href="/dashboard/cll">ХЛЛ подробно</a><a class="button" href="/survival">Исследователь выживаемости</a></div>
+</div>
+{{ filters('/dashboard', f, branches) }}
+<p class="muted">{{ filters_text }}.</p>
+
+<section class="tiles">
+  {{ tile('Полнота обязательного ядра', d.tiles.complete[0], d.tiles.complete[1], 'без пропусков') }}
+  {{ tile('Актуальное наблюдение', d.tiles.followup[0], d.tiles.followup[1], 'контакт ≤ 12 мес. или умер') }}
+  {{ tile('Ведутся в нескольких филиалах', d.tiles.multi_branch[0], d.tiles.multi_branch[1], 'межфилиальные дубликаты') }}
+  {{ tile('Умерли', d.tiles.dead[0], d.tiles.dead[1]) }}
+  {{ tile('Потеряны из наблюдения', d.tiles.lost[0], d.tiles.lost[1]) }}
+</section>
+
+<div class="two">
+  <section class="card"><h2>По нозологиям (WHO-HAEM5)</h2>
+    {{ charts.bar_chart(d.by_nosology, 'Пациенты по нозологиям', d.n)|safe }}{{ dist_table(d.by_nosology, d.n) }}</section>
+  <section class="card"><h2>По филиалам</h2>
+    {{ charts.bar_chart(d.by_branch, 'Пациенты по филиалам', d.n)|safe }}{{ dist_table(d.by_branch, d.n) }}</section>
+  <section class="card"><h2>Статус на последний контакт</h2>
+    {{ charts.bar_chart(d.by_status, 'Статус', d.n)|safe }}{{ dist_table(d.by_status, d.n) }}</section>
+  <section class="card"><h2>Ретро / проспектив</h2>
+    {{ charts.bar_chart(d.by_provenance, 'Ретро и проспективные', d.n)|safe }}{{ dist_table(d.by_provenance, d.n) }}</section>
+</div>
+
+<section class="card"><h2>Год диагноза</h2>
+  {{ charts.column_chart(d.by_year, 'Пациенты по году диагноза')|safe }}
+  <details class="viz-table"><summary>Таблица</summary><table class="grid small"><thead><tr><th>Год</th><th>n</th></tr></thead>
+    <tbody>{% for y, n in d.by_year %}<tr><td>{{ y }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody></table></details>
+</section>
+
+<section class="card"><h2>Внесение данных за 12 месяцев <small>линии, наблюдения, анализы, маркеры</small></h2>
+  {% if d.activity %}
+  {{ charts.column_chart(d.activity_cols, 'Записей в месяц')|safe }}
+  <table class="grid small"><thead><tr><th>Месяц</th><th>Записей</th><th>Авторов (врачей и куратора)</th></tr></thead>
+    <tbody>{% for a in d.activity %}<tr><td>{{ a.month }}</td><td>{{ a.records }}</td><td>{{ a.authors }}</td></tr>{% endfor %}</tbody></table>
+  {% else %}<p class="muted">Нет записей за период.</p>{% endif %}
+</section>
+{% endblock %}
