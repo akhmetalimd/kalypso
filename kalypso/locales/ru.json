@@ -1,41 +1,152 @@
 {
   "codes": {
-    "sex": { "M": "Мужской", "F": "Женский", "unknown": "Не указан" },
-    "status_last_contact": { "alive": "Жив", "dead": "Умер", "lost_to_follow_up": "Потерян из наблюдения" },
-    "b_symptoms": { "yes": "Да", "no": "Нет", "unknown": "Неизвестно" },
-    "provenance": { "retrospective": "Ретроспективно", "prospective": "Проспективно" },
-    "source": { "manual": "Вручную", "his_structured": "his.kz (структурно)", "ai_document": "AI из документа" },
+    "sex": {
+      "M": "Мужской",
+      "F": "Женский",
+      "unknown": "Не указан"
+    },
+    "status_last_contact": {
+      "alive": "Жив",
+      "dead": "Умер",
+      "lost_to_follow_up": "Потерян из наблюдения"
+    },
+    "b_symptoms": {
+      "yes": "Да",
+      "no": "Нет",
+      "unknown": "Неизвестно"
+    },
+    "provenance": {
+      "retrospective": "Ретроспективно",
+      "prospective": "Проспективно"
+    },
+    "source": {
+      "manual": "Вручную",
+      "his_structured": "his.kz (структурно)",
+      "ai_document": "AI из документа"
+    },
     "missing": {
       "not_done": "Не выполнялось",
       "done_unavailable": "Выполнялось, результат недоступен",
       "normal_negative": "Норма / отрицательно",
       "unknown": "Неизвестно"
     },
-    "date_precision": { "day": "День", "month": "Месяц", "year": "Год" },
-    "stage_system": { "Rai": "Rai", "Binet": "Binet" },
-    "cirs_fitness": { "fit": "Fit", "unfit": "Unfit", "frail": "Frail" },
-    "index_group": { "low": "Низкий", "intermediate": "Промежуточный", "high": "Высокий", "very_high": "Очень высокий" },
-    "event_type": {
-      "none": "Нет события", "progression": "Прогрессия", "relapse": "Рецидив",
-      "death": "Смерть", "new_line_start": "Старт новой линии"
+    "date_precision": {
+      "day": "День",
+      "month": "Месяц",
+      "year": "Год"
     },
-    "death_cause": { "lpd_related": "Связана с ЛПЗ", "not_related": "Не связана", "unknown": "Неизвестно" },
-    "response_criteria": { "iwCLL 2018": "iwCLL 2018" },
-    "response_basis": { "clinical": "Клинически", "ct": "КТ", "pet_ct": "ПЭТ-КТ", "morphology": "Морфология" },
+    "stage_system": {
+      "Rai": "Rai",
+      "Binet": "Binet"
+    },
+    "cirs_fitness": {
+      "fit": "Fit",
+      "unfit": "Unfit",
+      "frail": "Frail"
+    },
+    "index_group": {
+      "low": "Низкий",
+      "intermediate": "Промежуточный",
+      "high": "Высокий",
+      "very_high": "Очень высокий"
+    },
+    "event_type": {
+      "none": "Нет события",
+      "progression": "Прогрессия",
+      "relapse": "Рецидив",
+      "death": "Смерть",
+      "new_line_start": "Старт новой линии"
+    },
+    "death_cause": {
+      "lpd_related": "Связана с ЛПЗ",
+      "not_related": "Не связана",
+      "unknown": "Неизвестно"
+    },
+    "response_criteria": {
+      "iwCLL 2018": "iwCLL 2018"
+    },
+    "response_basis": {
+      "clinical": "Клинически",
+      "ct": "КТ",
+      "pet_ct": "ПЭТ-КТ",
+      "morphology": "Морфология"
+    },
     "response_value": {
-      "CR": "CR — полная ремиссия", "CRi": "CRi — ПР с неполным восст. крови",
-      "nPR": "nPR — нодулярная ЧР", "PR": "PR — частичная ремиссия",
-      "PR-L": "PR-L — ЧР с лимфоцитозом", "SD": "SD — стабилизация", "PD": "PD — прогрессирование"
+      "CR": "CR — полная ремиссия",
+      "CRi": "CRi — ПР с неполным восст. крови",
+      "nPR": "nPR — нодулярная ЧР",
+      "PR": "PR — частичная ремиссия",
+      "PR-L": "PR-L — ЧР с лимфоцитозом",
+      "SD": "SD — стабилизация",
+      "PD": "PD — прогрессирование"
     },
     "marker_value": {
-      "mutated": "Мутирован", "unmutated": "Немутирован", "wild_type": "Дикий тип",
-      "detected": "Выявлена", "not_detected": "Не выявлена"
+      "mutated": "Мутирован",
+      "unmutated": "Немутирован",
+      "wild_type": "Дикий тип",
+      "detected": "Выявлена",
+      "not_detected": "Не выявлена"
     },
-    "role": { "physician": "Лечащий врач", "curator": "Куратор регистра", "analyst": "Аналитик", "admin": "Администратор" },
-    "request_status": { "pending": "Ожидает", "approved": "Одобрен", "rejected": "Отклонён" },
+    "role": {
+      "physician": "Лечащий врач",
+      "curator": "Куратор регистра",
+      "analyst": "Аналитик",
+      "admin": "Администратор",
+      "ai_worker": "AI-обработчик (служебная)"
+    },
+    "request_status": {
+      "pending": "Ожидает",
+      "approved": "Одобрен",
+      "rejected": "Отклонён"
+    },
     "login_reason": {
-      "ok": "Успешно", "bad_password": "Неверный пароль", "unknown_user": "Неизвестный логин",
-      "inactive": "Учётная запись отключена", "locked": "Временная блокировка"
+      "ok": "Успешно",
+      "bad_password": "Неверный пароль",
+      "unknown_user": "Неизвестный логин",
+      "inactive": "Учётная запись отключена",
+      "locked": "Временная блокировка"
+    },
+    "doc_type": {
+      "histology": "Гистология / ИГХ",
+      "cytogenetics": "Цитогенетика / FISH",
+      "molecular": "Молекулярное (IGHV, TP53)",
+      "pet_ct": "ПЭТ-КТ",
+      "other": "Другое"
+    },
+    "doc_status": {
+      "queued": "В очереди AI",
+      "processing": "Обрабатывается AI",
+      "proposed": "Ждёт сверки",
+      "manual": "Ручная очередь",
+      "reviewed": "Сверен"
+    },
+    "confidence": {
+      "high": "высокая",
+      "medium": "средняя",
+      "low": "низкая"
+    },
+    "proposal_status": {
+      "pending": "Ожидает",
+      "accepted": "Принято",
+      "edited": "Исправлено",
+      "rejected": "Отклонено"
+    },
+    "run_status": {
+      "ok": "Успешно",
+      "error": "Ошибка",
+      "refusal": "Отказ модели",
+      "invalid": "Ответ не по схеме",
+      "timeout": "Таймаут"
+    },
+    "deid_kind": {
+      "name": "ФИО",
+      "iin": "ИИН",
+      "phone": "Телефон",
+      "email": "E-mail",
+      "address": "Адрес",
+      "record_no": "Номер истории / карты",
+      "number": "Номер документа",
+      "birth_date": "Дата рождения"
     }
   },
   "flags": {
@@ -65,7 +176,8 @@
     "empty_stage_value": "Нет стадии (или кода пропуска)",
     "empty_index_score": "Нет индекса CLL-IPI (или кода пропуска)",
     "lab_unknown_unit": "Единица не распознана — нужна ручная проверка",
-    "lab_unknown_loinc": "Показатель не из справочника — нужна ручная проверка"
+    "lab_unknown_loinc": "Показатель не из справочника — нужна ручная проверка",
+    "missing_response_line_any": "Нет оценки ответа по завершённой линии"
   },
   "msg": {
     "created": "Пациент внесён в регистр",
@@ -76,6 +188,11 @@
     "password_changed": "Пароль изменён",
     "user_created": "Пользователь создан",
     "request_decided": "Решение по запросу сохранено",
-    "not_found_iin": "Пациент с таким ИИН в доступных вам записях не найден"
+    "not_found_iin": "Пациент с таким ИИН в доступных вам записях не найден",
+    "doc_queued": "Документ сохранён (только деидентифицированный текст) и передан AI. Предложения появятся в очереди сверки",
+    "doc_manual": "Документ сохранён в ручную очередь: внесите данные вручную",
+    "decided": "Решение сохранено",
+    "requeued": "Документ повторно отправлен в AI",
+    "manual_done": "Документ отмечен как обработанный"
   }
 }

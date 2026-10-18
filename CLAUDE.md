@@ -32,6 +32,24 @@ KALYPSO (KAzakhstan LYmphoma Patients Survival and Outcomes) — пробная 
    `SET LOCAL app.user_id = '<uuid>'` (и `app.change_reason` при пересмотре диагноза).
    `audit_log` и `diagnosis_version` неизменяемы.
 
+## AI-ассист (П2)
+
+- Конвейер: документ (`source_document`, только очищенный `kalypso/deid_text.py` текст +
+  подтверждение пользователя) -> `kalypso/ai/pipeline.py` (служебный пользователь `ai-worker`)
+  -> `ai_run` + `ai_proposal` -> сверка куратором (`kalypso/review.py`) -> запись в регистр с
+  `source = 'ai_document'`, `source_record_id` = id предложения.
+- Шлюз — куратор: право `review.apply`; RLS пускает его писать только строки `ai_document`,
+  а в карточке пациента — только диагноз, текст гистологии, последний контакт (триггер
+  `patient_curator_guard`). **Пакетного принятия нет** — каждое предложение решается отдельно.
+- Извлекатели за интерфейсом `kalypso/ai/base.Extractor`: `rules` (без сети), `claude`
+  (Anthropic API: JSON-схема, кэш системной части, `fallbacks: "default"`), `fake` (тесты).
+  Модель в защищённом контуре — ещё одна реализация того же интерфейса.
+- `KALYPSO_AI_EXTRACTOR` по умолчанию `off` (всё — в ручную очередь); в dev — `rules`.
+- **Живые вызовы Claude — только с отдельного согласия владельца проекта на бюджет.**
+  Тесты к сети не обращаются. `python -m kalypso.ai.evaluate --extractor claude --estimate` —
+  смета без вызовов; живой прогон требует `--confirm-spend`.
+- Любой сбой извлечения — документ в ручную очередь, конвейер не падает.
+
 ## Схема данных
 
 - `schema.sql` — нормативный baseline, **не редактируется**. Все изменения — новыми

@@ -13,7 +13,9 @@
   <nav>
     <a href="/patients">Пациенты</a>
     {% if p.can('patient.write') %}<a href="/patients/new">Новый пациент</a>{% endif %}
+    {% if p.can('review.apply') %}<a href="/review">Сверка AI</a>{% endif %}
     {% if p.can('access.decide') %}<a href="/requests">Запросы доступа</a>{% endif %}
+    {% if p.can('patient.read') %}<a href="/quality">Полнота</a>{% endif %}
     {% if p.can('export.deid') %}<a href="/export">Выгрузка</a>{% endif %}
     {% if p.can('audit.read') %}<a href="/audit">Аудит</a>{% endif %}
     {% if p.can('users.manage') %}<a href="/admin/users">Пользователи</a>{% endif %}

@@ -12,11 +12,13 @@ import json
 import os
 import secrets
 import subprocess
+import threading
 from pathlib import Path
 
 import psycopg
 
 from kalypso import auth, migrate, synthetic
+from kalypso.ai import pipeline
 from kalypso.config import Settings
 from kalypso.db import Database
 from kalypso.deid import IinHasher
@@ -57,6 +59,34 @@ def seed_if_empty(db: Database, hasher: IinHasher) -> dict | None:
     return summary
 
 
+def seed_documents_if_empty(db: Database, ai_enabled: bool, n: int = 16) -> int:
+    """Синтетические заключения для части пациентов — чтобы очередь сверки была не пустой."""
+    import random
+
+    from kalypso import documents
+    from kalypso.ai.synthetic_docs import generate
+    with db.tx() as cur:
+        cur.execute("RESET ROLE")   # dev-seed: владелец, мимо RLS
+        cur.execute("SELECT count(*) AS n FROM source_document")
+        if cur.fetchone()["n"]:
+            return 0
+        cur.execute("SELECT patient_id, branch, dx_date, provenance FROM patient WHERE deleted_at IS NULL "
+                    "ORDER BY entry_date")
+        patients = cur.fetchall()
+        cur.execute("SELECT * FROM app_user WHERE role_code = 'physician'")
+        doctors = {r["branch_code"]: auth._principal(r) for r in cur.fetchall()}
+    rng = random.Random(7)
+    made = 0
+    for doc, pt in zip(generate(n, seed=7), rng.sample(patients, min(n, len(patients)))):
+        clean = documents.preview(doc.raw_text)
+        documents.add_document(db, doctors[pt["branch"]], pt["patient_id"], {
+            "doc_type": doc.doc_type, "doc_date": max(doc.doc_date, pt["dx_date"]).isoformat(),
+            "provenance": pt["provenance"], "text": clean.text, "deid_report": json.dumps(clean.report),
+            "confirm": "1"}, ai_enabled=ai_enabled)
+        made += 1
+    return made
+
+
 def main() -> None:
     import pgserver
     import uvicorn
@@ -78,12 +108,27 @@ def main() -> None:
     if done:
         print("Применены миграции:", ", ".join(done))
 
+    # В dev по умолчанию — извлечение на правилах (без сети). Claude — только если явно
+    # задать KALYPSO_AI_EXTRACTOR=claude и ANTHROPIC_API_KEY: это платные вызовы.
+    extractor_kind = os.environ.get("KALYPSO_AI_EXTRACTOR", "rules")
     settings = Settings(dsn=dsn, hmac_key=sec["hmac_key"].encode(), session_secret=sec["session_secret"].encode(),
-                        secure_cookies=False)
+                        secure_cookies=False, ai_extractor=extractor_kind,
+                        ai_model=os.environ.get("KALYPSO_AI_MODEL") or None)
     db = Database(dsn)
     summary = seed_if_empty(db, IinHasher(settings.hmac_key, settings.hash_key_version))
     if summary:
         print("Синтетика:", summary, "· учётные записи: kalypso/dev_seed.json")
+    made = seed_documents_if_empty(db, settings.ai_enabled)
+    if made:
+        print(f"Синтетические документы: {made}")
+
+    extractor = pipeline.make_extractor(settings.ai_extractor, settings.ai_model, settings.ai_effort)
+    if extractor is not None:
+        if extractor.name == "claude":
+            print("ВНИМАНИЕ: AI-извлечение через Claude — платные вызовы API")
+        threading.Thread(target=pipeline.run_forever, args=(db, extractor), daemon=True,
+                         name="ai-worker").start()
+        print(f"AI-обработчик запущен: {extractor.name}")
     uvicorn.run(create_app(settings, db), host="127.0.0.1", port=int(os.environ.get("PORT", "8765")))
 
 

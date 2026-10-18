@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field with context %}
+{% from "_doc_text.html" import doc_text %}
+{% block title %}Документ{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ label('doc_type', d.doc_type) }} от {{ d.doc_date|d }}
+    <span class="badge">{{ label('doc_status', d.status) }}</span></h1>
+  <div class="actions">
+    <a class="button" href="/patients/{{ d.patient_id }}">К пациенту {{ d.patient_id|short }}</a>
+    {% if p.can('review.apply') and d.status == 'proposed' %}<a class="button primary" href="/review/{{ d.doc_id }}">Сверить</a>{% endif %}
+  </div>
+</div>
+{% if d.status_note %}<div class="note warn">{{ d.status_note }}</div>{% endif %}
+<p class="muted">Сохранён деидентифицированный текст. Замены: {% for k, n in d.deid_report.items() %}{{ label('deid_kind', k) }} {{ n }}{{ ', ' if not loop.last }}{% else %}нет{% endfor %}.
+  {% if not d.deid_passed %}Текст не подтверждён пользователем — к AI не передаётся.{% endif %}</p>
+
+{% if d.status == 'manual' %}
+<div class="actions">
+  {% if p.can('patient.write') or p.can('review.apply') %}
+  <form method="post" action="/documents/{{ d.doc_id }}/manual-done" class="inline">{{ csrf_field() }}
+    <button>Данные внесены вручную — закрыть</button></form>{% endif %}
+  {% if p.can('review.apply') and d.deid_passed %}
+  <form method="post" action="/documents/{{ d.doc_id }}/requeue" class="inline">{{ csrf_field() }}
+    <button>Отправить в AI повторно</button></form>{% endif %}
+</div>
+{% endif %}
+
+<section class="card">
+  <h2>Текст заключения</h2>
+  {{ doc_text(segments) }}
+</section>
+
+{% if proposals %}
+<section class="card">
+  <h2>Предложения AI</h2>
+  <table class="grid">
+    <thead><tr><th>№</th><th>Поле</th><th>Предложено</th><th>Уверенность</th><th>Решение</th><th>Записано</th></tr></thead>
+    <tbody>{% for pr in proposals %}
+      <tr><td>{{ loop.index }}</td><td>{{ target_label(pr.target) }}</td>
+        <td>{{ value_label(pr.target, pr.proposed.value) }}</td>
+        <td>{{ label('confidence', pr.confidence) }}{% if not pr.grounded %} <span class="badge warn">цитата не найдена</span>{% endif %}</td>
+        <td>{{ label('proposal_status', pr.status) }}{% if pr.review_note %} <small>{{ pr.review_note }}</small>{% endif %}</td>
+        <td>{{ value_label(pr.target, pr.final.value) if pr.final else '—' }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if runs %}
+<section class="card">
+  <h2>AI-прогоны</h2>
+  <table class="grid small">
+    <thead><tr><th>Когда</th><th>Извлекатель</th><th>Модель</th><th>Исход</th><th>Токены (вход / выход / из кэша)</th><th>Примечание</th></tr></thead>
+    <tbody>{% for r in runs %}
+      <tr><td>{{ r.finished_at.strftime('%d.%m.%Y %H:%M') }}</td><td>{{ r.extractor }}</td><td>{{ r.model or '—' }}</td>
+        <td>{{ label('run_status', r.status) }}</td>
+        <td>{{ r.input_tokens or '—' }} / {{ r.output_tokens or '—' }} / {{ r.cache_read_tokens or '—' }}</td>
+        <td class="clip">{{ r.error or '' }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

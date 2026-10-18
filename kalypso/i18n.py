@@ -40,6 +40,8 @@ def label(group: str, code, lang: str = DEFAULT) -> str:
 
 def flag(code: str, lang: str = DEFAULT) -> str:
     flags = catalog(lang)["flags"]
+    if code in flags:
+        return flags[code]
     if code.startswith("missing_response_line_"):
         return flags["missing_response_line"].format(n=code.rsplit("_", 1)[-1])
     return flags.get(code, code)

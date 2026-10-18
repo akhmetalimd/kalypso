@@ -67,6 +67,21 @@
 </section>
 
 <section class="card">
+  <h2>Первичные документы</h2>
+  <table class="grid">
+    <thead><tr><th>Дата</th><th>Тип</th><th>Статус</th><th>AI-предложения</th><th></th></tr></thead>
+    <tbody>{% for dd in c.documents %}
+      <tr><td>{{ dd.doc_date|d }}</td><td>{{ label('doc_type', dd.doc_type) }}</td>
+        <td>{{ label('doc_status', dd.status) }}{% if dd.status_note %} <small>{{ dd.status_note }}</small>{% endif %}</td>
+        <td>{% if dd.pending %}ждут сверки: {{ dd.pending }}{% endif %}{% if dd.applied %} внесено: {{ dd.applied }}{% endif %}{% if not dd.pending and not dd.applied %}—{% endif %}</td>
+        <td><a href="/documents/{{ dd.doc_id }}">открыть</a></td></tr>
+    {% else %}<tr><td colspan="5" class="muted">Документов нет.</td></tr>{% endfor %}</tbody>
+  </table>
+  {% if p.can('documents.add') %}<p><a class="button" href="/patients/{{ pid }}/documents/new">Добавить документ</a>
+    <small>Гистология, FISH, IGHV/TP53, ПЭТ-КТ: текст очищается от идентификаторов и передаётся AI для предложений.</small></p>{% endif %}
+</section>
+
+<section class="card">
   <h2>История диагноза</h2>
   <table class="grid">
     <thead><tr><th>Версия</th><th>ICD-O</th><th>МКБ</th><th>Дата диагноза</th><th>Причина пересмотра</th><th>Когда</th></tr></thead>

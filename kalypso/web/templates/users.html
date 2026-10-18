@@ -37,7 +37,8 @@
     {{ csrf_field() }}
     <label>Логин * <input name="login" value="{{ fv.get('login') or '' }}" pattern="[a-z0-9._\-]{3,64}" required><small>латиница, цифры, . _ -</small></label>
     <label>Имя * <input name="display_name" value="{{ fv.get('display_name') or '' }}" required></label>
-    <label>Роль * {{ select('role_code', options('role'), fv.get('role_code'), required=True) }}</label>
+    {% set role_opts = {} %}{% for k, t in options('role').items() if k != 'ai_worker' %}{% set _ = role_opts.update({k: t}) %}{% endfor %}
+    <label>Роль * {{ select('role_code', role_opts, fv.get('role_code'), required=True) }}</label>
     {% set bopts = {} %}{% for b in branches %}{% set _ = bopts.update({b.branch_code: b.branch_code ~ ' — ' ~ b.name_ru}) %}{% endfor %}
     <label>Филиал {{ select('branch_code', bopts, fv.get('branch_code'), blank='— (не врач)') }}</label>
     <label>Временный пароль * <input type="password" name="password" minlength="10" autocomplete="new-password" required><small>при первом входе пользователь сменит его</small></label>

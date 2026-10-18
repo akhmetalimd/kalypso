@@ -80,10 +80,15 @@ def test_physician_cannot_touch_other_branch(reg, world2):
 @pytest.mark.parametrize("who", ["cur", "ana", "admin"])
 def test_readers_cannot_write_clinical_data(reg, world2, who):
     user = reg.admin if who == "admin" else world2[who]
-    reg.as_app(user)
-    reg.cur.execute("UPDATE patient SET ecog = 1 WHERE patient_id = %s", (world2["pa"],))
-    assert reg.cur.rowcount == 0
-    reg.con.rollback()
+    if who == "cur":   # куратор видит карточку для сверки AI (0005), но страж пускает только диагноз/гистологию
+        with rejected(reg.con, "только диагноз"):
+            reg.as_app(user)
+            reg.cur.execute("UPDATE patient SET ecog = 1 WHERE patient_id = %s", (world2["pa"],))
+    else:
+        reg.as_app(user)
+        reg.cur.execute("UPDATE patient SET ecog = 1 WHERE patient_id = %s", (world2["pa"],))
+        assert reg.cur.rowcount == 0
+        reg.con.rollback()
     with rejected(reg.con, "row-level security"):
         reg.as_app(user)
         reg.cur.execute("INSERT INTO lab (patient_id, obs_date, loinc, value_raw, unit_raw, value_canonical, "

@@ -1,13 +1,15 @@
 {
-  "_comment": "Матрица прав (PRD §3). Значение — область: branch (филиалы пользователя) | all. Нет ключа = нет права.",
+  "_comment": "Матрица прав (PRD §3). Значение — область: branch (филиалы пользователя) | all. Нет ключа = нет права. review.apply — запись в регистр только по принятому AI-предложению (source = ai_document). ai_worker — служебная роль фонового обработчика, входа нет.",
   "physician": {
     "patient.read": "branch",
-    "patient.write": "branch"
+    "patient.write": "branch",
+    "documents.add": "branch"
   },
   "curator": {
     "patient.read": "all",
     "access.decide": "all",
-    "audit.read": "all"
+    "audit.read": "all",
+    "review.apply": "all"
   },
   "analyst": {
     "patient.read": "all",
@@ -17,5 +19,8 @@
     "patient.read": "all",
     "users.manage": "all",
     "audit.read": "all"
+  },
+  "ai_worker": {
+    "ai.process": "all"
   }
 }

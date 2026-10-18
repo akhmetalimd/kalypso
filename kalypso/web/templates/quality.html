@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Полнота{% endblock %}
+{% block content %}
+<h1>Контроль полноты <span class="muted">{{ total }} пациентов</span></h1>
+<p class="muted">Поле считается заполненным, если внесено значение или код пропуска. Нажмите на флаг, чтобы увидеть пациентов.</p>
+<table class="grid">
+  <thead><tr><th>Пропуск</th><th>Пациентов</th><th>Доля</th></tr></thead>
+  <tbody>{% for key, n in counts %}
+    <tr class="{{ 'sel' if key == sel_flag else '' }}"><td><a href="/quality?flag={{ key }}">{{ flag(key) }}</a></td>
+      <td>{{ n }}</td><td>{{ '%.0f %%'|format(100 * n / total) if total else '—' }}</td></tr>
+  {% else %}<tr><td colspan="3" class="muted">Пропусков нет.</td></tr>{% endfor %}</tbody>
+</table>
+
+{% if sel_flag %}
+<section class="card">
+  <h2>Пациенты с пропуском: {{ flag(sel_flag) }}</h2>
+  <table class="grid">
+    <thead><tr><th>ID</th><th>Филиал</th><th>Диагноз</th><th>Статус</th><th>Все пропуски</th></tr></thead>
+    <tbody>{% for r in selected %}
+      <tr><td><a class="mono" href="/patients/{{ r.patient_id }}">{{ r.patient_id|short }}</a></td><td>{{ r.branch }}</td>
+        <td>{{ r.dx_date|d }}</td><td>{{ label('status_last_contact', r.status_last_contact) }}</td>
+        <td>{{ r.flags|length }}</td></tr>
+    {% else %}<tr><td colspan="5" class="muted">Нет пациентов.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

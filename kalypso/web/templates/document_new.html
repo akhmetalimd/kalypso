@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, select, codes with context %}
+{% block title %}Новый документ{% endblock %}
+{% block content %}
+<h1>Новый документ <span class="muted">· пациент <a class="mono" href="/patients/{{ pid }}">{{ pid|short }}</a></span></h1>
+<p class="muted">Шаг 1 из 2. Вставьте текст заключения. Перед сохранением система заменит ФИО, ИИН, телефоны,
+  адреса и номера документов метками и покажет очищенный текст. Исходный текст не сохраняется.</p>
+<form method="post" action="/patients/{{ pid }}/documents/preview" class="form compact">
+  {{ csrf_field() }}
+  <label>Тип документа * {{ codes('doc_type', doc_types, 'doc_type', v.get('doc_type'), required=True) }}</label>
+  <label>Дата документа * <input type="date" name="doc_date" value="{{ v.get('doc_date') or '' }}" required></label>
+  <label>Данные * {{ select('provenance', options('provenance'), v.get('provenance') or pt.provenance, blank=None) }}</label>
+  <label class="wide">Текст заключения *
+    <textarea name="text" rows="14" required maxlength="50000"></textarea>
+    <small>Только синтетические данные в пилоте.</small>
+  </label>
+  <div class="actions"><button class="primary">Очистить и показать</button><a href="/patients/{{ pid }}">Отмена</a></div>
+</form>
+{% endblock %}

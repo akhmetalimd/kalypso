@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import json
 import secrets
 from pathlib import Path
 from urllib.parse import urlencode
@@ -16,7 +17,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import registry_core as core
-from kalypso import admin, auth, export, i18n, registry
+from kalypso import admin, auth, documents, export, i18n, registry, review
+from kalypso.ai import fields as ai_fields
 from kalypso.config import Settings
 from kalypso.db import Database
 from kalypso.deid import IinHasher
@@ -63,7 +65,10 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
                        lab_units=core.LAB_UNITS, core_fields=registry.core_fields,
                        active_nodes=registry.active_nodes, missing_codes=registry.MISSING,
                        conditional_fields=registry.CONDITIONAL_FIELDS,
-                       iwcll=registry.IWCLL_RESPONSES)
+                       iwcll=registry.IWCLL_RESPONSES,
+                       target_label=lambda t: ai_fields.TARGET_LABELS.get(t, t),
+                       value_label=ai_fields.value_label, allowed_values=ai_fields.allowed_values,
+                       doc_types=documents.DOC_TYPES)
     env.filters.update(d=_fmt_date, short=_short,
                        nosology=lambda node_id: (core.find_node(core.NOSOLOGY_TREE, node_id or "") or {}).get("name", node_id))
 
@@ -325,6 +330,119 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             card = registry.get_card(db, p, pid_of(pid))
             return render(request, "patient_card.html", p, 422, c=card, pt=card["patient"], errors=e.errors)
         return back(f"/patients/{pid}", "deleted")
+
+    # --- первичные документы (П2) -------------------------------------------
+    @app.get("/patients/{pid}/documents/new", response_class=HTMLResponse)
+    def document_new(request: Request, pid: str):
+        p = current(request)
+        p.require("documents.add")
+        card = registry.get_card(db, p, pid_of(pid))
+        return render(request, "document_new.html", p, pt=card["patient"], pid=pid, v={})
+
+    @app.post("/patients/{pid}/documents/preview")
+    async def document_preview(request: Request, pid: str):
+        p = current(request)
+        p.require("documents.add")
+        form = await form_of(request)
+        card = registry.get_card(db, p, pid_of(pid))
+        try:
+            result = documents.preview(form.get("text", ""))
+        except ValidationError as e:
+            return render(request, "document_new.html", p, 422, errors=e.errors, pt=card["patient"], pid=pid,
+                          v={k: form.get(k) for k in ("doc_type", "doc_date", "provenance")})
+        # Исходный текст в ответ не возвращается — только очищенный.
+        return render(request, "document_preview.html", p, pt=card["patient"], pid=pid, result=result,
+                      report_json=json.dumps(result.report), ai_enabled=settings.ai_enabled,
+                      v={k: form.get(k) for k in ("doc_type", "doc_date", "provenance")})
+
+    @app.post("/patients/{pid}/documents")
+    async def document_create(request: Request, pid: str):
+        p = current(request)
+        form = await form_of(request)
+        try:
+            res = documents.add_document(db, p, pid_of(pid), form, ai_enabled=settings.ai_enabled)
+        except ValidationError as e:
+            card = registry.get_card(db, p, pid_of(pid))
+            result = documents.preview(form.get("text", "") or " ")
+            return render(request, "document_preview.html", p, 422, errors=e.errors, pt=card["patient"], pid=pid,
+                          result=result, report_json=form.get("deid_report", "{}"), ai_enabled=settings.ai_enabled,
+                          v={k: form.get(k) for k in ("doc_type", "doc_date", "provenance")})
+        return back(f"/patients/{pid}", "doc_queued" if res.status == "queued" else "doc_manual")
+
+    @app.get("/documents/{doc_id}", response_class=HTMLResponse)
+    def document_view(request: Request, doc_id: str):
+        p = current(request)
+        data = documents.get_document(db, p, pid_of(doc_id))
+        return render(request, "document_view.html", p, d=data["doc"], proposals=data["proposals"],
+                      runs=data["runs"], segments=review.segments(data["doc"]["text_deid"], data["proposals"]))
+
+    @app.post("/documents/{doc_id}/manual-done")
+    async def document_manual_done(request: Request, doc_id: str):
+        p = current(request)
+        await form_of(request)
+        try:
+            documents.close_manual(db, p, pid_of(doc_id))
+        except ValidationError:
+            pass
+        return back(f"/documents/{doc_id}", "manual_done")
+
+    @app.post("/documents/{doc_id}/requeue")
+    async def document_requeue(request: Request, doc_id: str):
+        p = current(request)
+        await form_of(request)
+        try:
+            documents.requeue(db, p, pid_of(doc_id))
+        except ValidationError:
+            pass
+        return back(f"/documents/{doc_id}", "requeued")
+
+    # --- куратор: сверка AI-предложений --------------------------------------
+    @app.get("/review", response_class=HTMLResponse)
+    def review_queue(request: Request):
+        p = current(request)
+        return render(request, "review_queue.html", p, q=review.list_queue(db, p))
+
+    @app.get("/review/metrics", response_class=HTMLResponse)
+    def review_metrics(request: Request):
+        p = current(request)
+        return render(request, "review_metrics.html", p, m=review.metrics(db, p))
+
+    def _review_page(request, p, doc_id, status_code=200, errors=None):
+        data = review.get_review(db, p, pid_of(doc_id))
+        return render(request, "review_doc.html", p, status_code, errors=errors, d=data["doc"],
+                      proposals=data["proposals"], segments=data["segments"], c=data["card"],
+                      pt=data["card"]["patient"])
+
+    @app.get("/review/{doc_id}", response_class=HTMLResponse)
+    def review_doc(request: Request, doc_id: str):
+        return _review_page(request, current(request), doc_id)
+
+    @app.post("/review/proposal/{proposal_id}")
+    async def review_decide(request: Request, proposal_id: str):
+        p = current(request)
+        form = await form_of(request)
+        doc_id = form.get("doc_id", "")
+        try:
+            review.decide(db, p, pid_of(proposal_id), form.get("action", ""), form.get("value"), form.get("note"))
+        except ValidationError as e:
+            return _review_page(request, p, doc_id, 422, e.errors)
+        return back(f"/review/{doc_id}", "decided")
+
+    # --- контроль полноты (FR-7) -------------------------------------------
+    @app.get("/quality", response_class=HTMLResponse)
+    def quality(request: Request, flag: str | None = None):
+        p = current(request)
+        patients = registry.list_patients(db, p)
+
+        def keys(r):  # все «нет ответа по линии N» сводятся в один флаг
+            return {"missing_response_line_any" if f.startswith("missing_response_line_") else f for f in r["flags"]}
+        counts: dict[str, int] = {}
+        for r in patients:
+            for k in keys(r):
+                counts[k] = counts.get(k, 0) + 1
+        selected = [r for r in patients if flag and flag in keys(r)]
+        return render(request, "quality.html", p, counts=sorted(counts.items(), key=lambda kv: -kv[1]),
+                      total=len(patients), sel_flag=flag, selected=selected)
 
     # --- куратор: запросы доступа ------------------------------------------
     @app.get("/requests", response_class=HTMLResponse)

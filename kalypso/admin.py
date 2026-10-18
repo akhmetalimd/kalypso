@@ -6,6 +6,8 @@ from kalypso.db import Database
 from kalypso.rbac import MATRIX, NotFound, Principal
 from kalypso.registry import Form, ValidationError, _db_call
 
+HUMAN_ROLES = [r for r in MATRIX if r != "ai_worker"]   # служебная роль не назначается людям
+
 
 # --- филиалы ----------------------------------------------------------------
 def list_branches(db: Database, p: Principal) -> list[dict]:
@@ -45,7 +47,7 @@ def create_user(db: Database, p: Principal, data: dict) -> None:
     f = Form(data)
     login = (f.text("login", "Логин", required=True, maxlen=64) or "").lower()
     name = f.text("display_name", "Имя", required=True, maxlen=200)
-    role = f.choice("role_code", "Роль", list(MATRIX), required=True)
+    role = f.choice("role_code", "Роль", HUMAN_ROLES, required=True)
     branch = f.raw("branch_code")
     password = f.raw("password") or ""
     if role == "physician" and not branch:

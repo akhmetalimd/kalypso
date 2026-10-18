@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Сверка AI{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Сверка AI-предложений</h1>
+  <a class="button" href="/review/metrics">Метрики точности</a>
+</div>
+<p class="muted">В регистр попадает только то, что вы приняли или исправили. Каждое предложение решается отдельно.</p>
+
+<section class="card">
+  <h2>Ждут сверки <span class="muted">{{ q.proposed|length }}</span></h2>
+  <table class="grid">
+    <thead><tr><th>Документ</th><th>Пациент</th><th>Филиал</th><th>Предложений</th><th>Противоречий</th><th>Без цитаты</th><th></th></tr></thead>
+    <tbody>{% for r in q.proposed %}
+      <tr><td>{{ label('doc_type', r.doc_type) }} · {{ r.doc_date|d }}</td>
+        <td class="mono">{{ r.patient_id|short }}</td><td>{{ r.branch }}</td><td>{{ r.pending }}</td>
+        <td>{% if r.conflicts %}<span class="badge warn">{{ r.conflicts }}</span>{% else %}0{% endif %}</td>
+        <td>{% if r.ungrounded %}<span class="badge warn">{{ r.ungrounded }}</span>{% else %}0{% endif %}</td>
+        <td><a class="button primary" href="/review/{{ r.doc_id }}">Сверить</a></td></tr>
+    {% else %}<tr><td colspan="7" class="muted">Нет документов на сверку.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Ручная очередь <span class="muted">{{ q.manual|length }}</span></h2>
+  <p class="muted">AI недоступен, отказал, ничего не нашёл, или текст не подтверждён при приёме. Данные вносит врач вручную.</p>
+  <table class="grid">
+    <thead><tr><th>Документ</th><th>Пациент</th><th>Филиал</th><th>Причина</th><th></th></tr></thead>
+    <tbody>{% for r in q.manual %}
+      <tr><td>{{ label('doc_type', r.doc_type) }} · {{ r.doc_date|d }}</td><td class="mono">{{ r.patient_id|short }}</td>
+        <td>{{ r.branch }}</td><td>{{ r.status_note or '—' }}</td><td><a href="/documents/{{ r.doc_id }}">открыть</a></td></tr>
+    {% else %}<tr><td colspan="5" class="muted">Пусто.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+{% if q.waiting %}
+<p class="muted">В обработке AI: {{ q.waiting|length }}.</p>
+{% endif %}
+{% endblock %}

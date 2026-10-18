@@ -85,7 +85,7 @@ def login(db: Database, login_name: str, password: str, *, session_hours: int,
         user = cur.fetchone()
         failures = _recent_failures(cur, login_name)
 
-    if user is None:
+    if user is None or user["role_code"] == "ai_worker":   # служебная роль не входит в веб
         _verify(_DUMMY_HASH, password)
         reason = "unknown_user"
     elif failures >= LOCKOUT_FAILURES:

@@ -435,6 +435,12 @@ def get_card(db: Database, p: Principal, pid) -> dict:
             "observations": q("SELECT * FROM observation WHERE patient_id = %s AND deleted_at IS NULL "
                               "ORDER BY obs_date, created_at"),
             "labs": q("SELECT * FROM lab WHERE patient_id = %s AND deleted_at IS NULL ORDER BY obs_date, loinc"),
+            "documents": q("""SELECT d.doc_id, d.doc_type, d.doc_date, d.status, d.status_note,
+                                     count(a.*) FILTER (WHERE a.status = 'pending') AS pending,
+                                     count(a.*) FILTER (WHERE a.status IN ('accepted', 'edited')) AS applied
+                              FROM source_document d LEFT JOIN ai_proposal a USING (doc_id)
+                              WHERE d.patient_id = %s AND d.deleted_at IS NULL
+                              GROUP BY d.doc_id ORDER BY d.doc_date DESC, d.created_at DESC"""),
         }
     mm = _marker_map(card["markers"])
     card["marker_map"] = mm
@@ -465,6 +471,11 @@ _KINDS = {"line": ("therapy_line", "line_id"), "observation": ("observation", "o
           "lab": ("lab", "lab_id"), "marker": ("module_data", "md_id")}
 
 
+def write_perm(source: str) -> str:
+    """Ручной ввод — право врача; запись по принятому AI-предложению — право куратора."""
+    return "review.apply" if source == "ai_document" else "patient.write"
+
+
 def _reason(f: Form) -> str | None:
     """Необязательная причина правки — уходит в audit_log.reason."""
     return f.text("change_reason", "Причина правки", maxlen=500)
@@ -478,14 +489,15 @@ def _update(cur, table: str, pk: str, rid, pid, row: dict) -> None:
         raise NotFound()
 
 
-def get_record(db: Database, p: Principal, pid, kind: str, rid) -> dict:
+def get_record(db: Database, p: Principal, pid, kind: str, rid, source: str = "manual") -> dict:
     """Запись для формы правки (только действующая и только видимого пациента)."""
-    p.require("patient.write")
+    perm = write_perm(source)
+    p.require(perm)
     if kind not in _KINDS:
         raise NotFound()
     table, pk = _KINDS[kind]
     with db.tx(p.user_id) as cur:
-        _load_visible(cur, p, pid, "patient.write")
+        _load_visible(cur, p, pid, perm)
         cur.execute(f"SELECT * FROM {table} WHERE {pk} = %s AND patient_id = %s AND deleted_at IS NULL",
                     (rid, pid))
         row = cur.fetchone()
@@ -604,31 +616,35 @@ def _obs_warnings(patient: dict, row: dict) -> list[str]:
                      "death_cause": row["death_cause"]})
 
 
-def add_observation(db: Database, p: Principal, pid, data: dict) -> Result:
-    p.require("patient.write")
+def add_observation(db: Database, p: Principal, pid, data: dict, source: str = "manual",
+                    source_record_id: str | None = None, reason: str | None = None) -> Result:
+    perm = write_perm(source)
+    p.require(perm)
     f = Form(data)
     row = _obs_row(f)
     f.check()
 
     def write():
-        with db.tx(p.user_id) as cur:
-            patient = _load_visible(cur, p, pid, "patient.write")
-            oid = _insert(cur, "observation", {**row, "patient_id": pid, "source": "manual"}, "obs_id")
+        with db.tx(p.user_id, reason=reason) as cur:
+            patient = _load_visible(cur, p, pid, perm)
+            oid = _insert(cur, "observation", {**row, "patient_id": pid, "source": source,
+                                               "source_record_id": source_record_id}, "obs_id")
             _obs_effects(cur, pid, patient, row)
             return oid, patient
     oid, patient = _db_call(write)
     return Result("saved", oid, _obs_warnings(patient, row))
 
 
-def update_observation(db: Database, p: Principal, pid, rid, data: dict) -> Result:
-    p.require("patient.write")
+def update_observation(db: Database, p: Principal, pid, rid, data: dict, source: str = "manual") -> Result:
+    perm = write_perm(source)
+    p.require(perm)
     f = Form(data)
     row, reason = _obs_row(f), _reason(f)
     f.check()
 
     def write():
         with db.tx(p.user_id, reason=reason) as cur:
-            patient = _load_visible(cur, p, pid, "patient.write")
+            patient = _load_visible(cur, p, pid, perm)
             cur.execute("SELECT event_type FROM observation WHERE obs_id = %s AND patient_id = %s "
                         "AND deleted_at IS NULL", (rid, pid))
             old = cur.fetchone()
@@ -700,17 +716,19 @@ def _marker_row(f: Form, key: str | None = None) -> dict:
             "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES, required=True)}
 
 
-def add_marker(db: Database, p: Principal, pid, data: dict) -> Result:
-    p.require("patient.write")
+def add_marker(db: Database, p: Principal, pid, data: dict, source: str = "manual",
+               source_record_id: str | None = None, reason: str | None = None) -> Result:
+    perm = write_perm(source)
+    p.require(perm)
     f = Form(data)
     row = _marker_row(f)
     f.check()
 
     def write():
-        with db.tx(p.user_id) as cur:
-            _load_visible(cur, p, pid, "patient.write")
-            return _insert(cur, "module_data", {**row, "patient_id": pid, "module": "cll",
-                                                "source": "manual"}, "md_id")
+        with db.tx(p.user_id, reason=reason) as cur:
+            _load_visible(cur, p, pid, perm)
+            return _insert(cur, "module_data", {**row, "patient_id": pid, "module": "cll", "source": source,
+                                                "source_record_id": source_record_id}, "md_id")
     return Result("saved", _db_call(write))
 
 
@@ -728,6 +746,40 @@ def update_marker(db: Database, p: Principal, pid, rid, data: dict) -> Result:
             _update(cur, "module_data", "md_id", rid, pid, row)
     _db_call(write)
     return Result("saved", rid)
+
+
+def revise_diagnosis_codes(db: Database, p: Principal, pid, who_haem5: str, icd_o_3_2: str, mkb: str,
+                           reason: str, source: str = "manual") -> Result:
+    """Пересмотр кодов диагноза (дата диагноза не меняется). Версия диагноза — в БД."""
+    perm = write_perm(source)
+    p.require(perm)
+    flags = core.validate_codes({"who_haem5": who_haem5, "icd_o_3_2": icd_o_3_2, "mkb": mkb})
+    if flags:
+        raise ValidationError([f"Коды диагноза не согласованы: {', '.join(flags)}"])
+
+    def write():
+        with db.tx(p.user_id, reason=reason) as cur:
+            _load_visible(cur, p, pid, perm)
+            cur.execute("UPDATE patient SET who_haem5 = %s, icd_o_3_2 = %s, mkb = %s WHERE patient_id = %s",
+                        (who_haem5, icd_o_3_2, mkb, pid))
+    _db_call(write)
+    return Result("saved", pid)
+
+
+def set_histology_report(db: Database, p: Principal, pid, text: str, source: str = "manual",
+                         reason: str | None = None) -> Result:
+    perm = write_perm(source)
+    p.require(perm)
+    f = Form({"histology_report": text})
+    value = f.free_text("histology_report", "Заключение гистологии")
+    f.check()
+
+    def write():
+        with db.tx(p.user_id, reason=reason) as cur:
+            _load_visible(cur, p, pid, perm)
+            cur.execute("UPDATE patient SET histology_report = %s WHERE patient_id = %s", (value, pid))
+    _db_call(write)
+    return Result("saved", pid)
 
 
 def soft_delete(db: Database, p: Principal, pid, kind: str, record_id) -> Result:
