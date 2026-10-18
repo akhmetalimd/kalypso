@@ -7,6 +7,8 @@ KALYPSO — движок регистра ЛПЗ — переносимая ло
   1. canonicalize_lab  — нормализация лабораторных единиц (LOINC + перевод по показателю).
   2. kaplan_meier      — расчёт выживаемости (PFS/OS) с медианой; движок для «песочницы».
   3. validate_record   — контроль качества (те же флаги, что и AI-проверка в прототипе).
+  4. validate_codes / completeness_flags — связка кодов WHO5 -> ICD-O -> МКБ и
+     полнота обязательного ядра нозологии (FR-1, FR-7).
 
 Зависимостей нет (только стандартная библиотека). Log-rank и Cox сознательно НЕ здесь —
 их считают на выгрузке (lifelines / R), см. README.
@@ -16,7 +18,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Iterable, Optional
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
@@ -31,6 +33,20 @@ def _load(name: str) -> dict:
 
 LAB_UNITS = _load("lab_units.json")
 NOSOLOGY_TREE = _load("nosology_tree.json")
+
+
+def _as_date(value) -> Optional[date]:
+    """Приводит дату к date: принимает date, datetime и ISO-строку 'YYYY-MM-DD'.
+    Пустое значение -> None; нераспознанная строка -> ValueError (не сравниваем молча)."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        return date.fromisoformat(value.strip())
+    raise ValueError(f"не дата: {value!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +67,7 @@ def canonicalize_lab(loinc: str, value: float, unit: str) -> CanonicalLab:
     Исходное значение и единица сохраняются всегда; при непознанной единице —
     флаг для ручной проверки (не приводим молча)."""
     spec = LAB_UNITS.get(loinc)
-    if spec is None:
+    if not isinstance(spec, dict):  # нет показателя или служебный ключ вроде "_comment"
         return CanonicalLab(loinc, value, unit, None, None, flag="unknown_loinc")
     factor = spec["conversions"].get(unit)
     if factor is None:
@@ -74,7 +90,17 @@ class KMPoint:
 
 def kaplan_meier(durations: Iterable[float], events: Iterable[int]) -> dict:
     """Оценка функции выживания. events: 1 = событие, 0 = цензурирование.
-    Возвращает кривую (список точек) и медиану выживаемости."""
+    Возвращает кривую (список точек) и медиану выживаемости.
+    Отрицательное время (событие раньше time-zero), событие не 0/1 или разная длина
+    списков -> ValueError: это ошибка данных, её нужно исправить, а не усреднить."""
+    durations, events = list(durations), list(events)
+    if len(durations) != len(events):
+        raise ValueError(f"durations ({len(durations)}) и events ({len(events)}) разной длины")
+    for d, e in zip(durations, events):
+        if d < 0:
+            raise ValueError(f"отрицательное время наблюдения: {d}")
+        if e not in (0, 1):
+            raise ValueError(f"событие должно быть 0 или 1, получено {e!r}")
     data = sorted(zip(durations, events), key=lambda x: x[0])
     n = len(data)
     if n == 0:
@@ -131,9 +157,9 @@ def survival_by_threshold(rows: list[dict], analyte_key: str, threshold: float) 
 def validate_record(rec: dict) -> list[str]:
     """Возвращает список флагов противоречий. Не правит, только помечает."""
     flags = []
-    dx = rec.get("dx_date")
-    resp = rec.get("response_date")
-    ev = rec.get("event_date")
+    dx = _as_date(rec.get("dx_date"))
+    resp = _as_date(rec.get("response_date"))
+    ev = _as_date(rec.get("event_date"))
     if dx and resp and resp < dx:
         flags.append("response_before_diagnosis")
     if dx and ev and ev < dx:
@@ -160,6 +186,105 @@ def find_node(node: dict, node_id: str) -> Optional[dict]:
     return None
 
 
+def _node_path(node: dict, node_id: str) -> Optional[list[dict]]:
+    """Путь от корня до узла (включительно) или None."""
+    if node.get("id") == node_id:
+        return [node]
+    for ch in node.get("children", []):
+        path = _node_path(ch, node_id)
+        if path:
+            return [node] + path
+    return None
+
+
+def resolve_codes(node_id: str) -> Optional[dict]:
+    """Коды узла с наследованием: ребёнок переопределяет коды родителя."""
+    path = _node_path(NOSOLOGY_TREE, node_id)
+    if path is None:
+        return None
+    codes: dict = {}
+    for n in path:
+        codes.update(n.get("codes") or {})
+    return codes
+
+
+def _norm_icd_o(code: Optional[str]) -> str:
+    """'M-9823/3', 'M9823/3', ' 9823/3 ' -> '9823/3'."""
+    c = (code or "").strip().upper()
+    if c.startswith("M-"):
+        c = c[2:]
+    elif c.startswith("M"):
+        c = c[1:]
+    return c
+
+
+def _mkb_matches(mkb: str, ref: str) -> bool:
+    """МКБ сверяется по префиксу рубрики: узел C82 допускает C82.0 … C82.9."""
+    return mkb == ref or mkb.startswith(ref + ".")
+
+
+def validate_codes(rec: dict) -> list[str]:
+    """Сверяет связку WHO-HAEM5 -> ICD-O-3.2 -> МКБ-10 с кодами узла дерева.
+    Допустимы основная пара кодов узла и альтернативные (alt_codes: например,
+    ЛМЛ внутри ХЛЛ/ЛМЛ). Возвращает флаги; не правит."""
+    who = rec.get("who_haem5")
+    if not who:
+        return ["who_haem5_missing"]
+    node = find_node(NOSOLOGY_TREE, who)
+    if node is None:
+        return ["unknown_who_haem5"]
+    flags = []
+    if node.get("status") != "active":
+        flags.append("nosology_not_active")
+
+    pairs = [resolve_codes(who) or {}] + list(node.get("alt_codes", []))
+    pairs = [p for p in pairs if p.get("icd_o_3_2") or p.get("mkb10")]
+    if not pairs:
+        return flags
+    icd_o = _norm_icd_o(rec.get("icd_o_3_2"))
+    mkb = (rec.get("mkb") or "").strip().upper()
+    icd_ok = [p for p in pairs if p.get("icd_o_3_2") in (None, icd_o)]
+    mkb_ok = [p for p in pairs if p.get("mkb10") is None or _mkb_matches(mkb, p["mkb10"])]
+    if not icd_ok:
+        flags.append("icd_o_mismatch")
+    if not mkb_ok:
+        flags.append("mkb_mismatch")
+    if icd_ok and mkb_ok and not any(p in mkb_ok for p in icd_ok):
+        flags.append("code_pair_mismatch")  # каждый код допустим, но из разных пар
+    return flags
+
+
+def completeness_flags(rec: dict) -> list[str]:
+    """FR-7: флаги незаполненных полей обязательного ядра нозологии.
+    Поле заполнено, если есть значение ИЛИ код пропуска (MISSING_CODES);
+    флаг ставится, только когда нет ни того, ни другого.
+
+    rec: who_haem5, status_last_contact,
+         module_data   {field_key: значение | код пропуска},
+         therapy_lines [{line_id, line_no, end_date}],
+         observations  [{line_id, response_value, event_type, death_cause}]."""
+    flags = []
+    node = find_node(NOSOLOGY_TREE, rec.get("who_haem5") or "") or {}
+    md = rec.get("module_data") or {}
+    for field in node.get("core_fields", []):
+        if md.get(field["key"]) in (None, ""):
+            flags.append(f"missing_{field['key']}")
+
+    obs = rec.get("observations") or []
+    for line in rec.get("therapy_lines") or []:
+        if not line.get("end_date"):
+            continue  # линия продолжается — оценки ответа ещё может не быть
+        if not any(o.get("line_id") == line.get("line_id") and o.get("response_value")
+                   for o in obs):
+            flags.append(f"missing_response_line_{line.get('line_no')}")
+
+    if rec.get("status_last_contact") == "dead":
+        deaths = [o for o in obs if o.get("event_type") == "death"]
+        if not deaths or not deaths[0].get("death_cause"):
+            flags.append("missing_death_cause")
+    return flags
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -183,4 +308,17 @@ if __name__ == "__main__":
 
     node = find_node(NOSOLOGY_TREE, "cll_sll")
     assert node["status"] == "active" and node["codes"]["mkb10"] == "C91.1"
+
+    assert "event_before_diagnosis" in validate_record(
+        {"dx_date": date(2020, 1, 1), "event_date": "2019-01-01"})          # str vs date
+    assert validate_codes({"who_haem5": "cll_sll", "icd_o_3_2": "M-9823/3", "mkb": "C91.1"}) == []
+    assert "mkb_mismatch" in validate_codes(
+        {"who_haem5": "cll_sll", "icd_o_3_2": "9823/3", "mkb": "C83.3"})
+    assert "missing_TP53" in completeness_flags({"who_haem5": "cll_sll", "module_data": {}})
+    assert canonicalize_lab("_comment", 1, "x").flag == "unknown_loinc"
+    try:
+        kaplan_meier([-1], [1])
+        raise AssertionError("отрицательное время должно отвергаться")
+    except ValueError:
+        pass
     print("registry_core self-test OK")

@@ -13,10 +13,21 @@
           "status": "active",
           "module": "cll",
           "codes": { "icd_o_3_2": "9823/3", "mkb10": "C91.1" },
+          "alt_codes": [
+            { "icd_o_3_2": "9670/3", "mkb10": "C83.0", "_comment": "ЛМЛ (лимфоцитарная лимфома из малых лимфоцитов)" }
+          ],
           "staging": ["Rai", "Binet"],
           "index": "CLL-IPI",
           "response_criteria": "iwCLL 2018",
-          "markers": ["IGHV", "TP53/del(17p)", "del(11q)", "+12", "del(13q)", "beta2m", "ALC"]
+          "markers": ["IGHV", "TP53/del(17p)", "del(11q)", "+12", "del(13q)", "beta2m", "ALC"],
+          "core_fields": [
+            { "key": "IGHV",   "label_ru": "Мутационный статус IGHV" },
+            { "key": "TP53",   "label_ru": "Мутация TP53" },
+            { "key": "del17p", "label_ru": "del(17p), FISH" },
+            { "key": "del11q", "label_ru": "del(11q), FISH" },
+            { "key": "tri12",  "label_ru": "Трисомия 12, FISH" },
+            { "key": "del13q", "label_ru": "del(13q), FISH" }
+          ]
         },
         {
           "id": "dlbcl",

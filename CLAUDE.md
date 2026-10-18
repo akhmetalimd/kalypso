@@ -50,6 +50,18 @@ KALYPSO (KAzakhstan LYmphoma Patients Survival and Outcomes) — пробная 
 - Log-rank и Cox в платформе не считаются — только на выгрузке (lifelines / R).
   Пороги для «Исследователя выживаемости» — внешние, не подбираются по этим же данным.
 
+## Тесты
+
+```bash
+python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-dev.txt
+.venv/Scripts/python -X utf8 -m pytest
+```
+
+- По умолчанию поднимается встроенный PostgreSQL 16 (pgserver); `KALYPSO_TEST_DSN`
+  направляет тесты на внешний сервер (нужны права CREATEDB + CREATEROLE).
+- Каждый тест получает свою БД-копию шаблона с применёнными миграциями.
+- Новая миграция или ограничение — сразу тест в `tests/test_db_*.py`.
+
 ## Окружение
 
 - Python 3.12, PostgreSQL 16 (минимум 15 — нужен `NULLS NOT DISTINCT`).
