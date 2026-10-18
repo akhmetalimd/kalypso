@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, select with context %}
+{% block title %}Пользователи{% endblock %}
+{% block content %}
+{% set fv = v if v is defined else {} %}
+<h1>Пользователи и филиалы</h1>
+<table class="grid">
+  <thead><tr><th>Логин</th><th>Имя</th><th>Роль</th><th>Филиал</th><th>Последний вход</th><th>Статус</th><th>Действия</th></tr></thead>
+  <tbody>
+  {% for u in users %}
+  <tr>
+    <td class="mono">{{ u.login }}</td><td>{{ u.display_name }}</td><td>{{ label('role', u.role_code) }}</td>
+    <td>{{ u.branch_code or '—' }}</td>
+    <td>{{ u.last_login.strftime('%d.%m.%Y %H:%M') if u.last_login else '—' }}</td>
+    <td>{% if u.is_active %}<span class="badge ok">активен</span>{% else %}<span class="badge">отключён</span>{% endif %}
+        {% if u.must_change_password %}<span class="badge warn">сменит пароль</span>{% endif %}</td>
+    <td>
+      <form method="post" action="/admin/users/{{ u.user_id }}/active" class="inline">
+        {{ csrf_field() }}<input type="hidden" name="active" value="{{ '0' if u.is_active else '1' }}">
+        <button class="link">{{ 'отключить' if u.is_active else 'включить' }}</button>
+      </form>
+      <details class="inline"><summary>сброс пароля</summary>
+        <form method="post" action="/admin/users/{{ u.user_id }}/password" class="inline-form">
+          {{ csrf_field() }}<input type="password" name="password" minlength="10" placeholder="временный пароль" autocomplete="new-password" required>
+          <button>Задать</button>
+        </form>
+      </details>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<section class="card">
+  <h2>Новый пользователь</h2>
+  <form method="post" action="/admin/users" class="form compact">
+    {{ csrf_field() }}
+    <label>Логин * <input name="login" value="{{ fv.get('login') or '' }}" pattern="[a-z0-9._\-]{3,64}" required><small>латиница, цифры, . _ -</small></label>
+    <label>Имя * <input name="display_name" value="{{ fv.get('display_name') or '' }}" required></label>
+    <label>Роль * {{ select('role_code', options('role'), fv.get('role_code'), required=True) }}</label>
+    {% set bopts = {} %}{% for b in branches %}{% set _ = bopts.update({b.branch_code: b.branch_code ~ ' — ' ~ b.name_ru}) %}{% endfor %}
+    <label>Филиал {{ select('branch_code', bopts, fv.get('branch_code'), blank='— (не врач)') }}</label>
+    <label>Временный пароль * <input type="password" name="password" minlength="10" autocomplete="new-password" required><small>при первом входе пользователь сменит его</small></label>
+    <div class="actions"><button class="primary">Создать</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Филиалы</h2>
+  <ul>{% for b in branches %}<li><span class="mono">{{ b.branch_code }}</span> — {{ b.name_ru }}</li>{% endfor %}</ul>
+  <form method="post" action="/admin/branches" class="form compact">
+    {{ csrf_field() }}
+    <label>Код * <input name="branch_code" pattern="[a-z0-9_]{2,32}" required></label>
+    <label>Название * <input name="name_ru" required></label>
+    <label>Название (каз.) <input name="name_kk"></label>
+    <div class="actions"><button>Добавить филиал</button></div>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Аудит{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Аудит-трейл</h1>
+  <a class="button" href="/audit/logins">Журнал входов</a>
+</div>
+<form method="get" action="/audit" class="search">
+  <input name="table" value="{{ table }}" placeholder="таблица (patient, lab…)">
+  <input name="row_id" value="{{ row_id }}" placeholder="ID записи">
+  <button>Фильтр</button>
+</form>
+<p class="muted">Журнал неизменяем: его нельзя править или удалять даже владельцу БД. Показаны последние 300 записей.</p>
+<table class="grid small">
+  <thead><tr><th>Когда</th><th>Кто</th><th>Таблица</th><th>Запись</th><th>Действие</th><th>Поле</th><th>Было</th><th>Стало</th><th>Причина</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.ts.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+    <td>{{ r.actor_login or r.actor }}</td>
+    <td>{{ r.table_name }}</td>
+    <td class="mono">{{ r.row_id[:17] }}</td>
+    <td>{{ r.action }}</td>
+    <td>{{ r.field or '—' }}</td>
+    <td class="clip">{{ r.old_value if r.old_value is not none else '—' }}</td>
+    <td class="clip">{{ r.new_value if r.new_value is not none else '—' }}</td>
+    <td>{{ r.reason or '' }}</td>
+  </tr>
+  {% else %}<tr><td colspan="9" class="muted">Записей нет.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

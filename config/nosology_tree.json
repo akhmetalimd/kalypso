@@ -21,12 +21,12 @@
           "response_criteria": "iwCLL 2018",
           "markers": ["IGHV", "TP53/del(17p)", "del(11q)", "+12", "del(13q)", "beta2m", "ALC"],
           "core_fields": [
-            { "key": "IGHV",   "label_ru": "Мутационный статус IGHV" },
-            { "key": "TP53",   "label_ru": "Мутация TP53" },
-            { "key": "del17p", "label_ru": "del(17p), FISH" },
-            { "key": "del11q", "label_ru": "del(11q), FISH" },
-            { "key": "tri12",  "label_ru": "Трисомия 12, FISH" },
-            { "key": "del13q", "label_ru": "del(13q), FISH" }
+            { "key": "IGHV",   "label_ru": "Мутационный статус IGHV", "values": ["mutated", "unmutated"] },
+            { "key": "TP53",   "label_ru": "Мутация TP53",            "values": ["mutated", "wild_type"] },
+            { "key": "del17p", "label_ru": "del(17p), FISH",          "values": ["detected", "not_detected"] },
+            { "key": "del11q", "label_ru": "del(11q), FISH",          "values": ["detected", "not_detected"] },
+            { "key": "tri12",  "label_ru": "Трисомия 12, FISH",       "values": ["detected", "not_detected"] },
+            { "key": "del13q", "label_ru": "del(13q), FISH",          "values": ["detected", "not_detected"] }
           ]
         },
         {

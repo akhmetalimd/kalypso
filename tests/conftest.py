@@ -23,8 +23,10 @@ from psycopg.conninfo import make_conninfo
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-SCHEMA = REPO / "schema.sql"
-MIGRATIONS = sorted((REPO / "db" / "migrations").glob("*.sql"))
+from kalypso import migrate  # noqa: E402
+
+SCHEMA = migrate.SCHEMA
+MIGRATIONS = [path for _, path in migrate.migration_files()[1:]]
 TEST_HMAC_KEY = b"kalypso-synthetic-test-key"
 
 
@@ -67,15 +69,7 @@ class PgCluster:
 
 
 def apply_sql(con: psycopg.Connection, path: Path) -> None:
-    sql = path.read_text(encoding="utf-8")
-    if path == SCHEMA:
-        # В PG 13+ gen_random_uuid() встроен; pgcrypto нужен только если он есть
-        # (во встроенном pgserver contrib не собран).
-        has = con.execute(
-            "SELECT 1 FROM pg_available_extensions WHERE name = 'pgcrypto'").fetchone()
-        if not has:
-            sql = sql.replace("CREATE EXTENSION IF NOT EXISTS pgcrypto;", "")
-    con.execute(sql)
+    con.execute(migrate.read_sql(con, path))
 
 
 @pytest.fixture(scope="session")
@@ -90,10 +84,7 @@ def template_db(pg: PgCluster) -> str:
     name = f"kalypso_tpl_{os.getpid()}"
     pg.drop_db(name)
     pg.create_db(name)
-    with psycopg.connect(pg.dsn(name)) as con:
-        apply_sql(con, SCHEMA)
-        for m in MIGRATIONS:
-            apply_sql(con, m)
+    migrate.apply_pending(pg.dsn(name))
     yield name
     pg.drop_db(name)
 
@@ -115,13 +106,19 @@ def make_db(pg: PgCluster):
 
 
 @pytest.fixture
-def conn(pg: PgCluster, template_db: str) -> psycopg.Connection:
+def db_dsn(pg: PgCluster, template_db: str) -> str:
+    """Своя БД-копия шаблона на тест."""
     name = f"t_{uuid.uuid4().hex[:12]}"
     pg.create_db(name, template=template_db)
-    con = psycopg.connect(pg.dsn(name))
+    yield pg.dsn(name)
+    pg.drop_db(name)
+
+
+@pytest.fixture
+def conn(db_dsn: str) -> psycopg.Connection:
+    con = psycopg.connect(db_dsn)
     yield con
     con.close()
-    pg.drop_db(name)
 
 
 @contextmanager
@@ -202,3 +199,66 @@ class Registry:
 @pytest.fixture
 def reg(conn) -> Registry:
     return Registry(conn)
+
+
+# ---------------------------------------------------------------------------
+# Сервисный уровень: Database, хэшер, пользователи всех ролей
+# ---------------------------------------------------------------------------
+TEST_PASSWORD = "synthetic-test-password"
+
+
+class World:
+    """Синтетический мир для сервисов и веба: 2 филиала, по пользователю на роль."""
+
+    def __init__(self, dsn: str):
+        from kalypso import auth
+        from kalypso.db import Database
+        from kalypso.deid import IinHasher
+
+        self.dsn = dsn
+        self.db = Database(dsn, min_size=1, max_size=4)
+        self.hasher = IinHasher(TEST_HMAC_KEY + b"-" * 8)
+        pw = auth.hash_password(TEST_PASSWORD)
+        with self.db.tx() as cur:
+            cur.execute("INSERT INTO branch (branch_code, name_ru) VALUES "
+                        "('synth_a', 'Синт. A'), ('synth_b', 'Синт. B')")
+            for login, role, branch in [("admin", "admin", None), ("curator", "curator", None),
+                                        ("analyst", "analyst", None), ("doc.a", "physician", "synth_a"),
+                                        ("doc.b", "physician", "synth_b")]:
+                cur.execute("""INSERT INTO app_user (login, display_name, password_hash, role_code,
+                                                     branch_code, must_change_password)
+                               VALUES (%s, %s, %s, %s, %s, false)""", (login, login, pw, role, branch))
+            cur.execute("SELECT * FROM app_user")
+            self.users = {r["login"]: auth._principal(r) for r in cur.fetchall()}
+        self.admin, self.curator, self.analyst = (self.users[k] for k in ("admin", "curator", "analyst"))
+        self.doc_a, self.doc_b = self.users["doc.a"], self.users["doc.b"]
+        self._seq = 0
+
+    def iin(self) -> str:
+        """Новый синтетический ИИН с корректной контрольной цифрой."""
+        import random
+        from datetime import date
+
+        from kalypso.synthetic import synthetic_iin
+        self._seq += 1
+        return synthetic_iin(random.Random(self._seq), date(1950, 1, 1 + self._seq % 28), "M")
+
+    def patient_form(self, **kw) -> dict:
+        base = {"iin": self.iin(), "sex": "M", "birth_date": "1950-05-01", "dx_date": "2021-03-01",
+                "last_contact_date": "2024-06-01", "provenance": "retrospective",
+                "status_last_contact": "alive", "stage_system": "Binet", "stage_value": "A"}
+        return {**base, **kw}
+
+    def register(self, doc=None, **kw):
+        from kalypso import registry
+        return registry.register_patient(self.db, self.hasher, doc or self.doc_a, self.patient_form(**kw))
+
+    def close(self) -> None:
+        self.db.close()
+
+
+@pytest.fixture
+def world(db_dsn: str) -> World:
+    w = World(db_dsn)
+    yield w
+    w.close()

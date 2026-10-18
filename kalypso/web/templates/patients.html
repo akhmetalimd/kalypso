@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field with context %}
+{% block title %}Пациенты{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Пациенты <span class="muted">{{ patients|length }}</span></h1>
+  <form method="post" action="/patients/search" class="search">
+    {{ csrf_field() }}
+    <input name="iin" placeholder="Найти по ИИН" inputmode="numeric" autocomplete="off" maxlength="14" required>
+    <button>Найти</button>
+  </form>
+</div>
+<p class="muted">{% if p.scope('patient.read') == 'branch' %}Пациенты вашего филиала ({{ p.branch_code }}).{% else %}Все филиалы.{% endif %}
+  ИИН не хранится: поиск идёт по его хэшу.</p>
+<table class="grid">
+  <thead><tr><th>ID</th><th>Филиал</th><th>Нозология</th><th>МКБ</th><th>Диагноз</th><th>Стадия</th>
+    <th>Статус</th><th>Посл. контакт</th><th>Линий</th><th>Полнота</th></tr></thead>
+  <tbody>
+  {% for r in patients %}
+  <tr>
+    <td><a href="/patients/{{ r.patient_id }}" class="mono">{{ r.patient_id|short }}</a></td>
+    <td>{{ r.branch }}</td>
+    <td>{{ r.who_haem5|nosology }}</td>
+    <td>{{ r.mkb }}{% if r.dx_version > 1 %} <span class="badge" title="Диагноз пересматривался">v{{ r.dx_version }}</span>{% endif %}</td>
+    <td>{{ r.dx_date|d }}</td>
+    <td>{% if r.stage_system %}{{ r.stage_system }} {{ r.stage_value }}{% else %}—{% endif %}</td>
+    <td>{{ label('status_last_contact', r.status_last_contact) }}</td>
+    <td>{{ r.last_contact_date|d }}</td>
+    <td>{{ r.n_lines }}</td>
+    <td>{% if r.flags %}<span class="badge warn" title="{% for f in r.flags %}{{ flag(f) }}&#10;{% endfor %}">{{ r.flags|length }} пропуск.</span>{% else %}<span class="badge ok">полно</span>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="10" class="muted">Пациентов пока нет.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

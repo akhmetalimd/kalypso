@@ -1,5 +1,4 @@
-# Тесты. pgserver — встроенный PostgreSQL 16 для локального прогона;
+# Окружение разработки: пакет kalypso (editable) + тестовые зависимости.
+# pgserver — встроенный PostgreSQL 16 для тестов и dev-запуска;
 # с KALYPSO_TEST_DSN тесты идут на внешнем сервере (см. tests/conftest.py).
-pytest==9.1.1
-psycopg[binary]==3.3.6
-pgserver==0.1.4
+-e .[dev]

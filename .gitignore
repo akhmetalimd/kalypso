@@ -14,3 +14,7 @@ __pycache__/
 *.sqlite
 *.dump
 exports/
+
+# Dev-окружение (встроенный PostgreSQL, секреты dev)
+.devdb/
+*.egg-info/

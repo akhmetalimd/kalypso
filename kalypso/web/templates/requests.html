@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field with context %}
+{% block title %}Запросы доступа{% endblock %}
+{% block content %}
+<h1>Запросы межфилиального доступа</h1>
+<p class="muted">Врач внёс ИИН пациента, который уже ведётся другим филиалом. До решения куратора данные пациента этому филиалу не видны.</p>
+<table class="grid">
+  <thead><tr><th>Когда</th><th>Пациент</th><th>Диагноз</th><th>Ведётся в</th><th>Запросил</th><th>Для филиала</th><th>Решение</th></tr></thead>
+  <tbody>
+  {% for r in requests %}
+  <tr>
+    <td>{{ r.requested_at.strftime('%d.%m.%Y %H:%M') }}</td>
+    <td><a class="mono" href="/patients/{{ r.patient_id }}">{{ r.patient_id|short }}</a></td>
+    <td>{{ r.who_haem5|nosology }} · {{ r.dx_date|d }}</td>
+    <td>{{ r.branches }}</td>
+    <td>{{ r.requested_by_login }}</td>
+    <td><strong>{{ r.branch_code }}</strong></td>
+    <td>
+      <form method="post" action="/requests/{{ r.request_id }}" class="inline-form">
+        {{ csrf_field() }}
+        <input name="note" placeholder="комментарий" maxlength="300">
+        <button name="decision" value="approve" class="primary">Одобрить</button>
+        <button name="decision" value="reject">Отклонить</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="muted">Ожидающих запросов нет.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

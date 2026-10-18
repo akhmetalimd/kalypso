@@ -1,0 +1,36 @@
+{% macro csrf_field() %}<input type="hidden" name="csrf" value="{{ csrf }}">{% endmacro %}
+
+{% macro select(name, opts, value=None, blank='—', required=False) %}
+<select name="{{ name }}" id="{{ name }}"{% if required %} required{% endif %}>
+  {% if blank is not none %}<option value="">{{ blank }}</option>{% endif %}
+  {% for code, text in opts.items() %}
+  <option value="{{ code }}"{% if value is not none and value|string == code|string %} selected{% endif %}>{{ text }}</option>
+  {% endfor %}
+</select>
+{% endmacro %}
+
+{% macro codes(name, values, group, value=None, blank='—', required=False) %}
+{% set opts = {} %}{% for c in values %}{% set _ = opts.update({c: label(group, c)}) %}{% endfor %}
+{{ select(name, opts, value, blank, required) }}
+{% endmacro %}
+
+{% macro date_field(name, prec_name, v, label_text, required=False) %}
+<label>{{ label_text }}{% if required %} *{% endif %}
+  <span class="pair">
+    <input type="date" name="{{ name }}" value="{{ v.get(name) or '' }}"{% if required %} required{% endif %}>
+    {{ select(prec_name, options('date_precision'), v.get(prec_name) or 'day', blank=None) }}
+  </span>
+</label>
+{% endmacro %}
+
+{% macro missing_select(name, missing) %}
+<span class="missing" title="Код пропуска вместо пустого поля">
+  {{ codes(name ~ '__missing', missing_codes, 'missing', missing.get(name), blank='код пропуска…') }}
+</span>
+{% endmacro %}
+
+{% macro delete_button(pid, kind, rid) %}
+<form method="post" action="/patients/{{ pid }}/delete/{{ kind }}/{{ rid }}" class="inline">
+  {{ csrf_field() }}<button class="link danger" title="Пометить удалённой (запись остаётся в аудите)">удалить</button>
+</form>
+{% endmacro %}

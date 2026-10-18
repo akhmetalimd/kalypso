@@ -285,6 +285,36 @@ def completeness_flags(rec: dict) -> list[str]:
     return flags
 
 
+def cll_ipi(age: Optional[float], stage_system: Optional[str], stage_value: Optional[str],
+            b2m_mg_l: Optional[float], ighv: Optional[str],
+            tp53_abnormal: Optional[bool]) -> Optional[dict]:
+    """CLL-IPI (International CLL-IPI working group, 2016):
+    TP53 (del(17p) и/или мутация) 4, IGHV немутирован 2, β2-микроглобулин > 3.5 мг/л 2,
+    стадия Binet B–C или Rai I–IV 1, возраст > 65 лет 1.
+    Группы: 0–1 низкий, 2–3 промежуточный, 4–6 высокий, 7–10 очень высокий.
+    Возвращает None, если хоть одного компонента нет: «норму» молча не подставляем."""
+    if stage_system == "Binet":
+        stage_pts = None if stage_value is None else int(stage_value in ("B", "C"))
+    elif stage_system == "Rai":
+        stage_pts = None if stage_value is None else int(stage_value != "0")
+    else:
+        stage_pts = None
+    ighv_pts = {"unmutated": 2, "mutated": 0}.get(ighv or "")
+    parts = {
+        "TP53": None if tp53_abnormal is None else (4 if tp53_abnormal else 0),
+        "IGHV": ighv_pts,
+        "b2m": None if b2m_mg_l is None else (2 if b2m_mg_l > 3.5 else 0),
+        "stage": stage_pts,
+        "age": None if age is None else (1 if age > 65 else 0),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    group = ("low" if score <= 1 else "intermediate" if score <= 3
+             else "high" if score <= 6 else "very_high")
+    return {"score": score, "group": group, "components": parts}
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0

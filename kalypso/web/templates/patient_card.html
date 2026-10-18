@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field, select, codes, date_field, delete_button with context %}
+{% block title %}Пациент {{ pt.patient_id|short }}{% endblock %}
+{% block content %}
+{% set pid = pt.patient_id %}
+{% set w = p.can('patient.write') %}
+{% set form_v = v if v is defined else {} %}
+{% set fv_markers = form_v if open_form == 'markers' else {} %}
+{% set fv_lines = form_v if open_form == 'lines' else {} %}
+{% set fv_observations = form_v if open_form == 'observations' else {} %}
+{% set fv_labs = form_v if open_form == 'labs' else {} %}
+
+<div class="head">
+  <h1>Пациент <span class="mono">{{ pid|short }}</span>
+    <span class="badge">{{ label('status_last_contact', pt.status_last_contact) }}</span></h1>
+  <div class="actions">
+    {% if w %}<a class="button" href="/patients/{{ pid }}/edit">Правка карточки</a>{% endif %}
+    {% if p.can('audit.read') %}<a class="button" href="/audit?table=patient&row_id={{ pid }}">История изменений</a>{% endif %}
+  </div>
+</div>
+<p class="muted">Филиал регистрации: {{ pt.branch }} · ведётся в: {{ c.branches|join(', ') }} ·
+  {{ label('provenance', pt.provenance) }} · источник: {{ label('source', pt.source) }} ·
+  внесён {{ pt.entry_date.strftime('%d.%m.%Y') }}</p>
+
+<section class="panels">
+  <div class="panel {{ 'warn' if c.flags.completeness else 'ok' }}">
+    <h2>Полнота ядра</h2>
+    {% if c.flags.completeness %}<ul>{% for f in c.flags.completeness %}<li>{{ flag(f) }}</li>{% endfor %}</ul>
+    {% else %}<p>Все обязательные поля заполнены (значением или кодом пропуска).</p>{% endif %}
+  </div>
+  <div class="panel {{ 'warn' if c.flags.quality else 'ok' }}">
+    <h2>Контроль качества</h2>
+    {% if c.flags.quality %}<ul>{% for f in c.flags.quality %}<li>{{ flag(f) }}</li>{% endfor %}</ul>
+    {% else %}<p>Противоречий не найдено.</p>{% endif %}
+  </div>
+  <div class="panel">
+    <h2>CLL-IPI</h2>
+    <p>В карточке: {% if pt.index_score is not none %}<strong>{{ pt.index_score }}</strong> · {{ label('index_group', pt.index_group) }}{% else %}—{% endif %}{% if c.missing.index_score %} <span class="badge">{{ label('missing', c.missing.index_score) }}</span>{% endif %}</p>
+    <p>Расчёт по данным:
+      {% if c.cll_ipi %}<strong>{{ c.cll_ipi.score }}</strong> · {{ label('index_group', c.cll_ipi.group) }}
+        <small>(TP53 {{ c.cll_ipi.components.TP53 }}, IGHV {{ c.cll_ipi.components.IGHV }}, β2M {{ c.cll_ipi.components.b2m }}, стадия {{ c.cll_ipi.components.stage }}, возраст {{ c.cll_ipi.components.age }})</small>
+        {% if pt.index_score is not none and pt.index_score != c.cll_ipi.score %}<br><span class="badge warn">не совпадает с карточкой</span>{% endif %}
+      {% else %}<span class="muted">недостаточно данных (TP53/del(17p), IGHV, β2M, стадия, возраст)</span>{% endif %}
+    </p>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Ядро</h2>
+  <dl class="facts">
+    <dt>Нозология</dt><dd>{{ pt.who_haem5|nosology }} · ICD-O {{ pt.icd_o_3_2 }} · МКБ {{ pt.mkb }} · версия диагноза {{ pt.dx_version }}</dd>
+    <dt>Диагноз</dt><dd>{{ pt.dx_date|d(pt.dx_date_precision) }}</dd>
+    <dt>Пол</dt><dd>{{ label('sex', pt.sex) }}</dd>
+    <dt>Дата рождения</dt><dd>{{ pt.birth_date|d(pt.birth_date_precision) }}{% if c.missing.birth_date %} <span class="badge">{{ label('missing', c.missing.birth_date) }}</span>{% endif %}</dd>
+    <dt>Первый визит</dt><dd>{{ pt.first_visit_date|d(pt.first_visit_precision) }}</dd>
+    <dt>Последний контакт</dt><dd>{{ pt.last_contact_date|d(pt.last_contact_precision) }}</dd>
+    <dt>ECOG</dt><dd>{{ pt.ecog if pt.ecog is not none else '—' }}{% if c.missing.ecog %} <span class="badge">{{ label('missing', c.missing.ecog) }}</span>{% endif %}</dd>
+    <dt>CIRS-G</dt><dd>{{ pt.cirs_score if pt.cirs_score is not none else '—' }} {{ label('cirs_fitness', pt.cirs_fitness) if pt.cirs_fitness else '' }}{% if c.missing.cirs_score %} <span class="badge">{{ label('missing', c.missing.cirs_score) }}</span>{% endif %}</dd>
+    <dt>Charlson</dt><dd>{{ pt.charlson_score if pt.charlson_score is not none else '—' }}</dd>
+    <dt>B-симптомы</dt><dd>{{ label('b_symptoms', pt.b_symptoms) }}{% if c.missing.b_symptoms %} <span class="badge">{{ label('missing', c.missing.b_symptoms) }}</span>{% endif %}</dd>
+    <dt>Стадия</dt><dd>{% if pt.stage_system %}{{ pt.stage_system }} {{ pt.stage_value }}{% else %}—{% endif %}{% if c.missing.stage_value %} <span class="badge">{{ label('missing', c.missing.stage_value) }}</span>{% endif %}</dd>
+  </dl>
+  <h3>Заключение гистологии</h3>
+  {% if pt.histology_report %}<pre class="doc">{{ pt.histology_report }}</pre>{% else %}<p class="muted">Не внесено.</p>{% endif %}
+  {% if pt.histology_scan %}<p>Скан: <span class="mono">{{ pt.histology_scan }}</span></p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>История диагноза</h2>
+  <table class="grid">
+    <thead><tr><th>Версия</th><th>ICD-O</th><th>МКБ</th><th>Дата диагноза</th><th>Причина пересмотра</th><th>Когда</th></tr></thead>
+    <tbody>{% for d in c.diagnoses %}
+      <tr><td>v{{ d.version }}</td><td>{{ d.icd_o_3_2 }}</td><td>{{ d.mkb }}</td><td>{{ d.dx_date|d(d.dx_date_precision) }}</td>
+        <td>{{ d.change_reason or '—' }}</td><td>{{ d.created_at.strftime('%d.%m.%Y %H:%M') }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Маркеры ХЛЛ</h2>
+  <table class="grid">
+    <thead><tr><th>Маркер</th><th>Результат / код пропуска</th><th>Дата теста</th><th>Данные</th><th></th></tr></thead>
+    <tbody>
+    {% for m in c.markers %}
+      <tr><td>{{ m.field_key }}</td>
+        <td>{% if m.value %}{{ label('marker_value', m.value) }}{% else %}<span class="badge">{{ label('missing', m.missing) }}</span>{% endif %}</td>
+        <td>{{ m.test_date|d(m.test_date_precision) }}</td><td>{{ label('provenance', m.provenance) }}</td>
+        <td>{% if w %}{{ delete_button(pid, 'marker', m.md_id) }}{% endif %}</td></tr>
+    {% else %}<tr><td colspan="5" class="muted">Маркеры не внесены.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% if w %}
+  <details{% if open_form == 'markers' %} open{% endif %}><summary>Добавить маркер</summary>
+    <form method="post" action="/patients/{{ pid }}/markers" class="form compact">
+      {{ csrf_field() }}
+      {% set fields = {} %}{% for f in core_fields() %}{% set _ = fields.update({f.key: f.label_ru}) %}{% endfor %}
+      <label>Маркер * {{ select('field_key', fields, fv_markers.get('field_key'), required=True) }}</label>
+      <label>Результат {{ select('value', options('marker_value'), fv_markers.get('value')) }}</label>
+      <label>или код пропуска {{ codes('missing', missing_codes, 'missing', fv_markers.get('missing')) }}</label>
+      {{ date_field('test_date', 'test_date_precision', fv_markers, 'Дата теста') }}
+      <label>Данные * {{ select('provenance', options('provenance'), fv_markers.get('provenance') or pt.provenance, blank=None) }}</label>
+      <div class="actions"><button class="primary">Добавить</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Линии терапии</h2>
+  <table class="grid">
+    <thead><tr><th>№</th><th>Режим</th><th>Препараты / доза</th><th>Циклов</th><th>Начало</th><th>Окончание</th><th>Дней</th><th>Причина окончания</th><th></th></tr></thead>
+    <tbody>
+    {% for l in c.lines %}
+      <tr><td>{{ l.line_no }}</td><td>{{ l.regimen }}</td><td>{{ l.drug or '' }} {{ l.dose or '' }}</td><td>{{ l.cycles if l.cycles is not none else '—' }}</td>
+        <td>{{ l.start_date|d(l.start_precision) }}</td><td>{{ l.end_date|d(l.end_precision) }}</td>
+        <td>{{ l.duration_days if l.duration_days is not none else '—' }}</td><td>{{ l.stop_reason or '—' }}</td>
+        <td>{% if w %}{{ delete_button(pid, 'line', l.line_id) }}{% endif %}</td></tr>
+    {% else %}<tr><td colspan="9" class="muted">Линий терапии нет.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% if w %}
+  <details{% if open_form == 'lines' %} open{% endif %}><summary>Добавить линию</summary>
+    <form method="post" action="/patients/{{ pid }}/lines" class="form compact">
+      {{ csrf_field() }}
+      <label>Режим * <input name="regimen" value="{{ fv_lines.get('regimen') or '' }}" required maxlength="200"></label>
+      <label>Препараты <input name="drug" value="{{ fv_lines.get('drug') or '' }}" maxlength="500"></label>
+      <label>Доза <input name="dose" value="{{ fv_lines.get('dose') or '' }}" maxlength="200"></label>
+      <label>Циклов <input type="number" name="cycles" min="0" max="100" value="{{ fv_lines.get('cycles') or '' }}"></label>
+      <label>Путь введения <input name="route" value="{{ fv_lines.get('route') or '' }}" maxlength="100"></label>
+      {{ date_field('start_date', 'start_precision', fv_lines, 'Начало', required=True) }}
+      {{ date_field('end_date', 'end_precision', fv_lines, 'Окончание') }}
+      <label>Причина окончания <input name="stop_reason" value="{{ fv_lines.get('stop_reason') or '' }}" maxlength="300"></label>
+      <label>Данные * {{ select('provenance', options('provenance'), fv_lines.get('provenance') or pt.provenance, blank=None) }}</label>
+      <div class="actions"><button class="primary">Добавить</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Наблюдения: ответ, события, ПЭТ-КТ</h2>
+  <table class="grid">
+    <thead><tr><th>Дата</th><th>Линия</th><th>Ответ</th><th>Событие</th><th>ПЭТ-КТ</th><th>Данные</th><th></th></tr></thead>
+    <tbody>
+    {% for o in c.observations %}
+      {% set line = c.lines|selectattr('line_id', 'equalto', o.line_id)|first %}
+      <tr><td>{{ o.obs_date|d(o.obs_precision) }}</td>
+        <td>{{ line.line_no if line else '—' }}</td>
+        <td>{% if o.response_value %}{{ o.response_value }} <small>({{ o.response_criteria }}, {{ label('response_basis', o.response_basis) }})</small>{% else %}—{% endif %}</td>
+        <td>{% if o.event_type != 'none' %}{{ label('event_type', o.event_type) }} {{ o.event_date|d }}{% if o.death_cause %} · {{ label('death_cause', o.death_cause) }}{% endif %}{% else %}—{% endif %}</td>
+        <td>{% if o.pet_ct_report %}<details><summary>заключение{% if o.deauville %} · DS {{ o.deauville }}{% endif %}</summary><pre class="doc">{{ o.pet_ct_report }}</pre>{% if o.pacs_accession %}<p>PACS: <span class="mono">{{ o.pacs_accession }}</span></p>{% endif %}</details>{% else %}—{% endif %}</td>
+        <td>{{ label('provenance', o.provenance) }}</td>
+        <td>{% if w %}{{ delete_button(pid, 'observation', o.obs_id) }}{% endif %}</td></tr>
+    {% else %}<tr><td colspan="7" class="muted">Наблюдений нет.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% if w %}
+  <details{% if open_form == 'observations' %} open{% endif %}><summary>Добавить наблюдение</summary>
+    <form method="post" action="/patients/{{ pid }}/observations" class="form compact">
+      {{ csrf_field() }}
+      {{ date_field('obs_date', 'obs_precision', fv_observations, 'Дата наблюдения', required=True) }}
+      {% set line_opts = {} %}{% for l in c.lines %}{% set _ = line_opts.update({l.line_id|string: '№' ~ l.line_no ~ ' ' ~ l.regimen}) %}{% endfor %}
+      <label>Линия {{ select('line_id', line_opts, fv_observations.get('line_id'), blank='не относится к линии') }}</label>
+      <label>Ответ (iwCLL 2018) {{ codes('response_value', iwcll, 'response_value', fv_observations.get('response_value')) }}</label>
+      <label>Основание оценки {{ select('response_basis', options('response_basis'), fv_observations.get('response_basis')) }}</label>
+      <label>Событие {{ select('event_type', options('event_type'), fv_observations.get('event_type') or 'none', blank=None) }}</label>
+      <label>Дата события <input type="date" name="event_date" value="{{ fv_observations.get('event_date') or '' }}"><small>по умолчанию — дата наблюдения</small></label>
+      <label>Причина смерти {{ select('death_cause', options('death_cause'), fv_observations.get('death_cause')) }}</label>
+      <label class="wide">Заключение ПЭТ-КТ (текст) <textarea name="pet_ct_report" rows="3">{{ fv_observations.get('pet_ct_report') or '' }}</textarea></label>
+      <label>Deauville <input type="number" name="deauville" min="1" max="5" value="{{ fv_observations.get('deauville') or '' }}"></label>
+      <label>PACS accession / Study UID <input name="pacs_accession" value="{{ fv_observations.get('pacs_accession') or '' }}" maxlength="200"></label>
+      <label>Данные * {{ select('provenance', options('provenance'), fv_observations.get('provenance') or pt.provenance, blank=None) }}</label>
+      <div class="actions"><button class="primary">Добавить</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Лабораторные</h2>
+  <table class="grid">
+    <thead><tr><th>Дата</th><th>Показатель (LOINC)</th><th>Как введено</th><th>Каноническое</th><th></th></tr></thead>
+    <tbody>
+    {% for l in c.labs %}
+      <tr><td>{{ l.obs_date|d }}</td><td>{{ lab_units.get(l.loinc, {}).get('name', l.loinc) }} <small class="mono">{{ l.loinc }}</small></td>
+        <td>{{ l.value_raw|float }} {{ l.unit_raw }}</td>
+        <td>{% if l.flag %}<span class="badge warn">{{ flag('lab_' ~ l.flag) }}</span>{% else %}{{ l.value_canonical|float }} {{ l.unit_canonical }}{% endif %}</td>
+        <td>{% if w %}{{ delete_button(pid, 'lab', l.lab_id) }}{% endif %}</td></tr>
+    {% else %}<tr><td colspan="5" class="muted">Анализов нет.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% if w %}
+  <details{% if open_form == 'labs' %} open{% endif %}><summary>Добавить анализ</summary>
+    <form method="post" action="/patients/{{ pid }}/labs" class="form compact">
+      {{ csrf_field() }}
+      {% set lab_opts = {} %}{% for code, spec in lab_units.items() if not code.startswith('_') %}{% set _ = lab_opts.update({code: spec.name ~ ' (' ~ spec.conversions|join(', ') ~ ')'}) %}{% endfor %}
+      <label>Показатель * {{ select('loinc', lab_opts, fv_labs.get('loinc'), required=True) }}</label>
+      <label>Значение * <input name="value" inputmode="decimal" value="{{ fv_labs.get('value') or '' }}" required></label>
+      <label>Единица (UCUM) * <input name="unit" list="units" value="{{ fv_labs.get('unit') or '' }}" required maxlength="30">
+        <small>Приводится к канонической; исходное значение сохраняется.</small></label>
+      <datalist id="units">{% for u in ['g/L','g/dL','10*9/L','10*3/uL','/uL','U/L','mg/L','ug/mL','mmol/L','mg/dL','umol/L'] %}<option value="{{ u }}">{% endfor %}</datalist>
+      <label>Дата анализа * <input type="date" name="obs_date" value="{{ fv_labs.get('obs_date') or '' }}" required></label>
+      <label>Данные * {{ select('provenance', options('provenance'), fv_labs.get('provenance') or pt.provenance, blank=None) }}</label>
+      <div class="actions"><button class="primary">Добавить</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+{% endblock %}

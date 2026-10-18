@@ -4,7 +4,7 @@ from datetime import date, datetime
 import pytest
 
 from registry_core import (
-    canonicalize_lab, completeness_flags, find_node, kaplan_meier, resolve_codes,
+    canonicalize_lab, cll_ipi, completeness_flags, find_node, kaplan_meier, resolve_codes,
     survival_by_threshold, validate_codes, validate_record, NOSOLOGY_TREE,
 )
 
@@ -152,6 +152,25 @@ def test_dead_requires_death_cause(observations, flagged):
     rec = {"who_haem5": "cll_sll", "module_data": CLL_FULL, "status_last_contact": "dead",
            "observations": observations}
     assert ("missing_death_cause" in completeness_flags(rec)) is flagged
+
+
+@pytest.mark.parametrize("args, score, group", [
+    ((60, "Binet", "A", 2.0, "mutated", False), 0, "low"),
+    ((70, "Binet", "A", 2.0, "mutated", False), 1, "low"),
+    ((60, "Rai", "II", 4.0, "mutated", False), 3, "intermediate"),
+    ((60, "Binet", "A", 2.0, "unmutated", True), 6, "high"),
+    ((70, "Binet", "C", 5.0, "unmutated", True), 10, "very_high"),
+])
+def test_cll_ipi(args, score, group):
+    r = cll_ipi(*args)
+    assert (r["score"], r["group"]) == (score, group)
+
+
+@pytest.mark.parametrize("missing_index", range(5))
+def test_cll_ipi_needs_all_components(missing_index):
+    args = [70, "Binet", "B", 4.0, "unmutated", True]
+    args[[0, 2, 3, 4, 5][missing_index]] = None
+    assert cll_ipi(*args) is None
 
 
 def test_cll_node_declares_core_fields():

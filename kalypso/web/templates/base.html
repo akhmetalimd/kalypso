@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}KALYPSO{% endblock %} · KALYPSO</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/patients">KALYPSO <span>регистр ЛПЗ · пилот</span></a>
+  {% if p %}
+  <nav>
+    <a href="/patients">Пациенты</a>
+    {% if p.can('patient.write') %}<a href="/patients/new">Новый пациент</a>{% endif %}
+    {% if p.can('access.decide') %}<a href="/requests">Запросы доступа</a>{% endif %}
+    {% if p.can('export.deid') %}<a href="/export">Выгрузка</a>{% endif %}
+    {% if p.can('audit.read') %}<a href="/audit">Аудит</a>{% endif %}
+    {% if p.can('users.manage') %}<a href="/admin/users">Пользователи</a>{% endif %}
+  </nav>
+  <div class="who">
+    {{ p.display_name }} · {{ label('role', p.role) }}{% if p.branch_code %} · {{ p.branch_code }}{% endif %}
+    <form method="post" action="/logout" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="link">Выйти</button>
+    </form>
+  </div>
+  {% endif %}
+</header>
+<main>
+  <div class="synthetic">Пилот на синтетических данных. Реальные данные пациентов не вносить.</div>
+  {% if message %}<div class="note ok">{{ message }}</div>{% endif %}
+  {% if warnings %}
+  <div class="note warn"><strong>Контроль качества:</strong>
+    <ul>{% for w in warnings %}<li>{{ flag(w) }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  {% if errors %}
+  <div class="note err"><strong>Не сохранено:</strong>
+    <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

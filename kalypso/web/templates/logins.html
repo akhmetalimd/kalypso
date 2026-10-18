@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Журнал входов{% endblock %}
+{% block content %}
+<div class="head"><h1>Журнал входов</h1><a class="button" href="/audit">Аудит-трейл</a></div>
+<table class="grid small">
+  <thead><tr><th>Когда</th><th>Событие</th><th>Логин</th><th>Результат</th><th>IP</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr class="{{ '' if r.success else 'bad' }}">
+    <td>{{ r.ts.strftime('%d.%m.%Y %H:%M:%S') }}</td><td>{{ 'вход' if r.event == 'login' else 'выход' }}</td>
+    <td class="mono">{{ r.login }}</td><td>{{ label('login_reason', r.reason) }}</td><td>{{ r.ip or '—' }}</td>
+  </tr>
+  {% else %}<tr><td colspan="5" class="muted">Записей нет.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

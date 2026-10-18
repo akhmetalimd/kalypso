@@ -50,12 +50,28 @@ KALYPSO (KAzakhstan LYmphoma Patients Survival and Outcomes) — пробная 
 - Log-rank и Cox в платформе не считаются — только на выгрузке (lifelines / R).
   Пороги для «Исследователя выживаемости» — внешние, не подбираются по этим же данным.
 
-## Тесты
+## Устройство (П1)
+
+- `kalypso/deid.py` — проверка ИИН, HMAC, поиск идентификаторов в тексте.
+- `kalypso/registry.py` — доменные сервисы: **единственный путь записи** в регистр
+  (права, приведение ввода, проверки registry_core, одна транзакция, предупреждения QC).
+- `kalypso/auth.py`, `kalypso/rbac.py` + `config/roles.json` — вход, сессии, CSRF, роли.
+- `kalypso/admin.py`, `kalypso/export.py` — пользователи/филиалы/аудит/запросы, деидент. выгрузка.
+- `kalypso/web/` — FastAPI + Jinja2, без JS. ИИН только в теле POST, в ответы не возвращается.
+- `kalypso/locales/*.json` — подписи кодов (ru; kk — заготовка).
+- `kalypso/migrate.py` — `schema.sql` + `db/migrations/*.sql`, учёт в `schema_migrations`.
+- `kalypso/synthetic.py` — синтетическая когорта ХЛЛ через те же сервисы.
+
+## Запуск и тесты
 
 ```bash
 python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-dev.txt
+.venv/Scripts/python -X utf8 -m kalypso.dev      # http://127.0.0.1:8765, учётки — kalypso/dev_seed.json
 .venv/Scripts/python -X utf8 -m pytest
 ```
+
+- `python -m kalypso.dev` поднимает встроенный PostgreSQL в `.devdb/`, применяет миграции и
+  при пустой БД создаёт филиалы, пользователей и 60 синтетических пациентов.
 
 - По умолчанию поднимается встроенный PostgreSQL 16 (pgserver); `KALYPSO_TEST_DSN`
   направляет тесты на внешний сервер (нужны права CREATEDB + CREATEROLE).

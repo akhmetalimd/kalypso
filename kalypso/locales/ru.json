@@ -1,0 +1,81 @@
+{
+  "codes": {
+    "sex": { "M": "Мужской", "F": "Женский", "unknown": "Не указан" },
+    "status_last_contact": { "alive": "Жив", "dead": "Умер", "lost_to_follow_up": "Потерян из наблюдения" },
+    "b_symptoms": { "yes": "Да", "no": "Нет", "unknown": "Неизвестно" },
+    "provenance": { "retrospective": "Ретроспективно", "prospective": "Проспективно" },
+    "source": { "manual": "Вручную", "his_structured": "his.kz (структурно)", "ai_document": "AI из документа" },
+    "missing": {
+      "not_done": "Не выполнялось",
+      "done_unavailable": "Выполнялось, результат недоступен",
+      "normal_negative": "Норма / отрицательно",
+      "unknown": "Неизвестно"
+    },
+    "date_precision": { "day": "День", "month": "Месяц", "year": "Год" },
+    "stage_system": { "Rai": "Rai", "Binet": "Binet" },
+    "cirs_fitness": { "fit": "Fit", "unfit": "Unfit", "frail": "Frail" },
+    "index_group": { "low": "Низкий", "intermediate": "Промежуточный", "high": "Высокий", "very_high": "Очень высокий" },
+    "event_type": {
+      "none": "Нет события", "progression": "Прогрессия", "relapse": "Рецидив",
+      "death": "Смерть", "new_line_start": "Старт новой линии"
+    },
+    "death_cause": { "lpd_related": "Связана с ЛПЗ", "not_related": "Не связана", "unknown": "Неизвестно" },
+    "response_criteria": { "iwCLL 2018": "iwCLL 2018" },
+    "response_basis": { "clinical": "Клинически", "ct": "КТ", "pet_ct": "ПЭТ-КТ", "morphology": "Морфология" },
+    "response_value": {
+      "CR": "CR — полная ремиссия", "CRi": "CRi — ПР с неполным восст. крови",
+      "nPR": "nPR — нодулярная ЧР", "PR": "PR — частичная ремиссия",
+      "PR-L": "PR-L — ЧР с лимфоцитозом", "SD": "SD — стабилизация", "PD": "PD — прогрессирование"
+    },
+    "marker_value": {
+      "mutated": "Мутирован", "unmutated": "Немутирован", "wild_type": "Дикий тип",
+      "detected": "Выявлена", "not_detected": "Не выявлена"
+    },
+    "role": { "physician": "Лечащий врач", "curator": "Куратор регистра", "analyst": "Аналитик", "admin": "Администратор" },
+    "request_status": { "pending": "Ожидает", "approved": "Одобрен", "rejected": "Отклонён" },
+    "login_reason": {
+      "ok": "Успешно", "bad_password": "Неверный пароль", "unknown_user": "Неизвестный логин",
+      "inactive": "Учётная запись отключена", "locked": "Временная блокировка"
+    }
+  },
+  "flags": {
+    "response_before_diagnosis": "Дата ответа раньше даты диагноза",
+    "event_before_diagnosis": "Дата события раньше даты диагноза",
+    "death_without_date": "Смерть без даты",
+    "staging_system_mismatch": "Система стадирования не подходит для нозологии",
+    "death_cause_missing": "Не указана причина смерти",
+    "icd_o_mismatch": "Код ICD-O-3.2 не соответствует нозологии",
+    "mkb_mismatch": "Код МКБ-10 не соответствует нозологии",
+    "code_pair_mismatch": "Коды ICD-O и МКБ из разных пар нозологии",
+    "unknown_who_haem5": "Неизвестный узел WHO-HAEM5",
+    "who_haem5_missing": "Не указана нозология WHO-HAEM5",
+    "nosology_not_active": "Модуль нозологии ещё не активен в пилоте",
+    "missing_IGHV": "Нет IGHV (значения или кода пропуска)",
+    "missing_TP53": "Нет TP53 (значения или кода пропуска)",
+    "missing_del17p": "Нет FISH del(17p)",
+    "missing_del11q": "Нет FISH del(11q)",
+    "missing_tri12": "Нет FISH +12",
+    "missing_del13q": "Нет FISH del(13q)",
+    "missing_death_cause": "Не указана причина смерти",
+    "missing_response_line": "Нет оценки ответа по завершённой линии №{n}",
+    "empty_birth_date": "Нет даты рождения (или кода пропуска)",
+    "empty_ecog": "Нет ECOG (или кода пропуска)",
+    "empty_cirs_score": "Нет CIRS-G (или кода пропуска)",
+    "empty_b_symptoms": "Нет B-симптомов (или кода пропуска)",
+    "empty_stage_value": "Нет стадии (или кода пропуска)",
+    "empty_index_score": "Нет индекса CLL-IPI (или кода пропуска)",
+    "lab_unknown_unit": "Единица не распознана — нужна ручная проверка",
+    "lab_unknown_loinc": "Показатель не из справочника — нужна ручная проверка"
+  },
+  "msg": {
+    "created": "Пациент внесён в регистр",
+    "exists_visible": "Пациент с этим ИИН уже есть в регистре вашего филиала — открыта его карточка",
+    "exists_requested": "Пациент с этим ИИН уже ведётся другим филиалом. Запрос доступа отправлен куратору",
+    "saved": "Сохранено",
+    "deleted": "Запись помечена удалённой",
+    "password_changed": "Пароль изменён",
+    "user_created": "Пользователь создан",
+    "request_decided": "Решение по запросу сохранено",
+    "not_found_iin": "Пациент с таким ИИН в доступных вам записях не найден"
+  }
+}

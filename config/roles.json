@@ -1,0 +1,21 @@
+{
+  "_comment": "Матрица прав (PRD §3). Значение — область: branch (филиалы пользователя) | all. Нет ключа = нет права.",
+  "physician": {
+    "patient.read": "branch",
+    "patient.write": "branch"
+  },
+  "curator": {
+    "patient.read": "all",
+    "access.decide": "all",
+    "audit.read": "all"
+  },
+  "analyst": {
+    "patient.read": "all",
+    "export.deid": "all"
+  },
+  "admin": {
+    "patient.read": "all",
+    "users.manage": "all",
+    "audit.read": "all"
+  }
+}
