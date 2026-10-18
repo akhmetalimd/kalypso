@@ -13,7 +13,7 @@
   <nav>
     <a href="/patients">Пациенты</a>
     {% if p.can('patient.write') %}<a href="/patients/new">Новый пациент</a>{% endif %}
-    {% if p.can('review.apply') %}<a href="/review">Сверка AI</a>{% endif %}
+    {% if p.can('review.apply') %}<a href="/review">Сверка AI</a><a href="/ingest">Приём из МИС</a>{% endif %}
     {% if p.can('access.decide') %}<a href="/requests">Запросы доступа</a>{% endif %}
     {% if p.can('patient.read') %}<a href="/dashboard">Дашборды</a><a href="/survival">Выживаемость</a><a href="/quality">Полнота</a>{% endif %}
     {% if p.can('export.deid') %}<a href="/export">Выгрузка</a>{% endif %}

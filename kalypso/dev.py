@@ -73,6 +73,19 @@ def top_up_patients(db: Database, hasher: IinHasher) -> int:
     return synthetic.generate(db, hasher, physicians, n=target - have, seed=1000 + have, duplicates=0)["patients"]
 
 
+def ingest_synthetic_once(db: Database, hasher: IinHasher) -> dict | None:
+    """Один прогон коннектора по синтетическому МИС-подобному источнику (если ещё не было)."""
+    from kalypso.ingest.connector import run
+    from kalypso.ingest.mapping import load_mapping
+    from kalypso.ingest.synthetic_his import SyntheticHisAdapter
+    with db.tx() as cur:
+        cur.execute("RESET ROLE")
+        cur.execute("SELECT count(*) AS n FROM ingest_run")
+        if cur.fetchone()["n"]:
+            return None
+    return run(db, SyntheticHisAdapter(n=10, seed=77), load_mapping(), hasher)["counts"]
+
+
 def seed_documents_if_empty(db: Database, ai_enabled: bool, n: int = 16) -> int:
     """Синтетические заключения для части пациентов — чтобы очередь сверки была не пустой."""
     import random
@@ -138,6 +151,9 @@ def main() -> None:
     made = seed_documents_if_empty(db, settings.ai_enabled)
     if made:
         print(f"Синтетические документы: {made}")
+    ingested = ingest_synthetic_once(db, IinHasher(settings.hmac_key, settings.hash_key_version))
+    if ingested:
+        print("Синтетический приём из МИС:", ingested)
 
     extractor = pipeline.make_extractor(settings.ai_extractor, settings.ai_model, settings.ai_effort)
     if extractor is not None:

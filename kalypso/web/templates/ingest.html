@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf_field with context %}
+{% block title %}Приём из МИС{% endblock %}
+{% block content %}
+{% set field_names = {'sex': 'Пол', 'birth_date': 'Дата рождения', 'branch': 'Филиал', 'last_contact_date': 'Последний визит',
+   'mkb': 'МКБ-10', 'who_haem5': 'WHO-HAEM5', 'icd_o_3_2': 'ICD-O-3.2', 'dx_date': 'Дата диагноза',
+   'loinc': 'Показатель (LOINC)', 'value': 'Значение', 'unit': 'Единица', 'obs_date': 'Дата анализа',
+   'doc_type': 'Тип документа', 'doc_date': 'Дата документа'} %}
+{% macro fields_table(d) %}
+<dl class="facts">{% for k, v in d.items() if not k.startswith('_') and k != 'text' %}
+  <dt>{{ field_names.get(k, k) }}</dt>
+  <dd>{% if k == 'sex' %}{{ label('sex', v) }}{% elif k == 'loinc' %}{{ lab_units.get(v, {}).get('name', v) }} <small class="mono">{{ v }}</small>{% elif k == 'doc_type' %}{{ label('doc_type', v) }}{% elif k == 'who_haem5' %}{{ v|nosology }}{% else %}{{ v }}{% endif %}</dd>
+{% endfor %}</dl>
+{% endmacro %}
+
+<div class="head"><h1>Приём из МИС <span class="muted">his.kz · задел, синтетика</span></h1></div>
+<p class="muted">Коннектор раскладывает данные МИС после деидентификации и маппинга сюда. В регистр они попадают
+  только по вашему решению — каждый элемент отдельно, автоприменения нет. ИИН, ФИО и внешние ID МИС сюда не попадают.</p>
+
+<section class="card">
+  <h2>Прогоны</h2>
+  {% for st in s.state %}<p class="muted">{{ st.source_system }}: инкремент с {{ st.last_until.strftime('%d.%m.%Y %H:%M') }}</p>{% endfor %}
+  <table class="grid small">
+    <thead><tr><th>Начат</th><th>Источник</th><th>Адаптер</th><th>Маппинг</th><th>Окно</th><th>Статус</th><th>Итог</th></tr></thead>
+    <tbody>{% for r in s.runs %}
+      <tr class="{{ 'bad' if r.status == 'failed' else '' }}"><td>{{ r.started_at.strftime('%d.%m.%Y %H:%M') }}</td><td>{{ r.source_system }}</td>
+        <td>{{ r.adapter }}</td><td class="mono">{{ r.mapping_version }}</td>
+        <td>{{ r.since.strftime('%d.%m.%Y') if r.since else 'всё' }} — {{ r.until.strftime('%d.%m.%Y') }}</td>
+        <td>{{ {'ok': 'успешно', 'failed': 'ошибка', 'running': 'идёт'}[r.status] }}{% if r.error %} <small>{{ r.error }}</small>{% endif %}</td>
+        <td class="clip">{% for k, v in r.counts.items() %}{{ k }}: {{ v }}{{ ', ' if not loop.last }}{% endfor %}</td></tr>
+    {% else %}<tr><td colspan="7" class="muted">Прогонов ещё не было.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+{% if p.can('review.apply') %}
+<div class="actions">
+  <a class="button{{ ' primary' if not kind }}" href="/ingest">Все</a>
+  {% for k, name in kinds.items() %}<a class="button{{ ' primary' if kind == k }}" href="/ingest?kind={{ k }}">{{ name }}</a>{% endfor %}
+</div>
+<section class="card">
+  <h2>Ждут решения <span class="muted">{{ items|length }}</span></h2>
+  {% for it in items %}
+  <div class="proposal">
+    <h3>{{ kinds[it.kind] }}
+      {% if it.change == 'update' %}<span class="badge warn">обновление записи МИС</span>{% endif %}
+      {% if it.issues %}<span class="badge warn">проблемы маппинга</span>{% endif %}
+      <small>пациент: {% if it.resolved_pid %}<a class="mono" href="/patients/{{ it.resolved_pid }}">{{ it.resolved_pid|short }}</a>{% else %}нет в регистре{% endif %}</small></h3>
+    {% if it.kind == 'patient' %}{{ fields_table(it.payload.patient) }}{{ fields_table(it.payload.diagnosis) }}
+    {% else %}{{ fields_table(it.payload) }}{% endif %}
+    {% if it.kind == 'document' %}
+      <p class="muted">Заменено: {% for k, n in it.payload.get('_deid_report', {}).items() %}{{ label('deid_kind', k) }} {{ n }}{{ ', ' if not loop.last }}{% else %}ничего{% endfor %}</p>
+      <pre class="doc">{{ it.payload.text }}</pre>
+    {% endif %}
+    {% if it.issues %}<div class="note err"><ul>{% for i in it.issues %}<li>{{ i }}</li>{% endfor %}</ul>
+      Исправьте <span class="mono">config/field_mapping/his_kz.json</span> — данные придут следующим прогоном.</div>{% endif %}
+    <form method="post" action="/ingest/item/{{ it.item_id }}" class="inline-form">
+      {{ csrf_field() }}<input type="hidden" name="kind" value="{{ kind or '' }}">
+      <input name="note" maxlength="500" placeholder="{{ 'причина изменения диагноза (обязательно)' if it.kind == 'diagnosis' else 'комментарий' }}">
+      {% if it.kind == 'document' and not it.issues %}<label class="check"><input type="checkbox" name="confirm" value="1"> текст проверен — идентификаторов нет</label>{% endif %}
+      {% if not it.issues %}<button name="decision" value="apply" class="primary">Применить</button>{% endif %}
+      <button name="decision" value="reject">Отклонить</button>
+    </form>
+  </div>
+  {% else %}<p class="muted">Нечего решать.</p>{% endfor %}
+</section>
+{% endif %}
+{% endblock %}

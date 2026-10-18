@@ -302,6 +302,33 @@ def register_patient(db: Database, hasher: IinHasher, p: Principal, data: dict) 
                                             "event_type": "death" if death else None}))
 
 
+def register_from_source(db: Database, p: Principal, iin_hash: str, hash_key_version: int, branch: str,
+                         data: dict, source: str = "his_structured", source_record_id: str | None = None,
+                         reason: str | None = None) -> Result:
+    """Пациент из внешнего источника (МИС) по решению куратора: ИИН у куратора нет — только хэш,
+    посчитанный коннектором тем же ключом. Филиал — из справочника учреждений маппинга."""
+    perm = write_perm(source)
+    p.require(perm)
+    f = Form(data)
+    row = _patient_fields(f)
+    f.check()
+    row.update(iin_hash=iin_hash, hash_key_version=hash_key_version, branch=branch, source=source,
+               source_record_id=source_record_id)
+
+    def write():
+        with db.tx(p.user_id, reason=reason) as cur:
+            cur.execute("SELECT patient_id_by_hash(%s) AS pid", (iin_hash,))
+            existing = cur.fetchone()["pid"]
+            if existing:
+                return existing, "exists"
+            cur.execute("SELECT 1 FROM branch WHERE branch_code = %s AND is_active", (branch,))
+            if not cur.fetchone():
+                raise ValidationError([f"Филиал {branch} не найден или отключён"])
+            return _insert(cur, "patient", row, "patient_id"), "created"
+    pid, status = _db_call(write)
+    return Result(status, pid, _quality(row))
+
+
 def _load_visible(cur, p: Principal, pid, perm="patient.read") -> dict:
     cond, params = visible_patients_sql(p, perm)
     cur.execute(f"SELECT * FROM patient p WHERE p.patient_id = %s AND p.deleted_at IS NULL AND {cond}",
@@ -471,9 +498,13 @@ _KINDS = {"line": ("therapy_line", "line_id"), "observation": ("observation", "o
           "lab": ("lab", "lab_id"), "marker": ("module_data", "md_id")}
 
 
+CURATED_SOURCES = ("ai_document", "his_structured")
+
+
 def write_perm(source: str) -> str:
-    """Ручной ввод — право врача; запись по принятому AI-предложению — право куратора."""
-    return "review.apply" if source == "ai_document" else "patient.write"
+    """Ручной ввод — право врача; запись по принятому AI-предложению или данным МИС —
+    право куратора (review.apply), только с соответствующим источником."""
+    return "review.apply" if source in CURATED_SOURCES else "patient.write"
 
 
 def _reason(f: Form) -> str | None:
@@ -674,28 +705,32 @@ def _lab_row(f: Form) -> tuple[dict, list[str]]:
     return row, [f"lab_{c.flag}"] if c.flag else []
 
 
-def add_lab(db: Database, p: Principal, pid, data: dict) -> Result:
-    p.require("patient.write")
+def add_lab(db: Database, p: Principal, pid, data: dict, source: str = "manual",
+            source_record_id: str | None = None, reason: str | None = None) -> Result:
+    perm = write_perm(source)
+    p.require(perm)
     f = Form(data)
     row, warnings = _lab_row(f)
     f.check()
 
     def write():
-        with db.tx(p.user_id) as cur:
-            _load_visible(cur, p, pid, "patient.write")
-            return _insert(cur, "lab", {**row, "patient_id": pid, "source": "manual"}, "lab_id")
+        with db.tx(p.user_id, reason=reason) as cur:
+            _load_visible(cur, p, pid, perm)
+            return _insert(cur, "lab", {**row, "patient_id": pid, "source": source,
+                                        "source_record_id": source_record_id}, "lab_id")
     return Result("saved", _db_call(write), warnings)
 
 
-def update_lab(db: Database, p: Principal, pid, rid, data: dict) -> Result:
-    p.require("patient.write")
+def update_lab(db: Database, p: Principal, pid, rid, data: dict, source: str = "manual") -> Result:
+    perm = write_perm(source)
+    p.require(perm)
     f = Form(data)
     (row, warnings), reason = _lab_row(f), _reason(f)
     f.check()
 
     def write():
         with db.tx(p.user_id, reason=reason) as cur:
-            _load_visible(cur, p, pid, "patient.write")
+            _load_visible(cur, p, pid, perm)
             _update(cur, "lab", "lab_id", rid, pid, row)
     _db_call(write)
     return Result("saved", rid, warnings)

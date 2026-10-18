@@ -110,7 +110,10 @@ def test_hash_lookup_reveals_only_id_to_physician(reg, world2):
     reg.as_app(reg.doc)
     assert reg.one("SELECT patient_id_by_hash(%s)", iin_hash("990000000302")) == world2["pb"]
     reg.con.rollback()
-    reg.as_app(world2["cur"])
+    reg.as_app(world2["cur"])   # куратор и так видит всех; id нужен ему для приёма из МИС (0006)
+    assert reg.one("SELECT patient_id_by_hash(%s)", iin_hash("990000000302")) == world2["pb"]
+    reg.con.rollback()
+    reg.as_app(world2["ana"])
     assert reg.one("SELECT patient_id_by_hash(%s)", iin_hash("990000000302")) is None
     reg.con.rollback()
 

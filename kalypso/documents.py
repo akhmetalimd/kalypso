@@ -128,3 +128,27 @@ def requeue(db: Database, p: Principal, doc_id) -> Result:
                         "WHERE doc_id = %s AND status = 'manual'", (doc_id,))
     _db_call(write)
     return Result("queued", doc_id)
+
+
+def add_from_source(db: Database, p: Principal, pid, doc_type: str, doc_date, provenance: str, text: str,
+                    deid_report: dict, ai_enabled: bool, source: str = "his_structured",
+                    source_record_id: str | None = None) -> Result:
+    """Документ из МИС по решению куратора. Куратор проверил очищенный текст — это и есть
+    подтверждение (deid_passed); повторная автоочистка и проверка остатков — как при ручном приёме."""
+    p.require("review.apply")
+    result = preview(text)
+    if not result.clean:
+        raise ValidationError(["В тексте остались идентификаторы (ИИН, телефон или e-mail)"])
+    status, note = ("queued", None) if ai_enabled else ("manual", "AI отключён — внесите данные вручную")
+
+    def write():
+        with db.tx(p.user_id) as cur:
+            _load_visible(cur, p, pid, "review.apply")
+            cur.execute("""INSERT INTO source_document (patient_id, doc_type, doc_date, provenance, source,
+                                                        source_record_id, text_deid, deid_report, deid_passed,
+                                                        status, status_note)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, true, %s, %s) RETURNING doc_id""",
+                        (pid, doc_type, doc_date, provenance, source, source_record_id, result.text,
+                         json.dumps(_merge_report(json.dumps(deid_report), result.report)), status, note))
+            return cur.fetchone()["doc_id"]
+    return Result(status, _db_call(write))

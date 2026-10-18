@@ -19,6 +19,7 @@ from fastapi.templating import Jinja2Templates
 import registry_core as core
 from kalypso import admin, analytics, auth, charts, docgen, documents, export, i18n, registry, review
 from kalypso.ai import fields as ai_fields
+from kalypso.ingest import apply as ingest_apply
 from kalypso.config import Settings
 from kalypso.db import Database
 from kalypso.deid import IinHasher
@@ -518,6 +519,29 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         s = docgen.patient_summary(card)
         text = docgen.tumor_board_text(s) if kind == "tumor-board" else docgen.epicrisis_text(s)
         return render(request, "patient_doc.html", p, s=s, text=text, kind=kind, pid=pid)
+
+    # --- П4: приём из МИС (куратор) -----------------------------------------
+    def _ingest_page(request, p, status_code=200, errors=None):
+        kind = request.query_params.get("kind") or None
+        items = ingest_apply.list_pending(db, p, kind) if p.can("review.apply") else []
+        return render(request, "ingest.html", p, status_code, errors=errors, s=ingest_apply.summary(db, p),
+                      items=items, kind=kind, kinds=ingest_apply.KIND_LABELS)
+
+    @app.get("/ingest", response_class=HTMLResponse)
+    def ingest_page(request: Request):
+        return _ingest_page(request, current(request))
+
+    @app.post("/ingest/item/{item_id}")
+    async def ingest_decide(request: Request, item_id: str):
+        p = current(request)
+        form = await form_of(request)
+        try:
+            ingest_apply.decide(db, p, pid_of(item_id), form.get("decision") == "apply", form.get("note"),
+                                confirm_text=form.get("confirm") == "1", ai_enabled=settings.ai_enabled)
+        except ValidationError as e:
+            return _ingest_page(request, p, 422, e.errors)
+        kind = form.get("kind")
+        return back("/ingest" + (f"?kind={kind}" if kind in ingest_apply.KIND_LABELS else ""), "decided")
 
     # --- контроль полноты (FR-7) -------------------------------------------
     @app.get("/quality", response_class=HTMLResponse)
