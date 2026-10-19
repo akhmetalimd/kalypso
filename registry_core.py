@@ -167,8 +167,8 @@ def validate_record(rec: dict) -> list[str]:
     if rec.get("status_last_contact") == "dead" and not rec.get("last_contact_date"):
         flags.append("death_without_date")
     stage_sys = rec.get("stage_system")
-    who = rec.get("who_haem5")
-    if who == "cll_sll" and stage_sys not in (None, "Rai", "Binet"):
+    node = find_node(NOSOLOGY_TREE, rec.get("who_haem5") or "") or {}
+    if node.get("staging") and stage_sys not in (None, *node["staging"]):
         flags.append("staging_system_mismatch")
     if rec.get("event_type") == "death" and not rec.get("death_cause"):
         flags.append("death_cause_missing")
@@ -267,6 +267,8 @@ def completeness_flags(rec: dict) -> list[str]:
     node = find_node(NOSOLOGY_TREE, rec.get("who_haem5") or "") or {}
     md = rec.get("module_data") or {}
     for field in node.get("core_fields", []):
+        if field.get("optional"):
+            continue  # дополнительное поле: пустое — не пропуск ядра
         if md.get(field["key"]) in (None, ""):
             flags.append(f"missing_{field['key']}")
 
@@ -461,6 +463,107 @@ def cll_ipi(age: Optional[float], stage_system: Optional[str], stage_value: Opti
     return {"score": score, "group": group, "components": parts}
 
 
+# ---------------------------------------------------------------------------
+# 7. Прогностические индексы ДВКЛ и критерии ответа Lugano 2014
+# ---------------------------------------------------------------------------
+# Балл -> группа: (верхняя граница балла, группа) по возрастанию.
+INDEXES = {
+    "CLL-IPI": {"max": 10, "groups": ((1, "low"), (3, "intermediate"), (6, "high"), (10, "very_high"))},
+    "IPI": {"max": 5, "groups": ((1, "low"), (2, "low_intermediate"), (3, "high_intermediate"), (5, "high"))},
+    "R-IPI": {"max": 5, "groups": ((0, "very_good"), (2, "good"), (5, "poor"))},
+    "NCCN-IPI": {"max": 8, "groups": ((1, "low"), (3, "low_intermediate"), (5, "high_intermediate"), (8, "high"))},
+}
+LDH_CATEGORIES = ("le_uln", "uln_1_3", "gt_3_uln")   # ЛДГ: ≤ ВГН, > 1–3 × ВГН, > 3 × ВГН
+RESPONSES = {
+    "iwCLL 2018": ("CR", "CRi", "nPR", "PR", "PR-L", "SD", "PD"),
+    "Lugano 2014": ("CMR", "PMR", "NMR", "PMD", "CR", "PR", "SD", "PD"),
+}
+LUGANO_METABOLIC = ("CMR", "PMR", "NMR", "PMD")      # ответ по ПЭТ-КТ (Deauville обязателен)
+
+
+def index_group(name: str, score) -> Optional[str]:
+    """Группа риска по баллу индекса; None — неизвестный индекс или балл вне шкалы."""
+    spec = INDEXES.get(name)
+    if spec is None or score is None or not 0 <= score <= spec["max"]:
+        return None
+    return next(g for upper, g in spec["groups"] if score <= upper)
+
+
+def advanced_stage(stage_system: Optional[str], stage_value: Optional[str]) -> Optional[bool]:
+    """Стадия III–IV по Lugano / Ann Arbor (компонент IPI и NCCN-IPI)."""
+    if stage_system not in ("Lugano", "Ann Arbor") or not stage_value:
+        return None
+    return stage_value in ("III", "IV")
+
+
+def ipi(age: Optional[float], ecog: Optional[int], advanced: Optional[bool],
+        ldh: Optional[str], extranodal_gt1: Optional[bool]) -> Optional[dict]:
+    """IPI (International NHL Prognostic Factors Project, 1993), по 1 баллу:
+    возраст > 60, ЛДГ > ВГН, ECOG ≥ 2, стадия III–IV, > 1 экстранодального очага.
+    Группы: 0–1 низкий, 2 низкий-промежуточный, 3 высокий-промежуточный, 4–5 высокий.
+    None, если хоть одного компонента нет."""
+    parts = {
+        "age": None if age is None else int(age > 60),
+        "LDH": None if ldh not in LDH_CATEGORIES else int(ldh != "le_uln"),
+        "ECOG": None if ecog is None else int(ecog >= 2),
+        "stage": None if advanced is None else int(advanced),
+        "extranodal": None if extranodal_gt1 is None else int(extranodal_gt1),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("IPI", score), "components": parts}
+
+
+def r_ipi(ipi_score: Optional[int]) -> Optional[dict]:
+    """R-IPI (Sehn, 2007) — перегруппировка балла IPI: 0 очень хороший, 1–2 хороший, 3–5 плохой."""
+    if ipi_score is None:
+        return None
+    return {"score": ipi_score, "group": index_group("R-IPI", ipi_score), "components": {"IPI": ipi_score}}
+
+
+def nccn_ipi(age: Optional[float], ecog: Optional[int], advanced: Optional[bool],
+             ldh: Optional[str], extranodal_key_site: Optional[bool]) -> Optional[dict]:
+    """NCCN-IPI (Zhou, 2014): возраст > 40–60 1, > 60–75 2, > 75 3; ЛДГ > 1–3 × ВГН 1, > 3 × ВГН 2;
+    стадия III–IV 1; поражение КМ, ЦНС, печени/ЖКТ или лёгкого 1; ECOG ≥ 2 1.
+    Группы: 0–1 низкий, 2–3 низкий-промежуточный, 4–5 высокий-промежуточный, 6–8 высокий."""
+    if age is None:
+        age_pts = None
+    else:
+        age_pts = 0 if age <= 40 else 1 if age <= 60 else 2 if age <= 75 else 3
+    parts = {
+        "age": age_pts,
+        "LDH": None if ldh not in LDH_CATEGORIES else LDH_CATEGORIES.index(ldh),
+        "stage": None if advanced is None else int(advanced),
+        "extranodal": None if extranodal_key_site is None else int(extranodal_key_site),
+        "ECOG": None if ecog is None else int(ecog >= 2),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("NCCN-IPI", score), "components": parts}
+
+
+def check_response(criteria: Optional[str], value: Optional[str], basis: Optional[str],
+                   deauville: Optional[int]) -> list[str]:
+    """Согласованность оценки ответа. Lugano 2014: по ПЭТ-КТ — метаболический ответ
+    (CMR/PMR/NMR/PMD) с баллом Deauville; CMR — Deauville 1–3, остальные — 4–5; по КТ — CR/PR/SD/PD."""
+    if not value:
+        return []
+    if value not in RESPONSES.get(criteria or "", ()):
+        return ["response_not_in_criteria"]
+    flags = []
+    if criteria == "Lugano 2014":
+        metabolic = value in LUGANO_METABOLIC
+        if metabolic != (basis == "pet_ct"):
+            flags.append("lugano_basis_mismatch")
+        if metabolic and deauville is None:
+            flags.append("deauville_required")
+        elif metabolic and (value == "CMR") != (deauville <= 3):
+            flags.append("deauville_mismatch")
+    return flags
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -492,6 +595,10 @@ if __name__ == "__main__":
         {"who_haem5": "cll_sll", "icd_o_3_2": "9823/3", "mkb": "C83.3"})
     assert "missing_TP53" in completeness_flags({"who_haem5": "cll_sll", "module_data": {}})
     assert canonicalize_lab("_comment", 1, "x").flag == "unknown_loinc"
+    assert ipi(70, 2, True, "uln_1_3", True)["group"] == "high"                 # 5 баллов
+    assert ipi(50, 0, False, "le_uln", False)["score"] == 0 and r_ipi(0)["group"] == "very_good"
+    assert nccn_ipi(80, 2, True, "gt_3_uln", True)["score"] == 8
+    assert check_response("Lugano 2014", "CMR", "pet_ct", 4) == ["deauville_mismatch"]
     try:
         kaplan_meier([-1], [1])
         raise AssertionError("отрицательное время должно отвергаться")

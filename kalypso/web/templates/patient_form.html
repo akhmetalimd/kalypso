@@ -2,7 +2,8 @@
 {% from "_macros.html" import csrf_field, select, codes, date_field, missing_select with context %}
 {% block title %}{{ 'Новый пациент' if is_new else 'Правка карточки' }}{% endblock %}
 {% block content %}
-<h1>{{ 'Новый пациент — ХЛЛ / ЛМЛ' if is_new else 'Правка карточки' }}</h1>
+{% set prof = profile(v.get('who_haem5') or who) %}
+<h1>{{ 'Новый пациент — ' ~ prof.name if is_new else 'Правка карточки' }}</h1>
 <form method="post" action="{{ '/patients/new' if is_new else '/patients/' ~ pid ~ '/edit' }}" class="form">
   {{ csrf_field() }}
 
@@ -19,12 +20,19 @@
 
   <fieldset>
     <legend>Диагноз (WHO-HAEM5 → ICD-O-3.2 → МКБ-10)</legend>
+    {% if is_new %}
+    <label>Нозология <input value="{{ prof.name }}" disabled><input type="hidden" name="who_haem5" value="{{ prof.id }}">
+      <small><a href="/patients/new">другая нозология</a></small></label>
+    {% else %}
     <label>Нозология *
       {% set nodes = {} %}{% for n in active_nodes() %}{% set _ = nodes.update({n.id: n.name}) %}{% endfor %}
-      {{ select('who_haem5', nodes, v.get('who_haem5') or 'cll_sll', blank=None) }}
+      {{ select('who_haem5', nodes, prof.id, blank=None) }}
+      <small>Стадия и индекс проверяются по выбранной нозологии: при её смене сначала сохраните диагноз без стадии и индекса.</small>
     </label>
-    <label>ICD-O-3.2 <input name="icd_o_3_2" value="{{ v.get('icd_o_3_2') or '' }}" placeholder="9823/3 (ЛМЛ — 9670/3)"></label>
-    <label>МКБ-10 <input name="mkb" value="{{ v.get('mkb') or '' }}" placeholder="C91.1 (ЛМЛ — C83.0)"></label>
+    {% endif %}
+    {% set codes_hint = {'cll_sll': ('9823/3 (ЛМЛ — 9670/3)', 'C91.1 (ЛМЛ — C83.0)'), 'dlbcl': ('9680/3', 'C83.3')}.get(prof.id, ('', '')) %}
+    <label>ICD-O-3.2 <input name="icd_o_3_2" value="{{ v.get('icd_o_3_2') or '' }}" placeholder="{{ codes_hint[0] }}"><small>Пусто — код узла нозологии</small></label>
+    <label>МКБ-10 <input name="mkb" value="{{ v.get('mkb') or '' }}" placeholder="{{ codes_hint[1] }}"></label>
     {{ date_field('dx_date', 'dx_date_precision', v, 'Дата диагноза (time-zero)', required=True) }}
     {% if not is_new %}
     <label class="wide">Причина пересмотра диагноза
@@ -61,21 +69,30 @@
     <div>
       <label>Стадия
         <span class="pair">
-          {{ select('stage_system', options('stage_system'), v.get('stage_system'), blank='система') }}
-          {{ select('stage_value', {'0':'0','I':'I','II':'II','III':'III','IV':'IV','A':'A','B':'B','C':'C'}, v.get('stage_value'), blank='стадия') }}
+          {% set systems = {} %}{% for s in prof.stages %}{% set _ = systems.update({s: s}) %}{% endfor %}
+          {{ select('stage_system', systems, v.get('stage_system'), blank='система') }}
+          <select name="stage_value" id="stage_value"><option value="">стадия</option>
+            {% for system, values in prof.stages.items() %}<optgroup label="{{ system }}">
+              {% for s in values %}<option value="{{ s }}"{% if v.get('stage_value')|string == s and (v.get('stage_system') or system) == system %} selected{% endif %}>{{ s }}</option>{% endfor %}
+            </optgroup>{% endfor %}
+          </select>
         </span>
-        <small>Rai: 0–IV · Binet: A–C</small>
+        <small>{% for system, values in prof.stages.items() %}{{ system }}: {{ values|join(', ') }}{% if not loop.last %} · {% endif %}{% endfor %}{% if prof.id == 'dlbcl' %}. Bulky — отдельным полем модуля{% endif %}</small>
       </label>{{ missing_select('stage_value', missing) }}
     </div>
+    {% set spec = indexes.get(prof.index) %}
+    {% if spec %}
     <div>
-      <label>CLL-IPI
+      <label>{{ prof.index }}
         <span class="pair">
-          <input type="number" name="index_score" min="0" max="10" placeholder="балл" value="{{ v.get('index_score') if v.get('index_score') is not none else '' }}">
-          {{ select('index_group', options('index_group'), v.get('index_group'), blank='группа') }}
+          <input type="number" name="index_score" min="0" max="{{ spec.max }}" placeholder="балл 0–{{ spec.max }}" value="{{ v.get('index_score') if v.get('index_score') is not none else '' }}">
+          {% set groups = {} %}{% for upper, g in spec.groups %}{% set _ = groups.update({g: label('index_group', g)}) %}{% endfor %}
+          {{ select('index_group', groups, v.get('index_group'), blank='группа') }}
         </span>
-        <small>Расчёт по внесённым данным показан в карточке.</small>
+        <small>Группа выводится из балла. Расчёт по внесённым данным{% if prof.index == 'IPI' %} (IPI, R-IPI, NCCN-IPI){% endif %} — в карточке.</small>
       </label>{{ missing_select('index_score', missing) }}
     </div>
+    {% endif %}
   </fieldset>
 
   <fieldset>

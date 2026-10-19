@@ -4,16 +4,16 @@
 {% block content %}
 <div class="head">
   <h1>ХЛЛ / ЛМЛ <span class="muted">{{ d.n }} пациентов</span></h1>
-  <div class="actions"><a class="button" href="/dashboard">Обзор</a><a class="button" href="/survival">Исследователь выживаемости</a></div>
+  <div class="actions"><a class="button" href="/dashboard">Обзор</a><a class="button" href="/dashboard/dlbcl">ДВКЛ</a><a class="button" href="/survival?nosology=cll_sll">Исследователь выживаемости</a></div>
 </div>
-{{ filters('/dashboard/cll', f, branches) }}
+{{ filters('/dashboard/cll', f, branches, nosology=False) }}
 <p class="muted">{{ filters_text }}. Маркеры — последний результат или код пропуска; серым — пропуски и «не внесено».</p>
 
 <section class="tiles">
   {{ tile('Получали терапию', d.treated[0], d.treated[1]) }}
   <div class="tile"><div class="label">Медиана времени до 1-й терапии</div>
     <div class="value">{{ d.ttft_median_months if d.ttft_median_months is not none else 'не достигнута' }}{% if d.ttft_median_months is not none %} мес.{% endif %}</div>
-    <div class="sub">TTFT, n={{ d.ttft_n }} · <a href="/survival?endpoint=TTFT">кривая</a></div></div>
+    <div class="sub">TTFT, n={{ d.ttft_n }} · <a href="/survival?endpoint=TTFT&amp;nosology=cll_sll">кривая</a></div></div>
 </section>
 
 <div class="two">

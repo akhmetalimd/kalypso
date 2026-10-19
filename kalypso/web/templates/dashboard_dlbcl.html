@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_viz.html" import filters, dist_table, tile with context %}
+{% block title %}ДВКЛ — дашборд{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>ДВКЛ (DLBCL, NOS) <span class="muted">{{ d.n }} пациентов</span></h1>
+  <div class="actions"><a class="button" href="/dashboard">Обзор</a><a class="button" href="/dashboard/cll">ХЛЛ</a><a class="button" href="/survival?nosology=dlbcl">Исследователь выживаемости</a></div>
+</div>
+{{ filters('/dashboard/dlbcl', f, branches, nosology=False, binet=False) }}
+<p class="muted">{{ filters_text }}. Маркеры и признаки — последний результат или код пропуска; серым — пропуски и «не внесено».
+  R-IPI и NCCN-IPI — расчёт по данным карточки.</p>
+
+<section class="tiles">
+  {{ tile('Получали терапию', d.treated[0], d.treated[1]) }}
+  {{ tile('CR / CMR после 1-й линии', d.cr1[0], d.cr1[1], 'последняя оценка по линии') }}
+  <div class="tile"><div class="label">Медиана общей выживаемости</div>
+    <div class="value">{{ d.os_median_months if d.os_median_months is not none else 'не достигнута' }}{% if d.os_median_months is not none %} мес.{% endif %}</div>
+    <div class="sub">OS, n={{ d.os_n }} · <a href="/survival?endpoint=OS&amp;grouping=ipi">кривые по IPI</a></div></div>
+</section>
+
+<div class="two">
+  <section class="card"><h2>Стадия Lugano</h2>
+    {{ charts.bar_chart(d.stage, 'Стадия Lugano', d.n)|safe }}{{ dist_table(d.stage, d.n) }}</section>
+  <section class="card"><h2>IPI (в карточке)</h2>
+    {{ charts.bar_chart(d.ipi_stored, 'IPI', d.n)|safe }}{{ dist_table(d.ipi_stored, d.n) }}</section>
+  <section class="card"><h2>IPI: карточка и расчёт по данным</h2>
+    {{ charts.bar_chart(d.ipi_agree, 'Сверка IPI', d.n)|safe }}{{ dist_table(d.ipi_agree, d.n) }}</section>
+  <section class="card"><h2>R-IPI (расчёт)</h2>
+    {{ charts.bar_chart(d.r_ipi, 'R-IPI', d.n)|safe }}{{ dist_table(d.r_ipi, d.n) }}</section>
+  <section class="card"><h2>NCCN-IPI (расчёт)</h2>
+    {{ charts.bar_chart(d.nccn_ipi, 'NCCN-IPI', d.n)|safe }}{{ dist_table(d.nccn_ipi, d.n) }}</section>
+  {% for key, title in [('coo_hans', 'Клеточное происхождение (Hans)'), ('ldh_uln', 'ЛДГ относительно ВГН'),
+                        ('extranodal_n', 'Экстранодальные очаги'), ('bulky', 'Bulky-очаг'),
+                        ('myc_r', 'Перестройка MYC'), ('bcl2_r', 'Перестройка BCL2'), ('bcl6_r', 'Перестройка BCL6')] %}
+  <section class="card"><h2>{{ title }}</h2>
+    {{ charts.bar_chart(d.markers[key], title, d.n)|safe }}{{ dist_table(d.markers[key], d.n) }}</section>
+  {% endfor %}
+  <section class="card"><h2>MYC / BCL2 (double-hit)</h2>
+    {{ charts.bar_chart(d.myc_bcl2, 'MYC / BCL2', d.n)|safe }}{{ dist_table(d.myc_bcl2, d.n) }}
+    <small>MYC + BCL2 — по WHO-HAEM5 это DLBCL/HGBL-MYC/BCL2: в карточке такого пациента — предупреждение проверить диагноз.</small></section>
+  <section class="card"><h2>Deauville после 1-й линии</h2>
+    {{ charts.bar_chart(d.eot_deauville, 'Deauville после 1-й линии', d.cr1[1])|safe }}{{ dist_table(d.eot_deauville, d.cr1[1]) }}
+    <small>Первая ПЭТ-КТ с баллом Deauville после окончания 1-й линии; среди получавших 1-ю линию. Кривые — <a href="/survival?endpoint=PFS&amp;grouping=deauville_eot1">анализ от ориентира</a>.</small></section>
+  <section class="card"><h2>Число линий терапии</h2>
+    {{ charts.bar_chart(d.lines_per, 'Линии', d.n)|safe }}{{ dist_table(d.lines_per, d.n) }}</section>
+  <section class="card"><h2>Режимы 1-й линии</h2>
+    {% if d.regimen1 %}{{ charts.bar_chart(d.regimen1, 'Режимы 1-й линии')|safe }}{{ dist_table(d.regimen1) }}{% else %}<p class="muted">Нет данных.</p>{% endif %}</section>
+</div>
+
+<section class="card"><h2>Ответ по линиям (Lugano 2014, последняя оценка)</h2>
+  {% if d.responses %}
+  {{ charts.stacked_bars(d.responses, response_groups, 'Ответ по линиям')|safe }}
+  <details class="viz-table"><summary>Таблица</summary><table class="grid small">
+    <thead><tr><th>Линия</th>{% for k, name in response_groups %}<th>{{ name }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for line, counts in d.responses %}<tr><td>{{ line }}</td>{% for k, _ in response_groups %}<td>{{ counts.get(k, 0) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></details>
+  {% else %}<p class="muted">Оценок ответа нет.</p>{% endif %}
+</section>
+
+<section class="card"><h2>Причины смерти</h2>
+  {% if d.deaths %}{{ charts.bar_chart(d.deaths, 'Причины смерти')|safe }}{{ dist_table(d.deaths) }}{% else %}<p class="muted">Смертей не зарегистрировано.</p>{% endif %}
+</section>
+{% endblock %}

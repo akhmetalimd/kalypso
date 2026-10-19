@@ -210,7 +210,8 @@ def test_markers_completeness_and_cll_ipi(world):
     pid = world.register(birth_date="1950-01-01", dx_date="2021-03-01", stage_value="B").record_id
     card = registry.get_card(world.db, world.doc_a, pid)
     assert {"missing_IGHV", "missing_TP53", "missing_del17p"} <= set(card["flags"]["completeness"])
-    assert card["cll_ipi"] is None
+    [cll_ipi] = card["indices"]
+    assert cll_ipi["name"] == "CLL-IPI" and cll_ipi["result"] is None
 
     m = {"provenance": "retrospective", "test_date": "2021-03-01"}
     for key, val in [("IGHV", "unmutated"), ("TP53", "wild_type"), ("del17p", "not_detected")]:
@@ -224,7 +225,8 @@ def test_markers_completeness_and_cll_ipi(world):
     card = registry.get_card(world.db, world.doc_a, pid)
     assert not [f for f in card["flags"]["completeness"] if f.startswith("missing_")]
     # IGHV немут. 2 + β2M > 3.5 2 + Binet B 1 + возраст 71 > 65 1 = 6
-    assert card["cll_ipi"]["score"] == 6 and card["cll_ipi"]["group"] == "high"
+    ipi = card["indices"][0]["result"]
+    assert ipi["score"] == 6 and ipi["group"] == "high"
 
     md = next(x for x in card["markers"] if x["field_key"] == "IGHV")
     registry.soft_delete(world.db, world.doc_a, pid, "marker", md["md_id"])

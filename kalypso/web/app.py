@@ -62,7 +62,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
                        lab_units=core.LAB_UNITS, core_fields=registry.core_fields,
                        active_nodes=registry.active_nodes, missing_codes=registry.MISSING,
                        conditional_fields=registry.CONDITIONAL_FIELDS,
-                       iwcll=registry.IWCLL_RESPONSES)
+                       profile=registry.profile, indexes=core.INDEXES)
     env.filters.update(d=_fmt_date, short=_short,
                        nosology=lambda node_id: (core.find_node(core.NOSOLOGY_TREE, node_id or "") or {}).get("name", node_id))
 
@@ -221,10 +221,16 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         return back(f"/patients/{pid}")
 
     @app.get("/patients/new", response_class=HTMLResponse)
-    def patient_new(request: Request):
+    def patient_new(request: Request, who: str | None = None):
+        """Сначала нозология (от неё зависят стадия, индекс и поля), затем форма — без JS."""
         p = current(request)
         p.require("patient.write")
-        return render(request, "patient_form.html", p, v={}, missing={}, is_new=True)
+        nodes = registry.active_nodes()
+        if who not in {n["id"] for n in nodes}:
+            if len(nodes) > 1:
+                return render(request, "nosology_choose.html", p, nodes=nodes)
+            who = nodes[0]["id"]
+        return render(request, "patient_form.html", p, v={}, missing={}, is_new=True, who=who)
 
     @app.post("/patients/new")
     async def patient_create(request: Request):
@@ -346,6 +352,8 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     # --- П3: дашборды и «Исследователь выживаемости» --------------------------
     def _filters_text(f: dict) -> str:
         parts = [f"филиал {f['branch']}" if f["branch"] else "все доступные филиалы"]
+        if f.get("nosology"):
+            parts.append(registry.profile(f["nosology"])["name"])
         if f["year_from"] or f["year_to"]:
             parts.append(f"диагноз {f['year_from'] or '…'}–{f['year_to'] or '…'}")
         if f["sex"]:
@@ -370,7 +378,15 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         f = analytics.parse_filters(dict(request.query_params))
         d = analytics.cll_dashboard(db, p, f)
         return render(request, "dashboard_cll.html", p, d=d, f=f, branches=admin.list_branches(db, p),
-                      charts=charts, filters_text=_filters_text(f), response_groups=analytics.RESPONSE_GROUPS)
+                      charts=charts, filters_text=_filters_text(f), response_groups=analytics.RESPONSE_GROUPS["cll_sll"])
+
+    @app.get("/dashboard/dlbcl", response_class=HTMLResponse)
+    def dashboard_dlbcl(request: Request):
+        p = current(request)
+        f = {**analytics.parse_filters(dict(request.query_params)), "binet": None}
+        d = analytics.dlbcl_dashboard(db, p, f)
+        return render(request, "dashboard_dlbcl.html", p, d=d, f=f, branches=admin.list_branches(db, p),
+                      charts=charts, filters_text=_filters_text(f), response_groups=analytics.RESPONSE_GROUPS["dlbcl"])
 
     def _explore(request: Request, p):
         q = dict(request.query_params)
@@ -393,11 +409,12 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         p = current(request)
         res, f, q = _explore(request, p)
         grouping_label = analytics.GROUPINGS[res["grouping"]]
+        f = {**f, "nosology": res["nosology"]}   # группировка могла сузить когорту до своей нозологии
         abstract = docgen.cohort_abstract(res, _filters_text(f), grouping_label) if res["groups"] else ""
         return render(request, "survival.html", p, r=res, f=f, q=q, branches=admin.list_branches(db, p),
                       charts=charts, endpoints=core.ENDPOINTS, line_endpoints=core.LINE_ENDPOINTS,
-                      groupings=analytics.GROUPINGS, abstract=abstract, grouping_label=grouping_label,
-                      csv_query=str(request.query_params))
+                      groupings=analytics.GROUPINGS, grouping_sets=analytics.GROUPING_SETS,
+                      abstract=abstract, grouping_label=grouping_label, csv_query=str(request.query_params))
 
     @app.get("/survival.csv")
     def survival_csv(request: Request):

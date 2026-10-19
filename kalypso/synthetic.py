@@ -1,4 +1,4 @@
-"""Синтетическая когорта ХЛЛ для разработки и приёмочных тестов.
+"""Синтетические когорты ХЛЛ и ДВКЛ для разработки и приёмочных тестов.
 
 Записи вносятся через доменные сервисы (как вручную врачом), поэтому проходят
 все проверки, аудит и провенанс. Намеренные дефекты: пропущенные маркеры,
@@ -53,12 +53,14 @@ def _pick(rng, weighted: dict):
 
 
 def generate(db: Database, physicians: list[Principal], n: int = 60,
-             seed: int = 42, duplicates: int = 3) -> dict:
+             seed: int = 42, duplicates: int = 3, nosology: str = "cll_sll") -> dict:
+    """n синтетических пациентов нозологии (cll_sll или dlbcl) + межфилиальные дубликаты."""
+    one = {"cll_sll": _one_patient, "dlbcl": _one_dlbcl}[nosology]
     rng = random.Random(seed)
     made: list[tuple[str, Principal]] = []
     for _ in range(n):
         doc = rng.choice(physicians)
-        made.append((_one_patient(db, doc, rng), doc))
+        made.append((one(db, doc, rng), doc))
 
     requests = 0
     for iin, doc in rng.sample(made, min(duplicates, len(made))):
@@ -188,4 +190,179 @@ def _one_patient(db: Database, doc: Principal, rng: random.Random) -> str:
             "obs_date": _d(death), "event_type": "death",
             "death_cause": _pick(rng, {"lpd_related": 55, "not_related": 30, "unknown": 15}),
             "provenance": provenance})
+    return iin
+
+
+# ---------------------------------------------------------------------------
+# ДВКЛ (DLBCL, NOS)
+# ---------------------------------------------------------------------------
+DLBCL_FIRST = {
+    ("R-CHOP", "ритуксимаб, циклофосфамид, доксорубицин, винкристин, преднизолон", 6): 75,
+    ("Pola-R-CHP", "полатузумаб ведотин, ритуксимаб, циклофосфамид, доксорубицин, преднизолон", 6): 20,
+    ("R-CHOEP", "ритуксимаб, циклофосфамид, доксорубицин, винкристин, этопозид, преднизолон", 6): 5,
+}
+DLBCL_SALVAGE = [("R-ICE", "ритуксимаб, ифосфамид, карбоплатин, этопозид", 3),
+                 ("R-DHAP", "ритуксимаб, дексаметазон, цитарабин, цисплатин", 3),
+                 ("R-GemOx", "ритуксимаб, гемцитабин, оксалиплатин", 6),
+                 ("Pola-BR", "полатузумаб ведотин, бендамустин, ритуксимаб", 6)]
+DLBCL_LATER = [("CAR-T (axi-cel)", "аксикабтаген цилолейсел", 1), ("Глофитамаб", "глофитамаб", 12),
+               ("Эпкоритамаб", "эпкоритамаб", None), ("Тафаситамаб + леналидомид", "тафаситамаб, леналидомид", 12)]
+HISTOLOGY_DLBCL = ("Биопсия лимфоузла: диффузный рост крупных атипичных лимфоидных клеток, стёртый рисунок. "
+                   "ИГХ: CD20+, CD10{cd10}, BCL6+, MUM1{mum1}. Ki-67 {ki}%. Заключение: ДВКЛ, NOS.")
+_LDH_RANGE = {"le_uln": (140, 245), "uln_1_3": (260, 740), "gt_3_uln": (760, 1500)}   # ВГН 250 Ед/л
+
+
+def _pet_response(rng, p_cmr: float) -> tuple[str, int]:
+    """Метаболический ответ Lugano 2014 и согласованный с ним балл Deauville."""
+    if rng.random() < p_cmr:
+        return "CMR", rng.choice([1, 2, 2, 3, 3])
+    value = _pick(rng, {"PMR": 45, "NMR": 15, "PMD": 40})
+    return value, 5 if value == "PMD" else rng.choice([4, 4, 5])
+
+
+def _one_dlbcl(db: Database, doc: Principal, rng: random.Random) -> str:
+    dx = date(2015, 1, 1) + timedelta(days=rng.randint(0, int(10.5 * 365)))
+    age = max(22, min(90, int(rng.gauss(64, 13))))
+    sex = "M" if rng.random() < 0.55 else "F"
+    birth = date(dx.year - age, rng.randint(1, 12), rng.randint(1, 28))
+    iin = synthetic_iin(rng, birth, sex)
+    provenance = "retrospective" if dx < date(2024, 1, 1) else "prospective"
+
+    stage = _pick(rng, {"I": 12, "IE": 8, "II": 15, "IIE": 8, "III": 20, "IV": 37})
+    adv = stage in ("III", "IV")
+    ecog = _pick(rng, {0: 25, 1: 40, 2: 20, 3: 10, 4: 5} if adv else {0: 45, 1: 40, 2: 12, 3: 3})
+    ldh = _pick(rng, {"le_uln": 30, "uln_1_3": 50, "gt_3_uln": 20} if adv else {"le_uln": 60, "uln_1_3": 35, "gt_3_uln": 5})
+    en_n = _pick(rng, {"0": 10, "1": 40, "2plus": 50} if stage == "IV"
+                 else {"1": 85, "2plus": 15} if stage.endswith("E") else {"0": 85, "1": 15})
+    en_key = "yes" if (stage == "IV" and rng.random() < 0.55) or rng.random() < 0.03 else "no"
+    fields = {
+        "coo_hans": _pick(rng, {"GCB": 45, "non_GCB": 45, "not_done": 7, None: 3}),
+        "myc_r": _pick(rng, {"detected": 10, "not_detected": 70, "not_done": 15, None: 5}),
+        "bcl2_r": _pick(rng, {"detected": 18, "not_detected": 62, "not_done": 15, None: 5}),
+        "bcl6_r": _pick(rng, {"detected": 25, "not_detected": 55, "not_done": 15, None: 5}),
+        "ldh_uln": ldh if rng.random() < 0.95 else None,
+        "extranodal_n": en_n,
+        "extranodal_nccn": en_key,
+        "bulky": "yes" if rng.random() < 0.25 else "no",
+    }
+    if rng.random() < 0.15:
+        fields["coo_gep"] = _pick(rng, {"GCB": 45, "ABC": 40, "unclassified": 15})
+    if rng.random() < 0.4:
+        fields["double_expressor"] = "yes" if rng.random() < 0.3 else "no"
+    exact_age = (dx - birth).days / 365.25          # как в карточке (registry._age)
+    ipi = core.ipi(exact_age, ecog, adv, ldh, en_n == "2plus")
+    risk = ipi["score"]
+    double_hit = fields["myc_r"] == "detected" and fields["bcl2_r"] == "detected"
+
+    # --- хронология: 1-я линия, ПЭТ-КТ в конце лечения, рецидив/прогрессия, 2-я и 3-я линии ---
+    timeline: list[tuple[str, dict]] = []
+    progressing = False
+    t = dx
+    if rng.random() < 0.95:
+        first = ("R-mini-CHOP", "ритуксимаб, циклофосфамид, доксорубицин (сниж. дозы), винкристин, преднизолон", 6) \
+            if age >= 80 else ("DA-EPOCH-R", "дозоадаптированный EPOCH, ритуксимаб", 6) \
+            if fields["myc_r"] == "detected" and rng.random() < 0.5 else _pick(rng, DLBCL_FIRST)
+        p_cmr = max(0.3, 0.88 - 0.09 * risk - (0.15 if double_hit else 0))
+        plan = [first, rng.choice(DLBCL_SALVAGE if age < 75 else DLBCL_SALVAGE[2:]), rng.choice(DLBCL_LATER)]
+        for i, (name, drugs, cycles) in enumerate(plan):
+            start = t + _months(rng, 0.3, 1.5)
+            end = start + _months(rng, 0.8, 1.5) if name.startswith("CAR-T") else start + _months(rng, 3.5, 5.5)
+            if end > REFERENCE_DATE:
+                break
+            timeline.append(("line", {"regimen": name, "drug": drugs, "cycles": cycles, "start_date": _d(start),
+                                      "end_date": _d(end), "stop_reason": "завершён план"}))
+            r_date = end + _months(rng, 0.7, 2)
+            if r_date > REFERENCE_DATE:
+                break
+            refractory = False
+            if rng.random() < 0.88:                      # у части линий оценки ответа нет — флаг полноты
+                if rng.random() < 0.85:
+                    value, ds = _pet_response(rng, p_cmr)
+                    timeline.append(("response", {"obs_date": _d(r_date), "line_no": i + 1, "response_value": value,
+                                                  "response_basis": "pet_ct", "deauville": ds,
+                                                  "pet_ct_report": f"ПЭТ-КТ после {i + 1}-й линии: Deauville {ds}."}))
+                    refractory = value in ("NMR", "PMD")
+                    complete = value == "CMR"
+                else:
+                    value = _pick(rng, {"CR": 55, "PR": 25, "SD": 8, "PD": 12})
+                    timeline.append(("response", {"obs_date": _d(r_date), "line_no": i + 1, "response_value": value,
+                                                  "response_basis": "ct"}))
+                    refractory, complete = value in ("SD", "PD"), value == "CR"
+            else:
+                complete = rng.random() < p_cmr
+            if refractory:
+                event_date, kind = r_date, "progression"
+            elif complete:
+                if rng.random() >= 0.12 + 0.05 * risk:
+                    progressing = False
+                    break                                # стойкая ремиссия
+                event_date, kind = r_date + _months(rng, 4, 36), "relapse"
+            else:
+                event_date, kind = r_date + _months(rng, 1, 8), "progression"
+            if event_date > REFERENCE_DATE:
+                break
+            timeline.append(("event", {"obs_date": _d(event_date), "event_type": kind}))
+            t, progressing = event_date, True
+            p_cmr = max(0.2, p_cmr - 0.3)
+
+    last_event = max([dx] + [date.fromisoformat(e.get("obs_date") or e.get("end_date") or e["start_date"])
+                             for _, e in timeline])
+    death, cause = None, None
+    if progressing and rng.random() < 0.75:
+        death, cause = last_event + _months(rng, 1, 14), _pick(rng, {"lpd_related": 85, "unknown": 15})
+    elif rng.random() < 0.06:
+        death, cause = last_event + _months(rng, 6, 60), _pick(rng, {"not_related": 70, "unknown": 30})
+    if death and death > REFERENCE_DATE:
+        death = None
+    lost = death is None and rng.random() < 0.04
+    last_contact = death or min(REFERENCE_DATE, last_event + _months(rng, 0, 30 if lost else 20))
+
+    # --- запись через сервисы ---
+    gcb = fields["coo_hans"] == "GCB"
+    data = {
+        "iin": iin, "sex": sex, "birth_date": _d(birth), "who_haem5": "dlbcl",
+        "dx_date": _d(dx), "last_contact_date": _d(last_contact), "provenance": provenance,
+        "status_last_contact": "lost_to_follow_up" if lost else "alive",
+        "ecog": ecog, "cirs_score": rng.randint(0, 16) if age >= 65 and rng.random() < 0.7 else None,
+        "b_symptoms": _pick(rng, {"no": 55, "yes": 38, "unknown": 7}),
+        "stage_system": "Lugano", "stage_value": stage,
+        "first_visit_date": _d(dx - timedelta(days=rng.randint(0, 30))),
+        "histology_report": HISTOLOGY_DLBCL.format(cd10="+" if gcb else "-", mum1="-" if gcb else "+",
+                                                   ki=rng.randint(40, 95)) if rng.random() < 0.75 else None,
+    }
+    if data["cirs_score"] is None:
+        data["cirs_score__missing"] = "not_done"
+    if rng.random() < 0.85:
+        data["index_score"] = risk
+    else:
+        data["index_score__missing"] = "unknown"
+    pid = registry.register_patient(db, doc, data).record_id
+
+    for key, val in fields.items():
+        if val is None:
+            continue
+        rec = {"field_key": key, "provenance": provenance, "test_date": _d(dx)}
+        rec.update({"missing": val} if val in core.MISSING_CODES else {"value": val})
+        registry.add_marker(db, doc, pid, rec)
+
+    lo, hi = _LDH_RANGE[ldh]
+    for loinc, value, unit in [("2532-0", rng.randint(lo, hi), "U/L"), ("8302-2", round(rng.uniform(90, 150)), "g/L"),
+                               ("777-3", rng.randint(90, 420), "10*9/L"), ("6690-2", round(rng.uniform(3, 12), 1), "10*9/L")]:
+        registry.add_lab(db, doc, pid, {"loinc": loinc, "value": value, "unit": unit,
+                                        "obs_date": _d(dx), "provenance": provenance})
+
+    line_ids: dict[int, str] = {}
+    for kind, e in timeline:
+        if kind == "line":
+            res = registry.add_line(db, doc, pid, {**e, "provenance": provenance})
+            line_ids[len(line_ids) + 1] = str(res.record_id)
+        elif kind == "response":
+            e = dict(e)
+            line_id = line_ids.get(e.pop("line_no"))
+            registry.add_observation(db, doc, pid, {**e, "line_id": line_id, "provenance": provenance})
+        else:
+            registry.add_observation(db, doc, pid, {**e, "provenance": provenance})
+    if death:
+        registry.add_observation(db, doc, pid, {"obs_date": _d(death), "event_type": "death",
+                                                "death_cause": cause, "provenance": provenance})
     return iin

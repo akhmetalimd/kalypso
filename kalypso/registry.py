@@ -1,9 +1,11 @@
-"""Доменные сервисы регистра (П1, модуль ХЛЛ): единственный путь записи в регистр.
+"""Доменные сервисы регистра (модули ХЛЛ и ДВКЛ): единственный путь записи в регистр.
 
 Каждая функция принимает пользователя (Principal), проверяет права и видимость
 пациента, приводит и проверяет ввод, пишет в одной транзакции и возвращает
-предупреждения контроля качества. Последний рубеж — ограничения БД (0002).
-На этапе П4 этот же слой станет стадией 5 конвейера приёма (запись после сверки).
+предупреждения контроля качества. Последний рубеж — ограничения БД (0002, 0005).
+
+Всё, что зависит от нозологии (стадирование, индекс, критерии ответа, поля модуля),
+берётся из узла дерева WHO-HAEM5 (config/nosology_tree.json) — см. profile().
 """
 from __future__ import annotations
 
@@ -26,11 +28,10 @@ PRECISIONS = ("day", "month", "year")
 # «Условные» поля пациента: пусто без кода пропуска -> флаг полноты.
 CONDITIONAL_FIELDS = {
     "birth_date": "Дата рождения", "ecog": "ECOG", "cirs_score": "CIRS-G",
-    "b_symptoms": "B-симптомы", "stage_value": "Стадия", "index_score": "Индекс CLL-IPI",
+    "b_symptoms": "B-симптомы", "stage_value": "Стадия", "index_score": "Прогностический индекс",
 }
 DX_FIELDS = ("who_haem5", "icd_o_3_2", "mkb", "dx_date", "dx_date_precision")
 LOINC_B2M = "1952-1"
-IWCLL_RESPONSES = ("CR", "CRi", "nPR", "PR", "PR-L", "SD", "PD")
 
 
 class ValidationError(Exception):
@@ -59,8 +60,30 @@ def active_nodes() -> list[dict]:
     return out
 
 
+def profile(who_haem5: str | None) -> dict:
+    """Настройки модуля нозологии из её узла дерева: системы и значения стадий, индекс,
+    критерии и варианты ответа, поля модуля (module_data). Неизвестный узел -> ХЛЛ."""
+    node = core.find_node(core.NOSOLOGY_TREE, who_haem5 or CLL)
+    if not node or not node.get("module"):
+        node = core.find_node(core.NOSOLOGY_TREE, CLL)
+    criteria = node.get("response_criteria")
+    return {"id": node["id"], "name": node["name"], "module": node["module"],
+            "stages": node.get("stage_values", {}), "index": node.get("index"),
+            "criteria": criteria, "responses": core.RESPONSES.get(criteria, ()),
+            "fields": node.get("core_fields", []), "regimens": node.get("regimens", [])}
+
+
 def core_fields(who_haem5: str = CLL) -> list[dict]:
-    node = core.find_node(core.NOSOLOGY_TREE, who_haem5) or {}
+    return profile(who_haem5)["fields"]
+
+
+def all_fields() -> list[dict]:
+    """Поля всех активных модулей (для выгрузки): ключи модулей не пересекаются."""
+    return [f for n in active_nodes() for f in n.get("core_fields", [])]
+
+
+def _fields_of_module(module: str) -> list[dict]:
+    node = next((n for n in active_nodes() if n.get("module") == module), {})
     return node.get("core_fields", [])
 
 
@@ -188,14 +211,10 @@ def _patient_fields(f: Form) -> dict:
         "cirs_fitness": f.choice("cirs_fitness", "Fitness", ("fit", "unfit", "frail")),
         "charlson_score": f.int("charlson_score", "Charlson", 0, 40),
         "b_symptoms": f.choice("b_symptoms", "B-симптомы", ("yes", "no", "unknown")),
-        "stage_system": f.choice("stage_system", "Система стадирования", ("Rai", "Binet")),
-        "stage_value": f.text("stage_value", "Стадия", maxlen=8),
-        "index_score": f.int("index_score", "Балл CLL-IPI", 0, 10),
-        "index_group": f.choice("index_group", "Группа CLL-IPI", ("low", "intermediate", "high", "very_high")),
         "histology_report": f.free_text("histology_report", "Заключение гистологии"),
         "histology_scan": f.text("histology_scan", "Ссылка на скан", maxlen=500),
     }
-    row["index_name"] = "CLL-IPI" if row["index_score"] is not None else None
+    row.update(_stage_and_index(f, profile(who)))
     for flag in core.validate_codes(row):
         f.errors.append({
             "icd_o_mismatch": "Код ICD-O-3.2 не соответствует выбранной нозологии",
@@ -205,6 +224,30 @@ def _patient_fields(f: Form) -> dict:
     if row["dx_date"] and row["last_contact_date"] and row["last_contact_date"] < row["dx_date"]:
         f.errors.append("Последний контакт не может быть раньше даты диагноза")
     return row
+
+
+def _stage_and_index(f: Form, prof: dict) -> dict:
+    """Стадия и индекс — по настройкам нозологии; группа индекса выводится из балла."""
+    stages, name = prof["stages"], prof["index"]
+    system = f.choice("stage_system", "Система стадирования", list(stages))
+    value = f.raw("stage_value")
+    if (system is None) != (value is None):
+        f.errors.append("Стадия: укажите и систему стадирования, и стадию")
+    elif system and value not in stages[system]:
+        f.errors.append(f"Стадия по {system}: {', '.join(stages[system])}")
+    spec = core.INDEXES.get(name or "")
+    score = f.int("index_score", f"Балл {name}", 0, spec["max"]) if spec else None
+    group = f.choice("index_group", f"Группа {name}", [g for _, g in spec["groups"]]) if spec else None
+    if score is None and group:
+        f.errors.append(f"{name}: укажите балл (группа выводится из него)")
+    elif score is not None:
+        expected = core.index_group(name, score)
+        if group and group != expected:
+            f.errors.append(f"{name}: группа не соответствует баллу {score}")
+        group = expected
+    return {"stage_system": system, "stage_value": value if system else None,
+            "index_name": name if score is not None else None, "index_score": score,
+            "index_group": group if score is not None else None}
 
 
 def _missing_codes(f: Form, row: dict) -> dict[str, str]:
@@ -447,16 +490,64 @@ def get_card(db: Database, p: Principal, pid) -> dict:
         quality.update(_quality({**patient, "response_date": o.get("obs_date") if o.get("response_value") else None,
                                  "event_date": o.get("event_date"), "event_type": o.get("event_type"),
                                  "death_cause": o.get("death_cause")}))
+    quality.update(module_quality(patient, mm))
     card["flags"]["quality"] = sorted(quality)
     for name in CONDITIONAL_FIELDS:
         if patient.get(name) is None and name not in card["missing"]:
             card["flags"]["completeness"].append(f"empty_{name}")
-    b2m = next((l["value_canonical"] for l in card["labs"]
-                if l["loinc"] == LOINC_B2M and l["value_canonical"] is not None), None)
-    card["cll_ipi"] = core.cll_ipi(
-        _age(patient["birth_date"], patient["dx_date"]), patient["stage_system"], patient["stage_value"],
-        float(b2m) if b2m is not None else None, mm.get("IGHV"), _tp53_abnormal(mm))
+    card["profile"] = profile(patient["who_haem5"])
+    card["indices"] = computed_indices(patient, mm, card["labs"])
     return card
+
+
+# ---------------------------------------------------------------------------
+# Индексы, рассчитанные по данным карточки (ручной индекс в карточке с ними сверяется)
+# ---------------------------------------------------------------------------
+def _yes_no(v: str | None) -> bool | None:
+    return {"yes": True, "no": False, "normal_negative": False}.get(v or "")
+
+
+def _ldh(v: str | None) -> str | None:
+    return "le_uln" if v == "normal_negative" else v
+
+
+def _extranodal_gt1(v: str | None) -> bool | None:
+    return {"0": False, "1": False, "2plus": True, "normal_negative": False}.get(v or "")
+
+
+def computed_indices(pt: dict, mm: dict[str, str], labs: list[dict]) -> list[dict]:
+    """[{name, stored, result, needs}]: stored — индекс вносится и в карточку (сверяется);
+    result — None, если какого-то компонента нет («норму» молча не подставляем)."""
+    prof = profile(pt["who_haem5"])
+    age = _age(pt["birth_date"], pt["dx_date"])
+    if prof["index"] == "CLL-IPI":
+        b2m = next((float(l["value_canonical"]) for l in labs
+                    if l["loinc"] == LOINC_B2M and l["value_canonical"] is not None), None)
+        return [{"name": "CLL-IPI", "stored": True, "needs": "TP53/del(17p), IGHV, β2M, стадия, возраст",
+                 "result": core.cll_ipi(age, pt["stage_system"], pt["stage_value"], b2m,
+                                        mm.get("IGHV"), _tp53_abnormal(mm))}]
+    if prof["index"] == "IPI":
+        adv = core.advanced_stage(pt["stage_system"], pt["stage_value"])
+        ldh = _ldh(mm.get("ldh_uln"))
+        ipi = core.ipi(age, pt["ecog"], adv, ldh, _extranodal_gt1(mm.get("extranodal_n")))
+        return [
+            {"name": "IPI", "stored": True, "result": ipi,
+             "needs": "возраст, ECOG, стадия Lugano, ЛДГ, число экстранодальных очагов"},
+            {"name": "R-IPI", "stored": False, "result": core.r_ipi(ipi["score"]) if ipi else None,
+             "needs": "те же компоненты, что у IPI"},
+            {"name": "NCCN-IPI", "stored": False,
+             "result": core.nccn_ipi(age, pt["ecog"], adv, ldh, _yes_no(mm.get("extranodal_nccn"))),
+             "needs": "возраст, ECOG, стадия, ЛДГ, поражение КМ/ЦНС/печени-ЖКТ/лёгкого"},
+        ]
+    return []
+
+
+def module_quality(pt: dict, mm: dict[str, str]) -> list[str]:
+    """Предупреждения модуля. ДВКЛ: перестройки MYC и BCL2 — по WHO-HAEM5 это отдельная
+    нозология (DLBCL/HGBL-MYC/BCL2); диагноз не меняем, только просим проверить."""
+    if pt["who_haem5"] == "dlbcl" and mm.get("myc_r") == "detected" and mm.get("bcl2_r") == "detected":
+        return ["dlbcl_myc_bcl2"]
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -553,12 +644,12 @@ def update_line(db: Database, p: Principal, pid, rid, data: dict) -> Result:
 
 
 # --- наблюдения -------------------------------------------------------------
-def _obs_row(f: Form) -> dict:
+def _obs_row(f: Form, prof: dict) -> dict:
     row = {
         "obs_date": f.date("obs_date", "Дата наблюдения", required=True),
         "obs_precision": f.precision("obs_precision"),
         "line_id": f.raw("line_id"),
-        "response_value": f.choice("response_value", "Ответ", IWCLL_RESPONSES),
+        "response_value": f.choice("response_value", f"Ответ ({prof['criteria']})", prof["responses"]),
         "response_basis": f.choice("response_basis", "Основание оценки", ("clinical", "ct", "pet_ct", "morphology")),
         "event_type": f.choice("event_type", "Событие",
                                ("none", "progression", "relapse", "death", "new_line_start"), default="none"),
@@ -574,9 +665,12 @@ def _obs_row(f: Form) -> dict:
             row["line_id"] = UUID(str(row["line_id"]))
         except ValueError:
             f.errors.append("Неизвестная линия терапии")
-    row["response_criteria"] = "iwCLL 2018" if row["response_value"] else None
+    row["response_criteria"] = prof["criteria"] if row["response_value"] else None
     if row["response_value"] and not row["response_basis"]:
         f.errors.append("Для ответа укажите основание оценки")
+    elif not f.errors:
+        f.errors += [RESPONSE_ERRORS[e] for e in core.check_response(
+            row["response_criteria"], row["response_value"], row["response_basis"], row["deauville"])]
     if not row["response_value"]:
         row["response_basis"] = None
     if row["event_type"] == "none":
@@ -590,6 +684,15 @@ def _obs_row(f: Form) -> dict:
     if not row["response_value"] and row["event_type"] == "none" and not row["pet_ct_report"]:
         f.errors.append("Наблюдение пустое: укажите ответ, событие или заключение ПЭТ-КТ")
     return row
+
+
+RESPONSE_ERRORS = {
+    "response_not_in_criteria": "Ответ не из критериев этой нозологии",
+    "lugano_basis_mismatch": "Lugano 2014: по ПЭТ-КТ — метаболический ответ (CMR/PMR/NMR/PMD), "
+                             "по КТ и другим основаниям — CR/PR/SD/PD",
+    "deauville_required": "Для метаболического ответа укажите балл Deauville",
+    "deauville_mismatch": "CMR — Deauville 1–3; PMR, NMR и PMD — Deauville 4–5",
+}
 
 
 def _obs_effects(cur, pid, patient: dict, row: dict) -> None:
@@ -612,16 +715,16 @@ def add_observation(db: Database, p: Principal, pid, data: dict) -> Result:
     perm = "patient.write"
     p.require(perm)
     f = Form(data)
-    row = _obs_row(f)
-    f.check()
 
     def write():
         with db.tx(p.user_id) as cur:
             patient = _load_visible(cur, p, pid, perm)
+            row = _obs_row(f, profile(patient["who_haem5"]))
+            f.check()
             oid = _insert(cur, "observation", {**row, "patient_id": pid, "source": "manual"}, "obs_id")
             _obs_effects(cur, pid, patient, row)
-            return oid, patient
-    oid, patient = _db_call(write)
+            return oid, patient, row
+    oid, patient, row = _db_call(write)
     return Result("saved", oid, _obs_warnings(patient, row))
 
 
@@ -629,12 +732,13 @@ def update_observation(db: Database, p: Principal, pid, rid, data: dict) -> Resu
     perm = "patient.write"
     p.require(perm)
     f = Form(data)
-    row, reason = _obs_row(f), _reason(f)
-    f.check()
+    reason = _reason(f)
 
     def write():
         with db.tx(p.user_id, reason=reason) as cur:
             patient = _load_visible(cur, p, pid, perm)
+            row = _obs_row(f, profile(patient["who_haem5"]))
+            f.check()
             cur.execute("SELECT event_type FROM observation WHERE obs_id = %s AND patient_id = %s "
                         "AND deleted_at IS NULL", (rid, pid))
             old = cur.fetchone()
@@ -644,8 +748,8 @@ def update_observation(db: Database, p: Principal, pid, rid, data: dict) -> Resu
                 raise ValidationError(["Смерть отменяется сменой статуса в карточке пациента (Правка карточки)"])
             _update(cur, "observation", "obs_id", rid, pid, row)
             _obs_effects(cur, pid, patient, row)
-            return patient
-    patient = _db_call(write)
+            return patient, row
+    patient, row = _db_call(write)
     return Result("saved", rid, _obs_warnings(patient, row))
 
 
@@ -694,8 +798,8 @@ def update_lab(db: Database, p: Principal, pid, rid, data: dict) -> Result:
 
 
 # --- маркеры ----------------------------------------------------------------
-def _marker_row(f: Form, key: str | None = None) -> dict:
-    fields = {cf["key"]: cf for cf in core_fields(CLL)}
+def _marker_row(f: Form, fields_list: list[dict], key: str | None = None) -> dict:
+    fields = {cf["key"]: cf for cf in fields_list}
     if key is None:
         key = f.choice("field_key", "Маркер", list(fields), required=True)
     value = f.choice("value", "Результат", fields[key]["values"]) if key in fields else None
@@ -712,13 +816,13 @@ def add_marker(db: Database, p: Principal, pid, data: dict) -> Result:
     perm = "patient.write"
     p.require(perm)
     f = Form(data)
-    row = _marker_row(f)
-    f.check()
 
     def write():
         with db.tx(p.user_id) as cur:
-            _load_visible(cur, p, pid, perm)
-            return _insert(cur, "module_data", {**row, "patient_id": pid, "module": "cll",
+            prof = profile(_load_visible(cur, p, pid, perm)["who_haem5"])
+            row = _marker_row(f, prof["fields"])
+            f.check()
+            return _insert(cur, "module_data", {**row, "patient_id": pid, "module": prof["module"],
                                                 "source": "manual"}, "md_id")
     return Result("saved", _db_call(write))
 
@@ -726,9 +830,9 @@ def add_marker(db: Database, p: Principal, pid, data: dict) -> Result:
 def update_marker(db: Database, p: Principal, pid, rid, data: dict) -> Result:
     """Маркер остаётся тем же (ключ не меняется); правятся результат, код пропуска и дата."""
     p.require("patient.write")
-    key = get_record(db, p, pid, "marker", rid)["field_key"]
+    rec = get_record(db, p, pid, "marker", rid)
     f = Form(data)
-    row, reason = _marker_row(f, key), _reason(f)
+    row, reason = _marker_row(f, _fields_of_module(rec["module"]), rec["field_key"]), _reason(f)
     f.check()
 
     def write():

@@ -87,6 +87,7 @@ form.inline, details.inline { display: inline; }
 .pair > * { flex: 1; }
 .missing select { margin-top: 4px; font-size: .85rem; color: var(--muted); }
 .actions { display: flex; gap: 12px; align-items: center; }
+.choices { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
 .stack { display: grid; gap: 12px; }
 .search { display: flex; gap: 6px; flex-wrap: wrap; }
 .search input { width: auto; min-width: 180px; }

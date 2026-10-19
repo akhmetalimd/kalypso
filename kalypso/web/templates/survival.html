@@ -11,7 +11,10 @@
     {% for code, text in endpoints.items() %}<option value="{{ code }}" title="{{ text }}"{% if r.endpoint == code %} selected{% endif %}>{{ code }}</option>{% endfor %}</select></label>
   <label>Линия (для PFS/mPFS/EFS/TTNT) <input type="number" name="line_no" min="1" max="5" value="{{ r.line_no }}"></label>
   <label>Группировка <select name="grouping">
-    {% for code, text in groupings.items() %}<option value="{{ code }}"{% if r.grouping == code %} selected{% endif %}>{{ text }}</option>{% endfor %}</select></label>
+    {% for nos, codes in grouping_sets.items() %}<optgroup label="{{ profile(nos).name if nos else 'Общие' }}">
+      {% for code in codes %}<option value="{{ code }}"{% if r.grouping == code %} selected{% endif %}>{{ groupings[code] }}</option>{% endfor %}
+    </optgroup>{% endfor %}</select>
+    <small>Группировка нозологии сужает когорту до неё.</small></label>
   <label>Показатель (для порога) <select name="lab"><option value="">—</option>
     {% for code, spec in lab_units.items() if not code.startswith('_') %}<option value="{{ code }}"{% if r.lab_loinc == code %} selected{% endif %}>{{ spec.name }}, {{ spec.canonical_unit }}</option>{% endfor %}</select></label>
   <label>Порог <input name="threshold" inputmode="decimal" value="{{ q.get('threshold', '') }}" placeholder="из литературы">
@@ -21,7 +24,9 @@
 <section class="card">
   <h2>{{ r.endpoint }}{% if r.endpoint in line_endpoints %} от старта {{ r.line_no }}-й линии{% endif %} · {{ grouping_label }}</h2>
   <p class="muted">{{ endpoints[r.endpoint] }}. Когорта: {{ r.n_cohort }}; в анализе {{ r.groups|sum(attribute='n') }}{% if r.not_applicable %}, неприменимо {{ r.not_applicable }} (нет нужной линии){% endif %}{% if r.excluded %}, исключено {{ r.excluded|length }}{% endif %}.
-    {% if r.grouping not in ('none', 'sex', 'branch', 'binet', 'cll_ipi', 'line1_regimen') %}Признак берётся на момент начала отсчёта (окно {{ r.window_days }} дней), позже измеренное — «не определено на старте».{% endif %}</p>
+    {% if r.baseline_grouping %}Признак берётся на момент начала отсчёта (окно {{ r.window_days }} дней), позже измеренное — «не определено на старте».{% endif %}</p>
+  {% if r.landmark %}<div class="note">Анализ от ориентира: отсчёт — от первой ПЭТ-КТ с баллом Deauville после окончания 1-й линии
+    (если она позже начала отсчёта). Без такой ПЭТ-КТ — {{ r.landmark.missing }}; событие или цензура до неё — {{ r.landmark.dropped }}: в анализ не входят.</div>{% endif %}
   {% for n in r.notes %}<div class="note warn">{{ n }}</div>{% endfor %}
   {% if r.groups %}
     {{ charts.km_chart(r.groups, 'Кривые Каплана–Майера')|safe }}

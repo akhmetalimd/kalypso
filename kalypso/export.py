@@ -12,7 +12,7 @@ import io
 
 from kalypso.db import Database
 from kalypso.rbac import Principal
-from kalypso.registry import _marker_map, core_fields
+from kalypso.registry import _marker_map, all_fields
 
 COLUMNS = [
     "patient_id", "branch", "sex", "birth_year", "age_at_dx", "who_haem5", "icd_o_3_2", "mkb",
@@ -24,7 +24,7 @@ COLUMNS = [
 
 def patients_csv(db: Database, p: Principal) -> str:
     p.require("export.deid")
-    markers_keys = [f["key"] for f in core_fields()]
+    markers_keys = [f["key"] for f in all_fields()]   # поля всех активных модулей
     with db.tx(p.user_id) as cur:
         cur.execute("""SELECT pt.*, s.event AS pfs_event,
                               (s.event_or_censor_date - s.time_zero) AS pfs_days,

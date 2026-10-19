@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Новый пациент{% endblock %}
+{% block content %}
+<h1>Новый пациент</h1>
+<p class="muted">Выберите нозологию: от неё зависят стадирование, прогностический индекс, критерии ответа и поля модуля.</p>
+<section class="choices">
+  {% for n in nodes %}
+  <a class="button primary" href="/patients/new?who={{ n.id }}">{{ n.name }}</a>
+  {% endfor %}
+</section>
+{% endblock %}

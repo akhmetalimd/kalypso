@@ -39,16 +39,21 @@
     {% if c.flags.quality %}<ul>{% for f in c.flags.quality %}<li>{{ flag(f) }}</li>{% endfor %}</ul>
     {% else %}<p>Противоречий не найдено.</p>{% endif %}
   </div>
+  {% set part_names = {'age': 'возраст', 'stage': 'стадия', 'b2m': 'β2M', 'LDH': 'ЛДГ', 'extranodal': 'экстранод.'} %}
+  {% for ix in c.indices %}
   <div class="panel">
-    <h2>CLL-IPI</h2>
-    <p>В карточке: {% if pt.index_score is not none %}<strong>{{ pt.index_score }}</strong> · {{ label('index_group', pt.index_group) }}{% else %}—{% endif %}{% if c.missing.index_score %} <span class="badge">{{ label('missing', c.missing.index_score) }}</span>{% endif %}</p>
+    <h2>{{ ix.name }}</h2>
+    {% if ix.stored %}
+    <p>В карточке: {% if pt.index_name == ix.name %}<strong>{{ pt.index_score }}</strong> · {{ label('index_group', pt.index_group) }}{% else %}—{% endif %}{% if c.missing.index_score %} <span class="badge">{{ label('missing', c.missing.index_score) }}</span>{% endif %}</p>
+    {% endif %}
     <p>Расчёт по данным:
-      {% if c.cll_ipi %}<strong>{{ c.cll_ipi.score }}</strong> · {{ label('index_group', c.cll_ipi.group) }}
-        <small>(TP53 {{ c.cll_ipi.components.TP53 }}, IGHV {{ c.cll_ipi.components.IGHV }}, β2M {{ c.cll_ipi.components.b2m }}, стадия {{ c.cll_ipi.components.stage }}, возраст {{ c.cll_ipi.components.age }})</small>
-        {% if pt.index_score is not none and pt.index_score != c.cll_ipi.score %}<br><span class="badge warn">не совпадает с карточкой</span>{% endif %}
-      {% else %}<span class="muted">недостаточно данных (TP53/del(17p), IGHV, β2M, стадия, возраст)</span>{% endif %}
+      {% if ix.result %}<strong>{{ ix.result.score }}</strong> · {{ label('index_group', ix.result.group) }}
+        <small>({% for k, n in ix.result.components.items() %}{{ part_names.get(k, k) }} {{ n }}{% if not loop.last %}, {% endif %}{% endfor %})</small>
+        {% if ix.stored and pt.index_name == ix.name and pt.index_score != ix.result.score %}<br><span class="badge warn">не совпадает с карточкой</span>{% endif %}
+      {% else %}<span class="muted">недостаточно данных ({{ ix.needs }})</span>{% endif %}
     </p>
   </div>
+  {% endfor %}
 </section>
 
 <section class="card">
@@ -84,12 +89,13 @@
 </section>
 
 <section class="card">
-  <h2>Маркеры ХЛЛ</h2>
+  <h2>Маркеры и признаки модуля <small>{{ c.profile.name }}</small></h2>
+  {% set field_names = {} %}{% for f in c.profile.fields %}{% set _ = field_names.update({f.key: f.label_ru}) %}{% endfor %}
   <table class="grid">
     <thead><tr><th>Маркер</th><th>Результат / код пропуска</th><th>Дата теста</th><th>Данные</th><th></th></tr></thead>
     <tbody>
     {% for m in c.markers %}
-      <tr><td>{{ m.field_key }}</td>
+      <tr><td>{{ field_names.get(m.field_key, m.field_key) }}</td>
         <td>{% if m.value %}{{ label('marker_value', m.value) }}{% else %}<span class="badge">{{ label('missing', m.missing) }}</span>{% endif %}</td>
         <td>{{ m.test_date|d(m.test_date_precision) }}</td><td>{{ label('provenance', m.provenance) }}</td>
         <td>{% if w %}{{ edit_link(pid, 'marker', m.md_id) }} {{ delete_button(pid, 'marker', m.md_id) }}{% endif %}</td></tr>

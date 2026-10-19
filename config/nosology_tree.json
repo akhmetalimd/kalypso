@@ -17,8 +17,11 @@
             { "icd_o_3_2": "9670/3", "mkb10": "C83.0", "_comment": "ЛМЛ (лимфоцитарная лимфома из малых лимфоцитов)" }
           ],
           "staging": ["Rai", "Binet"],
+          "stage_values": { "Rai": ["0", "I", "II", "III", "IV"], "Binet": ["A", "B", "C"] },
           "index": "CLL-IPI",
           "response_criteria": "iwCLL 2018",
+          "regimens": ["FCR", "BR", "Хлорамбуцил + обинутузумаб", "Венетоклакс + обинутузумаб",
+                       "Венетоклакс + ритуксимаб", "Ибрутиниб", "Акалабрутиниб", "Занубрутиниб"],
           "markers": ["IGHV", "TP53/del(17p)", "del(11q)", "+12", "del(13q)", "beta2m", "ALC"],
           "core_fields": [
             { "key": "IGHV",   "label_ru": "Мутационный статус IGHV", "values": ["mutated", "unmutated"] },
@@ -31,14 +34,31 @@
         },
         {
           "id": "dlbcl",
-          "name": "Агрессивные B-НХЛ (DLBCL и др.)",
-          "status": "coming_soon",
+          "name": "ДВКЛ (DLBCL, NOS)",
+          "status": "active",
           "module": "dlbcl",
           "codes": { "icd_o_3_2": "9680/3", "mkb10": "C83.3" },
           "staging": ["Lugano"],
-          "index": "IPI/R-IPI",
-          "response_criteria": "Lugano 2014 + Deauville",
-          "markers": ["cell_of_origin", "MYC", "BCL2", "BCL6"]
+          "stage_values": { "Lugano": ["I", "IE", "II", "IIE", "III", "IV"] },
+          "index": "IPI",
+          "response_criteria": "Lugano 2014",
+          "markers": ["cell_of_origin", "MYC", "BCL2", "BCL6"],
+          "regimens": ["R-CHOP", "Pola-R-CHP", "R-mini-CHOP", "DA-EPOCH-R", "R-CHOEP",
+                       "R-ICE", "R-DHAP", "R-GemOx", "Pola-BR", "ВДХТ + аутоТГСК",
+                       "CAR-T (axi-cel)", "CAR-T (liso-cel)", "CAR-T (tisa-cel)",
+                       "Глофитамаб", "Эпкоритамаб", "Тафаситамаб + леналидомид"],
+          "core_fields": [
+            { "key": "coo_hans",        "label_ru": "Клеточное происхождение (Hans, ИГХ)",      "values": ["GCB", "non_GCB"] },
+            { "key": "myc_r",           "label_ru": "Перестройка MYC, FISH",                   "values": ["detected", "not_detected"] },
+            { "key": "bcl2_r",          "label_ru": "Перестройка BCL2, FISH",                  "values": ["detected", "not_detected"] },
+            { "key": "bcl6_r",          "label_ru": "Перестройка BCL6, FISH",                  "values": ["detected", "not_detected"] },
+            { "key": "ldh_uln",         "label_ru": "ЛДГ относительно ВГН лаборатории",         "values": ["le_uln", "uln_1_3", "gt_3_uln"] },
+            { "key": "extranodal_n",    "label_ru": "Экстранодальные очаги, число",            "values": ["0", "1", "2plus"] },
+            { "key": "extranodal_nccn", "label_ru": "Поражение КМ, ЦНС, печени/ЖКТ или лёгкого", "values": ["yes", "no"] },
+            { "key": "bulky",           "label_ru": "Bulky-очаг (≥ 7,5–10 см по протоколу центра)", "values": ["yes", "no"] },
+            { "key": "coo_gep",          "label_ru": "Клеточное происхождение (GEP)",            "values": ["GCB", "ABC", "unclassified"], "optional": true },
+            { "key": "double_expressor", "label_ru": "MYC ≥ 40 % и BCL2 ≥ 50 %, ИГХ (double-expressor)", "values": ["yes", "no"], "optional": true }
+          ]
         },
         {
           "id": "follicular",

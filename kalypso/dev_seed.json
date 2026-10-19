@@ -58,5 +58,6 @@
       "password": "dev-doctor-c-2026"
     }
   ],
-  "synthetic_patients": 200
+  "synthetic_patients": 200,
+  "synthetic_patients_dlbcl": 100
 }

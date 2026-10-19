@@ -4,8 +4,9 @@ from datetime import date, datetime
 import pytest
 
 from registry_core import (
-    canonicalize_lab, cll_ipi, completeness_flags, find_node, kaplan_meier, resolve_codes,
-    survival_by_threshold, validate_codes, validate_record, NOSOLOGY_TREE,
+    INDEXES, canonicalize_lab, check_response, cll_ipi, completeness_flags, find_node, index_group, ipi,
+    kaplan_meier, nccn_ipi, r_ipi, resolve_codes, survival_by_threshold, validate_codes, validate_record,
+    NOSOLOGY_TREE,
 )
 
 CLL_FULL = {"IGHV": "mutated", "TP53": "wt", "del17p": "normal_negative",
@@ -105,7 +106,7 @@ def test_codes_consistent(icd_o, mkb):
     ({"who_haem5": "cll_sll", "icd_o_3_2": "9670/3", "mkb": "C91.1"}, "code_pair_mismatch"),
     ({"who_haem5": "nope", "icd_o_3_2": "9823/3", "mkb": "C91.1"}, "unknown_who_haem5"),
     ({"icd_o_3_2": "9823/3", "mkb": "C91.1"}, "who_haem5_missing"),
-    ({"who_haem5": "dlbcl", "icd_o_3_2": "9680/3", "mkb": "C83.3"}, "nosology_not_active"),
+    ({"who_haem5": "mcl", "icd_o_3_2": "9673/3", "mkb": "C83.1"}, "nosology_not_active"),
 ])
 def test_codes_flags(rec, flag):
     assert flag in validate_codes(rec)
@@ -176,3 +177,85 @@ def test_cll_ipi_needs_all_components(missing_index):
 def test_cll_node_declares_core_fields():
     node = find_node(NOSOLOGY_TREE, "cll_sll")
     assert [f["key"] for f in node["core_fields"]] == list(CLL_FULL)
+
+
+# --- ДВКЛ: IPI, R-IPI, NCCN-IPI, Lugano 2014 ---------------------------------
+@pytest.mark.parametrize("args, score, group", [
+    ((60, 1, False, "le_uln", False), 0, "low"),          # возраст 60 — ещё не «> 60»
+    ((61, 1, False, "le_uln", False), 1, "low"),
+    ((61, 2, False, "le_uln", False), 2, "low_intermediate"),
+    ((61, 2, True, "le_uln", False), 3, "high_intermediate"),
+    ((61, 2, True, "uln_1_3", False), 4, "high"),
+    ((61, 3, True, "gt_3_uln", True), 5, "high"),
+])
+def test_ipi(args, score, group):
+    r = ipi(*args)
+    assert (r["score"], r["group"]) == (score, group)
+
+
+@pytest.mark.parametrize("missing_index", range(5))
+def test_ipi_needs_all_components(missing_index):
+    args = [70, 2, True, "uln_1_3", True]
+    args[missing_index] = None
+    assert ipi(*args) is None
+    assert ipi(70, 2, True, "not_done", True) is None    # код пропуска — не «норма»
+
+
+@pytest.mark.parametrize("score, group", [(0, "very_good"), (1, "good"), (2, "good"), (3, "poor"), (5, "poor")])
+def test_r_ipi(score, group):
+    assert r_ipi(score)["group"] == group
+
+
+@pytest.mark.parametrize("args, score, group", [
+    ((40, 1, False, "le_uln", False), 0, "low"),
+    ((41, 1, False, "le_uln", False), 1, "low"),          # > 40–60 — 1 балл
+    ((61, 1, False, "uln_1_3", False), 3, "low_intermediate"),
+    ((75, 2, True, "le_uln", False), 4, "high_intermediate"),
+    ((76, 1, True, "gt_3_uln", False), 6, "high"),        # > 75 — 3, ЛДГ > 3 × ВГН — 2
+    ((80, 2, True, "gt_3_uln", True), 8, "high"),
+])
+def test_nccn_ipi(args, score, group):
+    r = nccn_ipi(*args)
+    assert (r["score"], r["group"]) == (score, group)
+
+
+def test_index_group_matches_cll_ipi():
+    from itertools import product
+    seen = set()
+    for age, stage, b2m, ighv, tp53 in product((60, 70), "AB", (2.0, 5.0), ("mutated", "unmutated"), (False, True)):
+        r = cll_ipi(age, "Binet", stage, b2m, ighv, tp53)
+        assert index_group("CLL-IPI", r["score"]) == r["group"]
+        seen.add(r["score"])
+    assert seen == set(range(11))
+    assert index_group("IPI", 6) is None and index_group("FLIPI", 1) is None
+    assert {name for name in INDEXES} >= {"CLL-IPI", "IPI", "R-IPI", "NCCN-IPI"}
+
+
+@pytest.mark.parametrize("args, flags", [
+    (("Lugano 2014", "CMR", "pet_ct", 3), []),
+    (("Lugano 2014", "PMR", "pet_ct", 4), []),
+    (("Lugano 2014", "CR", "ct", None), []),
+    (("Lugano 2014", "CMR", "pet_ct", None), ["deauville_required"]),
+    (("Lugano 2014", "CMR", "pet_ct", 4), ["deauville_mismatch"]),
+    (("Lugano 2014", "NMR", "pet_ct", 2), ["deauville_mismatch"]),
+    (("Lugano 2014", "CR", "pet_ct", 2), ["lugano_basis_mismatch"]),
+    (("Lugano 2014", "CMR", "ct", 2), ["lugano_basis_mismatch"]),
+    (("Lugano 2014", "CRi", "ct", None), ["response_not_in_criteria"]),
+    (("iwCLL 2018", "CMR", "pet_ct", 2), ["response_not_in_criteria"]),
+    (("iwCLL 2018", "CR", "pet_ct", None), []),
+])
+def test_check_response(args, flags):
+    assert check_response(*args) == flags
+
+
+def test_dlbcl_completeness_skips_optional_fields():
+    node = find_node(NOSOLOGY_TREE, "dlbcl")
+    required = [f["key"] for f in node["core_fields"] if not f.get("optional")]
+    assert completeness_flags({"who_haem5": "dlbcl", "module_data": {}}) == [f"missing_{k}" for k in required]
+    assert "coo_gep" not in required and "double_expressor" not in required
+    assert completeness_flags({"who_haem5": "dlbcl", "module_data": dict.fromkeys(required, "unknown")}) == []
+
+
+def test_dlbcl_staging_mismatch():
+    assert "staging_system_mismatch" in validate_record({"who_haem5": "dlbcl", "stage_system": "Binet"})
+    assert "staging_system_mismatch" not in validate_record({"who_haem5": "dlbcl", "stage_system": "Lugano"})

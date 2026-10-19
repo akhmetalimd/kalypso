@@ -35,26 +35,40 @@ def _dev_secrets() -> dict:
 
 
 def seed_if_empty(db: Database) -> dict | None:
+    """Пустая БД — филиалы, пользователи и когорта ХЛЛ; нет пациентов ДВКЛ — когорта ДВКЛ
+    (так dev-БД, созданная до модуля ДВКЛ, получает её без пересоздания)."""
+    seed = json.loads(SEED.read_text(encoding="utf-8"))
+    summary = {}
     with db.tx() as cur:
         cur.execute("SELECT count(*) AS n FROM app_user")
-        if cur.fetchone()["n"]:
-            return None
-    seed = json.loads(SEED.read_text(encoding="utf-8"))
+        empty = cur.fetchone()["n"] == 0
+    if empty:
+        with db.tx() as cur:
+            for b in seed["branches"]:
+                cur.execute("INSERT INTO branch (branch_code, name_ru) VALUES (%s, %s)",
+                            (b["branch_code"], b["name_ru"]))
+            for u in seed["users"]:
+                cur.execute("""INSERT INTO app_user (login, display_name, password_hash, role_code,
+                                                     branch_code, must_change_password)
+                               VALUES (%s, %s, %s, %s, %s, false)""",
+                            (u["login"], u["display_name"], auth.hash_password(u["password"]),
+                             u["role_code"], u["branch_code"]))
     with db.tx() as cur:
-        for b in seed["branches"]:
-            cur.execute("INSERT INTO branch (branch_code, name_ru) VALUES (%s, %s)",
-                        (b["branch_code"], b["name_ru"]))
-        for u in seed["users"]:
-            cur.execute("""INSERT INTO app_user (login, display_name, password_hash, role_code,
-                                                 branch_code, must_change_password)
-                           VALUES (%s, %s, %s, %s, %s, false)""",
-                        (u["login"], u["display_name"], auth.hash_password(u["password"]),
-                         u["role_code"], u["branch_code"]))
-        cur.execute("SELECT * FROM app_user WHERE role_code = 'physician' ORDER BY login")
-        physicians = [auth._principal(r) for r in cur.fetchall()]
-    summary = synthetic.generate(db, physicians, n=seed["synthetic_patients"])
-    summary.pop("iins")  # синтетические ИИН в консоль не печатаем
-    return summary
+        cur.execute("SELECT * FROM app_user WHERE role_code IN ('physician', 'curator') ORDER BY login")
+        users = [auth._principal(r) for r in cur.fetchall()]
+    physicians = [u for u in users if u.role == "physician"]
+    curator = next(u for u in users if u.role == "curator")
+    if empty:
+        summary["cll_sll"] = synthetic.generate(db, physicians, n=seed["synthetic_patients"])
+    with db.tx(curator.user_id) as cur:     # куратор видит все филиалы (RLS)
+        cur.execute("SELECT count(*) AS n FROM patient WHERE who_haem5 = 'dlbcl'")
+        no_dlbcl = cur.fetchone()["n"] == 0
+    if no_dlbcl:
+        summary["dlbcl"] = synthetic.generate(db, physicians, n=seed.get("synthetic_patients_dlbcl", 100),
+                                              seed=7, duplicates=2, nosology="dlbcl")
+    for part in summary.values():
+        part.pop("iins")  # синтетические ИИН в консоль не печатаем
+    return summary or None
 
 
 def main() -> None:

@@ -35,7 +35,8 @@
     },
     "stage_system": {
       "Rai": "Rai",
-      "Binet": "Binet"
+      "Binet": "Binet",
+      "Lugano": "Lugano"
     },
     "cirs_fitness": {
       "fit": "Fit",
@@ -46,7 +47,12 @@
       "low": "Низкий",
       "intermediate": "Промежуточный",
       "high": "Высокий",
-      "very_high": "Очень высокий"
+      "very_high": "Очень высокий",
+      "low_intermediate": "Низкий-промежуточный",
+      "high_intermediate": "Высокий-промежуточный",
+      "very_good": "Очень хороший",
+      "good": "Хороший",
+      "poor": "Плохой"
     },
     "event_type": {
       "none": "Нет события",
@@ -61,7 +67,8 @@
       "unknown": "Неизвестно"
     },
     "response_criteria": {
-      "iwCLL 2018": "iwCLL 2018"
+      "iwCLL 2018": "iwCLL 2018",
+      "Lugano 2014": "Lugano 2014"
     },
     "response_basis": {
       "clinical": "Клинически",
@@ -76,14 +83,30 @@
       "PR": "PR — частичная ремиссия",
       "PR-L": "PR-L — ЧР с лимфоцитозом",
       "SD": "SD — стабилизация",
-      "PD": "PD — прогрессирование"
+      "PD": "PD — прогрессирование",
+      "CMR": "CMR — полный метаболический ответ",
+      "PMR": "PMR — частичный метаболический ответ",
+      "NMR": "NMR — нет метаболического ответа",
+      "PMD": "PMD — метаболическое прогрессирование"
     },
     "marker_value": {
       "mutated": "Мутирован",
       "unmutated": "Немутирован",
       "wild_type": "Дикий тип",
       "detected": "Выявлена",
-      "not_detected": "Не выявлена"
+      "not_detected": "Не выявлена",
+      "GCB": "GCB",
+      "non_GCB": "non-GCB",
+      "ABC": "ABC",
+      "unclassified": "Неклассифицируемый",
+      "le_uln": "≤ ВГН",
+      "uln_1_3": "> 1–3 × ВГН",
+      "gt_3_uln": "> 3 × ВГН",
+      "0": "0",
+      "1": "1",
+      "2plus": "≥ 2",
+      "yes": "Да",
+      "no": "Нет"
     },
     "role": {
       "physician": "Лечащий врач",
@@ -122,6 +145,14 @@
     "missing_del11q": "Нет FISH del(11q)",
     "missing_tri12": "Нет FISH +12",
     "missing_del13q": "Нет FISH del(13q)",
+    "missing_coo_hans": "Нет клеточного происхождения по Hans (значения или кода пропуска)",
+    "missing_myc_r": "Нет FISH MYC",
+    "missing_bcl2_r": "Нет FISH BCL2",
+    "missing_bcl6_r": "Нет FISH BCL6",
+    "missing_ldh_uln": "Нет ЛДГ относительно ВГН (значения или кода пропуска)",
+    "missing_extranodal_n": "Нет числа экстранодальных очагов",
+    "missing_extranodal_nccn": "Нет данных о поражении КМ / ЦНС / печени-ЖКТ / лёгкого",
+    "missing_bulky": "Нет данных о bulky-очаге",
     "missing_death_cause": "Не указана причина смерти",
     "missing_response_line": "Нет оценки ответа по завершённой линии №{n}",
     "empty_birth_date": "Нет даты рождения (или кода пропуска)",
@@ -129,10 +160,11 @@
     "empty_cirs_score": "Нет CIRS-G (или кода пропуска)",
     "empty_b_symptoms": "Нет B-симптомов (или кода пропуска)",
     "empty_stage_value": "Нет стадии (или кода пропуска)",
-    "empty_index_score": "Нет индекса CLL-IPI (или кода пропуска)",
+    "empty_index_score": "Нет прогностического индекса (или кода пропуска)",
     "lab_unknown_unit": "Единица не распознана — нужна ручная проверка",
     "lab_unknown_loinc": "Показатель не из справочника — нужна ручная проверка",
-    "missing_response_line_any": "Нет оценки ответа по завершённой линии"
+    "missing_response_line_any": "Нет оценки ответа по завершённой линии",
+    "dlbcl_myc_bcl2": "Перестройки MYC и BCL2: по WHO-HAEM5 это DLBCL/HGBL-MYC/BCL2 — проверьте диагноз"
   },
   "msg": {
     "created": "Пациент внесён в регистр",

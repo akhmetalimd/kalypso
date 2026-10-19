@@ -2,20 +2,31 @@
 {% from "_macros.html" import select, codes, date_field with context %}
 
 {% macro marker_fields(fv, pt, fixed_key=None) %}
+  {% set all = profile(pt.who_haem5).fields %}
   {% if fixed_key %}
-  <label>Маркер <input value="{{ fixed_key }}" disabled></label>
+  {% set shown = all|selectattr('key', 'equalto', fixed_key)|list %}
+  <label>Маркер <input value="{{ shown[0].label_ru if shown else fixed_key }}" disabled></label>
   {% else %}
-  {% set fields = {} %}{% for f in core_fields() %}{% set _ = fields.update({f.key: f.label_ru}) %}{% endfor %}
+  {% set shown = all %}
+  {% set fields = {} %}{% for f in all %}{% set _ = fields.update({f.key: f.label_ru ~ (' (доп.)' if f.optional else '')}) %}{% endfor %}
   <label>Маркер * {{ select('field_key', fields, fv.get('field_key'), required=True) }}</label>
   {% endif %}
-  <label>Результат {{ select('value', options('marker_value'), fv.get('value')) }}</label>
+  <label>Результат
+    <select name="value" id="value"><option value="">—</option>
+      {% for f in shown %}<optgroup label="{{ f.label_ru }}">
+        {% for code in f['values'] %}<option value="{{ code }}"{% if fv.get('value') == code %} selected{% endif %}>{{ label('marker_value', code) }}</option>{% endfor %}
+      </optgroup>{% endfor %}
+    </select>
+    {% if not fixed_key %}<small>Результат — из группы выбранного маркера.</small>{% endif %}</label>
   <label>или код пропуска {{ codes('missing', missing_codes, 'missing', fv.get('missing')) }}</label>
   {{ date_field('test_date', 'test_date_precision', fv, 'Дата теста') }}
   <label>Данные * {{ select('provenance', options('provenance'), fv.get('provenance') or pt.provenance, blank=None) }}</label>
 {% endmacro %}
 
 {% macro line_fields(fv, pt) %}
-  <label>Режим * <input name="regimen" value="{{ fv.get('regimen') or '' }}" required maxlength="200"></label>
+  <label>Режим * <input name="regimen" list="regimens" value="{{ fv.get('regimen') or '' }}" required maxlength="200">
+    <small>Выберите из списка или введите свой.</small></label>
+  <datalist id="regimens">{% for r in profile(pt.who_haem5).regimens %}<option value="{{ r }}">{% endfor %}</datalist>
   <label>Препараты <input name="drug" value="{{ fv.get('drug') or '' }}" maxlength="500"></label>
   <label>Доза <input name="dose" value="{{ fv.get('dose') or '' }}" maxlength="200"></label>
   <label>Циклов <input type="number" name="cycles" min="0" max="100" value="{{ fv.get('cycles') if fv.get('cycles') is not none else '' }}"></label>
@@ -30,7 +41,9 @@
   {{ date_field('obs_date', 'obs_precision', fv, 'Дата наблюдения', required=True) }}
   {% set line_opts = {} %}{% for l in lines %}{% set _ = line_opts.update({l.line_id|string: '№' ~ l.line_no ~ ' ' ~ l.regimen}) %}{% endfor %}
   <label>Линия {{ select('line_id', line_opts, fv.get('line_id'), blank='не относится к линии') }}</label>
-  <label>Ответ (iwCLL 2018) {{ codes('response_value', iwcll, 'response_value', fv.get('response_value')) }}</label>
+  {% set prof = profile(pt.who_haem5) %}
+  <label>Ответ ({{ prof.criteria }}) {{ codes('response_value', prof.responses, 'response_value', fv.get('response_value')) }}
+    {% if prof.criteria == 'Lugano 2014' %}<small>По ПЭТ-КТ — CMR/PMR/NMR/PMD с баллом Deauville; по КТ — CR/PR/SD/PD.</small>{% endif %}</label>
   <label>Основание оценки {{ select('response_basis', options('response_basis'), fv.get('response_basis')) }}</label>
   <label>Событие {{ select('event_type', options('event_type'), fv.get('event_type') or 'none', blank=None) }}</label>
   <label>Дата события <input type="date" name="event_date" value="{{ fv.get('event_date') or '' }}"><small>по умолчанию — дата наблюдения</small></label>

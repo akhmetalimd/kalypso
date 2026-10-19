@@ -1,6 +1,10 @@
 {# Фильтры когорты и табличные двойники графиков. #}
-{% macro filters(action, f, branches) %}
+{% macro filters(action, f, branches, nosology=True, binet=True) %}
 <form method="get" action="{{ action }}" class="filters">
+  {% if nosology %}
+  <label>Нозология <select name="nosology"><option value="">все</option>
+    {% for n in active_nodes() %}<option value="{{ n.id }}"{% if f.nosology == n.id %} selected{% endif %}>{{ n.name }}</option>{% endfor %}</select></label>
+  {% endif %}
   {% set bopts = {} %}{% for b in branches %}{% set _ = bopts.update({b.branch_code: b.branch_code}) %}{% endfor %}
   <label>Филиал <select name="branch"><option value="">все доступные</option>
     {% for code in bopts %}<option value="{{ code }}"{% if f.branch == code %} selected{% endif %}>{{ code }}</option>{% endfor %}</select></label>
@@ -8,8 +12,10 @@
   <label>по <input type="number" name="year_to" min="1990" max="2100" value="{{ f.year_to or '' }}" placeholder="год"></label>
   <label>Пол <select name="sex"><option value="">все</option>
     {% for code, t in options('sex').items() %}<option value="{{ code }}"{% if f.sex == code %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
-  <label>Binet <select name="binet"><option value="">все</option>
+  {% if binet %}
+  <label>Binet (ХЛЛ) <select name="binet"><option value="">все</option>
     {% for s in ['A', 'B', 'C'] %}<option value="{{ s }}"{% if f.binet == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  {% endif %}
   <label>Данные <select name="provenance"><option value="">все</option>
     {% for code, t in options('provenance').items() %}<option value="{{ code }}"{% if f.provenance == code %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
   {% if caller %}{{ caller() }}{% endif %}

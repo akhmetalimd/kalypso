@@ -25,9 +25,11 @@ def patient_summary(card: dict) -> dict:
     node = core.find_node(core.NOSOLOGY_TREE, pt["who_haem5"]) or {}
     age = _age(pt["birth_date"], pt["dx_date"])
     markers = []
-    for f in core_fields():
+    for f in core_fields(pt["who_haem5"]):
         recs = [m for m in card["markers"] if m["field_key"] == f["key"]]
         last = recs[-1] if recs else None
+        if f.get("optional") and not last:
+            continue  # дополнительное поле без результата в документ не выводим
         markers.append({"label": f["label_ru"],
                         "value": (label("marker_value", last["value"]) if last["value"]
                                   else label("missing", last["missing"])) if last else "не внесено",
@@ -41,7 +43,13 @@ def patient_summary(card: dict) -> dict:
     events = [{"type": label("event_type", o["event_type"]), "date": _d(o["event_date"]),
                "cause": label("death_cause", o["death_cause"]) if o["death_cause"] else None}
               for o in card["observations"] if o["event_type"] != "none"]
-    ipi = card.get("cll_ipi")
+    indices = []
+    for ix in card.get("indices", []):
+        r = ix["result"]
+        stored = (f"{pt['index_score']} ({label('index_group', pt['index_group'])})"
+                  if ix["stored"] and pt["index_name"] == ix["name"] else None)
+        indices.append({"name": ix["name"], "stored": stored, "show_stored": ix["stored"],
+                        "computed": f"{r['score']} ({label('index_group', r['group'])})" if r else None})
     return {
         "pid": str(pt["patient_id"])[:8], "sex": label("sex", pt["sex"]),
         "age_at_dx": None if age is None else int(age),
@@ -49,9 +57,7 @@ def patient_summary(card: dict) -> dict:
         "dx_date": _d(pt["dx_date"], pt["dx_date_precision"]), "dx_version": pt["dx_version"],
         "stage": f"{pt['stage_system']} {pt['stage_value']}" if pt["stage_system"] else "не указана",
         "ecog": pt["ecog"], "cirs": pt["cirs_score"],
-        "ipi_stored": (f"{pt['index_score']} ({label('index_group', pt['index_group'])})"
-                       if pt["index_name"] == "CLL-IPI" else None),
-        "ipi_computed": f"{ipi['score']} ({label('index_group', ipi['group'])})" if ipi else None,
+        "indices": indices,
         "markers": markers, "lines": lines, "events": events,
         "status": label("status_last_contact", pt["status_last_contact"]),
         "last_contact": _d(pt["last_contact_date"], pt["last_contact_precision"]),
@@ -69,7 +75,8 @@ def tumor_board_text(s: dict) -> str:
              + (f", версия диагноза {s['dx_version']}" if s["dx_version"] > 1 else "") + ".",
              f"Стадия: {s['stage']}. ECOG: {s['ecog'] if s['ecog'] is not None else 'н/д'}. "
              f"CIRS-G: {s['cirs'] if s['cirs'] is not None else 'н/д'}.",
-             f"CLL-IPI: в карточке {s['ipi_stored'] or 'не указан'}; расчёт по данным {s['ipi_computed'] or 'недостаточно данных'}.",
+             *[(f"{ix['name']}: в карточке {ix['stored'] or 'не указан'}; " if ix["show_stored"] else f"{ix['name']}: ")
+               + f"расчёт по данным {ix['computed'] or 'недостаточно данных'}." for ix in s["indices"]],
              "", "Маркеры:"]
     lines += [f"  - {m['label']}: {m['value']}" + (f" ({m['date']})" if m["date"] else "") for m in s["markers"]]
     lines += ["", "Терапия:"]
