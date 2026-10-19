@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "kalypso"
 version = "0.1.0"
-description = "KALYPSO — пробная платформа регистра ЛПЗ (этап П1)"
+description = "KALYPSO — пробная платформа регистра ЛПЗ"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi==0.144.0",
@@ -25,7 +25,7 @@ dev = [
 ]
 
 [tool.setuptools]
-py-modules = ["registry_core", "source_adapter"]
+py-modules = ["registry_core"]
 
 [tool.setuptools.packages.find]
 include = ["kalypso*"]

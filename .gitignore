@@ -18,3 +18,7 @@ exports/
 # Dev-окружение (встроенный PostgreSQL, секреты dev)
 .devdb/
 *.egg-info/
+
+# Развёртывание: сертификаты и секреты сервера
+deploy/certs/
+deploy/.env

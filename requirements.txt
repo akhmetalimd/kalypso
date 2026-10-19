@@ -1,0 +1,9 @@
+# Зависимости сервера (точные версии — те же, что в pyproject.toml; проверяет tests/test_ops.py).
+# Развёртывание идёт из каталога исходников: schema.sql, db/migrations и config/ читаются оттуда.
+fastapi==0.144.0
+uvicorn==0.54.0
+jinja2==3.1.6
+python-multipart==0.0.32
+psycopg[binary]==3.3.6
+psycopg-pool==3.3.3
+argon2-cffi==25.1.0

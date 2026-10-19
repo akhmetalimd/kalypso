@@ -1,0 +1,10 @@
+[Unit]
+Description=KALYPSO: резервная копия БД
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Environment=BACKUP_DIR=/var/backups/kalypso
+Environment=KEEP_DAYS=14
+ExecStart=/opt/kalypso/deploy/scripts/backup.sh

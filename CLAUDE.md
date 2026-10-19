@@ -55,7 +55,9 @@ KALYPSO (KAzakhstan LYmphoma Patients Survival and Outcomes) — пробная 
 - `schema.sql` — нормативный baseline, **не редактируется**. Изменения — файлами в
   `db/migrations/` (порядковый номер + суть). Применение: `psql -1 -f <файл>`.
   Пока платформа нигде не развёрнута, миграции 0002–0004 приведены к чистому виду;
-  0005 — проверки модуля ДВКЛ (стадия Lugano, IPI, ответ Lugano 2014 и Deauville).
+  0005 — проверки модуля ДВКЛ (стадия Lugano, IPI, ответ Lugano 2014 и Deauville);
+  0006 — чтение `schema_migrations` для `check`. Миграции не должны требовать суперпользователя:
+  их применяет владелец схемы (`tests/test_deploy.py` репетирует это на чистом кластере).
 - В БД хранятся **коды**, а не русские подписи (`alive`, `death`, `M`…). Подписи на
   русском/казахском — в слое локализации. Названия систем и критериев (`Rai`, `Binet`,
   `iwCLL 2018`) остаются как есть.
@@ -92,6 +94,12 @@ KALYPSO (KAzakhstan LYmphoma Patients Survival and Outcomes) — пробная 
 - `kalypso/locales/*.json` — подписи кодов (ru; kk — заготовка).
 - `kalypso/migrate.py` — `schema.sql` + `db/migrations/*.sql`, учёт в `schema_migrations`.
 - `kalypso/synthetic.py` — синтетические когорты ХЛЛ и ДВКЛ через те же сервисы.
+- `kalypso/cli.py` + `kalypso/ops.py` — эксплуатация: `migrate`, `check` (роль входа не обходит RLS,
+  миграции применены), `serve`, `create-admin`, `seed-synthetic` (только пустой регистр).
+- `kalypso/logsafe.py` — фильтр журналов: любое 12-значное число -> `***` (на всех обработчиках сервера).
+- `deploy/` — Docker Compose (PostgreSQL 16 + приложение + nginx/HTTPS), первичные роли БД,
+  резервные копии; инструкция для ИТ — `docs/deploy.md`. Роли: `kalypso_owner` — владелец схемы
+  (миграции), `kalypso_web` — логин приложения в роли `kalypso_app`.
 
 ## Запуск и тесты
 
@@ -109,6 +117,7 @@ python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-dev.
   направляет их на внешний сервер (нужны права CREATEDB + CREATEROLE).
 - Каждый тест получает свою БД-копию шаблона с применёнными миграциями.
 - Новая миграция или ограничение — сразу тест в `tests/test_db_*.py`.
+- Сервер: `docs/deploy.md`; зависимости сервера — `requirements.txt` (те же версии, что в pyproject).
 
 ## Окружение
 

@@ -1,0 +1,82 @@
+# KALYPSO — пилот: PostgreSQL 16 + приложение + nginx (HTTPS).
+# Запуск из каталога deploy/:  docker compose up -d --build
+# Секреты — в deploy/.env (образец: .env.example); файл в git не попадает.
+# Порядок старта: db (здоров) -> migrate (применил миграции и завершился) -> app (check + serve) -> nginx.
+
+name: kalypso
+
+services:
+  db:
+    image: postgres:16.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте в deploy/.env}
+      KALYPSO_OWNER_PASSWORD: ${KALYPSO_OWNER_PASSWORD:?задайте в deploy/.env}
+      KALYPSO_WEB_PASSWORD: ${KALYPSO_WEB_PASSWORD:?задайте в deploy/.env}
+    # Журнал БД без DETAIL (там бывают значения ключей, в т. ч. ИИН) и без текста запросов.
+    command: ["postgres",
+              "-c", "log_error_verbosity=terse",
+              "-c", "log_min_error_statement=panic",
+              "-c", "log_statement=none",
+              "-c", "log_connections=on",
+              "-c", "password_encryption=scram-sha-256"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro    # только при первом запуске (пустой том)
+    healthcheck:
+      # По TCP: во время первичной инициализации образ слушает только сокет — не «здоров» раньше времени.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d kalypso"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  migrate:
+    build: {context: .., dockerfile: deploy/Dockerfile}
+    image: kalypso:pilot
+    command: ["python", "-m", "kalypso.cli", "migrate"]
+    environment:
+      KALYPSO_MIGRATE_DSN: postgresql://kalypso_owner:${KALYPSO_OWNER_PASSWORD}@db:5432/kalypso
+    depends_on:
+      db: {condition: service_healthy}
+    restart: "no"
+    networks: [backend]
+
+  app:
+    image: kalypso:pilot
+    restart: unless-stopped
+    # Не стартует, если check нашёл проблему (роль входа, миграции, cookie).
+    command: ["sh", "-c", "python -m kalypso.cli check && exec python -m kalypso.cli serve"]
+    environment:
+      KALYPSO_DSN: postgresql://kalypso_web:${KALYPSO_WEB_PASSWORD}@db:5432/kalypso
+      KALYPSO_SESSION_SECRET: ${KALYPSO_SESSION_SECRET:?задайте в deploy/.env}
+      KALYPSO_SESSION_HOURS: ${KALYPSO_SESSION_HOURS:-8}
+      KALYPSO_SECURE_COOKIES: "1"
+      KALYPSO_HOST: 0.0.0.0
+      KALYPSO_PORT: "8000"
+      # Порт приложения не публикуется: до него доходит только nginx из сети frontend.
+      KALYPSO_FORWARDED_ALLOW_IPS: "*"
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    networks: [backend, frontend]
+
+  nginx:
+    image: nginx:1.27.2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/kalypso.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro       # kalypso.crt + kalypso.key (см. docs/deploy.md)
+    depends_on:
+      app: {condition: service_healthy}
+    networks: [frontend]
+
+networks:
+  backend:
+    internal: true      # БД недоступна снаружи
+  frontend: {}
+
+volumes:
+  pgdata: {}

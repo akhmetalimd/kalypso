@@ -1,4 +1,4 @@
-"""Веб-интерфейс: вход, пациенты ХЛЛ, карточка, аналитика, администрирование, аудит.
+"""Веб-интерфейс: вход, пациенты (ХЛЛ, ДВКЛ), карточка, аналитика, администрирование, аудит.
 
 Серверный рендеринг (Jinja2), без JavaScript. ИИН передаётся только в теле POST
 (не в URL — URL попадают в журналы доступа). В интерфейсе ИИН видят только роли
@@ -198,6 +198,16 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         return back("/patients", "password_changed")
 
     # --- пациенты -----------------------------------------------------------
+    @app.get("/healthz")
+    def healthz():
+        """Проверка живости для Docker и мониторинга: без входа, без данных, только SELECT 1."""
+        try:
+            with db.tx() as cur:
+                cur.execute("SELECT 1")
+        except Exception:  # noqa: BLE001 — причина в ответ не попадает
+            return Response("db unavailable", status_code=503, media_type="text/plain")
+        return Response("ok", media_type="text/plain")
+
     @app.get("/")
     def root():
         return RedirectResponse("/patients", status_code=303)

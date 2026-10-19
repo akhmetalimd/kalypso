@@ -1,0 +1,17 @@
+# В образ — только код сервера (см. deploy/Dockerfile). Секреты, БД и выгрузки — никогда.
+.git
+.venv
+venv
+.devdb
+.pytest_cache
+**/__pycache__
+*.egg-info
+tests
+exports
+*.dump
+*.db
+*.sqlite
+.env
+**/.env
+*.key
+deploy
