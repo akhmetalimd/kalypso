@@ -41,7 +41,7 @@
   {% endif %}
   <button type="button" id="theme-toggle" class="link theme-toggle" hidden>◐ Тема</button>
 </header>
-<main>
+<main class="{% block main_class %}{% endblock %}">
   <div class="synthetic">Пилот на синтетических данных. Реальные данные пациентов не вносить.{% if demo_mode %} Демо-режим: вход без пароля, роль — в шапке.{% endif %}</div>
   {% if message %}<div class="note ok">{{ message }}</div>{% endif %}
   {% if warnings %}
@@ -54,5 +54,6 @@
   {% endif %}
   {% block content %}{% endblock %}
 </main>
+<footer class="site-foot">Created by Aidos Akhmetali and the Lymphoma Working Group · Version {{ app_version }}</footer>
 </body>
 </html>

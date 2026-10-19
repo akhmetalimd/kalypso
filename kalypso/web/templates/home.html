@@ -1,31 +1,40 @@
 {% extends "base.html" %}
 {% block title %}Главная{% endblock %}
+{% block main_class %}main-home{% endblock %}
 {% block content %}
 <section class="home">
-  {# Фон: условная кривая выживаемости двух групп с полосой ДИ и «клетки» — рисунок кодом, не данные #}
+  {# Картина — общественное достояние (static/img/SOURCES.md); края растворяются в фоне страницы #}
+  <figure class="home-painting">
+    <img src="/static/img/boecklin-odysseus-calypso.jpg" width="1920" height="1332" decoding="async"
+         alt="Арнольд Бёклин, «Одиссей и Калипсо» (1882): Одиссей на скале смотрит в море, Калипсо с арфой у входа в грот">
+    <figcaption>Арнольд Бёклин. «Одиссей и Калипсо», 1882. Художественный музей Базеля · общественное достояние</figcaption>
+  </figure>
+  {# За картиной: условная кривая выживаемости двух групп с полосой ДИ и «клетки» — рисунок кодом, не данные #}
   <svg class="home-art" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
-    <path class="axis" d="M60,60V440H950"/>
-    <path class="ci" d="M60,74H160V96H250V122H330V150H420V176H500V206H590V228H680V256H770V276H860V292H950V338H860V322H770V306H680V290H590V266H500V242H420V214H330V186H250V156H160V124H60Z"/>
-    <path class="km a" pathLength="1" d="M60,80H160V110H250V138H330V168H420V195H500V224H590V247H680V273H770V291H860V307H950"/>
-    <path class="km b" pathLength="1" d="M60,80H120V126H190V178H270V226H350V266H440V302H530V330H630V352H740V366H950"/>
-    <path class="cens" d="M205,104V116M375,162V174M545,218V230M725,267V279M905,301V313"/>
-    <g transform="translate(120 400)"><g class="drift d1"><circle class="cell-body" r="30"/><circle class="cell-nuc" cx="5" cy="-4" r="13"/></g></g>
-    <g transform="translate(870 110)"><g class="drift b"><circle class="cell-body" r="38"/><circle class="cell-nuc" cx="-6" cy="5" r="17"/></g></g>
-    <g transform="translate(250 60)" class="alt"><g class="drift slow d2"><circle class="cell-body" r="18"/><circle class="cell-nuc" cx="3" cy="2" r="8"/></g></g>
-    <g transform="translate(780 420)"><g class="drift d3"><circle class="cell-body" r="24"/><circle class="cell-nuc" cx="-4" cy="-3" r="11"/></g></g>
-    <g transform="translate(560 455)" class="alt"><g class="drift b slow"><circle class="cell-body" r="14"/><circle class="cell-nuc" cx="2" cy="-2" r="6"/></g></g>
-    <g transform="translate(950 250)" class="alt"><g class="drift d2"><circle class="cell-body" r="20"/><circle class="cell-nuc" cx="-3" cy="4" r="9"/></g></g>
-    <g transform="translate(40 230)"><g class="drift b d1"><circle class="cell-body" r="16"/><circle class="cell-nuc" cx="2" cy="3" r="7"/></g></g>
-    <g transform="translate(420 40)"><g class="drift slow d3"><circle class="cell-body" r="12"/><circle class="cell-nuc" cx="-2" cy="1" r="5"/></g></g>
+    <path class="axis" d="M60,70V430H950"/>
+    <path class="ci" d="M60,84H160V106H250V132H330V160H420V186H500V216H590V238H680V266H770V286H860V302H950V348H860V332H770V316H680V300H590V276H500V252H420V224H330V196H250V166H160V134H60Z"/>
+    <path class="km a" pathLength="1" d="M60,90H160V120H250V148H330V178H420V205H500V234H590V257H680V283H770V301H860V317H950"/>
+    <path class="km b" pathLength="1" d="M60,90H120V136H190V188H270V236H350V276H440V312H530V340H630V362H740V376H950"/>
+    <path class="cens" d="M205,114V126M375,172V184M545,228V240M725,277V289M905,311V323"/>
+    <g transform="translate(120 395)"><g class="drift d1"><circle class="cell-body" r="30"/><circle class="cell-nuc" cx="5" cy="-4" r="13"/></g></g>
+    <g transform="translate(870 120)"><g class="drift b"><circle class="cell-body" r="38"/><circle class="cell-nuc" cx="-6" cy="5" r="17"/></g></g>
+    <g transform="translate(250 80)" class="alt"><g class="drift slow d2"><circle class="cell-body" r="18"/><circle class="cell-nuc" cx="3" cy="2" r="8"/></g></g>
+    <g transform="translate(780 410)"><g class="drift d3"><circle class="cell-body" r="24"/><circle class="cell-nuc" cx="-4" cy="-3" r="11"/></g></g>
+    <g transform="translate(560 430)" class="alt"><g class="drift b slow"><circle class="cell-body" r="14"/><circle class="cell-nuc" cx="2" cy="-2" r="6"/></g></g>
+    <g transform="translate(940 250)" class="alt"><g class="drift d2"><circle class="cell-body" r="20"/><circle class="cell-nuc" cx="-3" cy="4" r="9"/></g></g>
+    <g transform="translate(45 240)"><g class="drift b d1"><circle class="cell-body" r="16"/><circle class="cell-nuc" cx="2" cy="3" r="7"/></g></g>
+    <g transform="translate(420 70)"><g class="drift slow d3"><circle class="cell-body" r="12"/><circle class="cell-nuc" cx="-2" cy="1" r="5"/></g></g>
   </svg>
-  <h1 class="home-title" aria-label="KALYPSO">KALYPSO</h1>
-  <p class="home-decoding">
-    <span class="acc">K</span><span class="acc">A</span>zakhstan
-    <span class="acc">L</span><span class="acc">Y</span>mphoma
-    <span class="acc">P</span>atients
-    <span class="acc">S</span>urvival and
-    <span class="acc">O</span>utcomes
-  </p>
-  <p class="home-sub">Пилотный регистр лимфопролиферативных заболеваний · синтетические данные</p>
+  <div class="home-text">
+    <h1 class="home-title" aria-label="KALYPSO">KALYPSO</h1>
+    <p class="home-decoding">
+      <span class="acc">K</span><span class="acc">A</span>zakhstan
+      <span class="acc">L</span><span class="acc">Y</span>mphoma
+      <span class="acc">P</span>atients
+      <span class="acc">S</span>urvival and
+      <span class="acc">O</span>utcomes
+    </p>
+    <p class="home-sub">Пилотный регистр лимфопролиферативных заболеваний · синтетические данные</p>
+  </div>
 </section>
 {% endblock %}

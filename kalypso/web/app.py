@@ -60,6 +60,9 @@ def _short(value) -> str:
 SPECIAL_DASHBOARDS = {"cll_sll": "/dashboard/cll", "dlbcl": "/dashboard/dlbcl", "follicular": "/dashboard/fl"}
 
 
+APP_VERSION = "0.1"            # подпись внизу страниц; pyproject — 0.1.0
+
+
 def dashboard_url(nosology: str) -> str:
     return SPECIAL_DASHBOARDS.get(nosology, f"/dashboard/m/{nosology}")
 
@@ -79,6 +82,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
                        profile=registry.profile, indexes=core.INDEXES, dashboard_url=dashboard_url,
                        nosology_groups=registry.nosology_groups, inv=investigations,
                        index_help=indices.index_help,
+                       app_version=APP_VERSION,
                        stage_map=lambda: {n["id"]: n.get("stage_values", {}) for n in registry.active_nodes()})
     env.filters.update(d=_fmt_date, short=_short,
                        nosology_short=lambda node_id: (core.find_node(core.NOSOLOGY_TREE, node_id or "") or {}).get("short", node_id),

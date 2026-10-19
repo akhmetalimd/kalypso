@@ -23,7 +23,10 @@
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 a { color: var(--accent); }
-main { max-width: 1240px; margin: 0 auto; padding: 16px; }
+body { min-height: 100vh; display: flex; flex-direction: column; }
+main { flex: 1 0 auto; width: 100%; max-width: 1240px; margin: 0 auto; padding: 16px; }
+.site-foot { padding: 10px 16px; text-align: center; font-size: .8rem; color: var(--muted);
+  border-top: 1px solid var(--line); background: var(--surface); }
 h1 { font-size: 1.5rem; margin: .4rem 0 .8rem; }
 h2 { font-size: 1.1rem; margin: 0 0 .6rem; }
 h3 { font-size: 1rem; margin: 1rem 0 .4rem; }
@@ -158,9 +161,35 @@ textarea.doc-text { font-family: ui-monospace, Consolas, monospace; font-size: .
   textarea.doc-text { border: 0; height: auto; overflow: visible; }
 }
 
-/* Главная: название и расшифровка; буквы аббревиатуры — акцентным цветом */
-.home { min-height: 55vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 32px 16px; }
-.home-title { font-size: clamp(3rem, 12vw, 7rem); letter-spacing: .12em; margin: 0 0 16px; }
+/* Главная — на всю высоту окна: название и расшифровка слева, картина справа, рисунок кодом поверх */
+main.main-home { max-width: none; padding: 0; display: flex; flex-direction: column; }
+main.main-home > .synthetic { width: 100%; max-width: 1240px; margin: 0 auto; padding: 8px 16px 0; }
+main.main-home > .home { flex: 1 0 auto; }
+.home { position: relative; overflow: hidden; min-height: 520px; display: flex; align-items: center;
+  padding: 32px clamp(16px, 5vw, 72px); }
+.home-text { position: relative; z-index: 2; max-width: 54rem; }
+.home-title { font-size: clamp(3rem, 10vw, 7rem); letter-spacing: .12em; margin: 0 0 16px; text-shadow: 0 1px 18px var(--bg); }
+.home-painting { position: absolute; top: 0; right: 0; bottom: 0; width: min(64%, 1150px); margin: 0; z-index: 1; }
+.home-painting img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 55% 60%;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 42%), linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent, #000 42%), linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent);
+  mask-composite: intersect; }
+.home-painting figcaption { position: absolute; right: 12px; bottom: 10px; z-index: 3; max-width: 90%; padding: 2px 8px;
+  border-radius: 6px; font-size: .72rem; color: var(--muted); background: color-mix(in srgb, var(--bg) 75%, transparent); }
+/* В тёмной теме картина приглушена, чтобы не спорить с текстом */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .home-painting img { filter: brightness(.6) saturate(.85); }
+}
+:root[data-theme="dark"] .home-painting img { filter: brightness(.6) saturate(.85); }
+@media (max-width: 860px) {
+  .home { flex-direction: column; align-items: stretch; padding-top: 24px; }
+  .home-text { text-align: center; max-width: none; order: 0; }
+  .home-painting { position: relative; order: 1; width: auto; margin: 20px calc(-1 * clamp(16px, 5vw, 72px)) -32px; }
+  .home-painting figcaption { position: static; display: block; margin: 4px 12px 8px; background: none; text-align: center; }
+  .home-painting img { height: auto; aspect-ratio: 1920 / 1332;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%); mask-image: linear-gradient(to bottom, transparent, #000 22%); }
+}
 .home-decoding { font-size: clamp(1.1rem, 3.2vw, 1.9rem); line-height: 1.5; color: var(--muted); margin: 0; }
 .home-decoding .acc { color: var(--accent); font-weight: 700; }
 .demo-role select { font-size: .85rem; max-width: 260px; }
@@ -197,9 +226,7 @@ table.grid { display: block; max-width: 100%; overflow-x: auto; }
 /* Переключатель темы (появляется, только если работает JS) */
 .top button.theme-toggle { font-size: .9rem; white-space: nowrap; text-decoration: none; }
 
-/* Главная: фоновая картинка — кривая выживаемости и «клетки», рисуется кодом (SVG) */
-.home { position: relative; overflow: hidden; }
-.home > :not(.home-art) { position: relative; z-index: 1; }
+/* Главная: за картиной — кривая выживаемости и «клетки», рисуется кодом (SVG); видны там, где картина растворяется */
 .home-art { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
 .home-art .axis { stroke: var(--line); stroke-width: 2; fill: none; }
 .home-art .km { fill: none; stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
@@ -248,6 +275,7 @@ table.grid { display: block; max-width: 100%; overflow-x: auto; }
   .js svg.viz.in path.bar.col { animation-name: k-grow-y; }
   /* Главная */
   .home-title { animation: k-title .9s ease-out both; }
+  .home-painting { animation: k-fade 1.6s ease-out both; }
   .home-decoding .acc { animation: k-letter .45s ease-out both; }
   .home-decoding .acc:nth-of-type(1) { animation-delay: .5s; } .home-decoding .acc:nth-of-type(2) { animation-delay: .68s; }
   .home-decoding .acc:nth-of-type(3) { animation-delay: .86s; } .home-decoding .acc:nth-of-type(4) { animation-delay: 1.04s; }
@@ -266,5 +294,5 @@ table.grid { display: block; max-width: 100%; overflow-x: auto; }
   .js svg.viz .tick, .js svg.viz rect.seg { opacity: 1 !important; animation: none !important; }
   .js svg.viz .band { opacity: .12 !important; animation: none !important; }
   .js svg.viz path.bar { transform: none !important; animation: none !important; }
-  .theme-toggle, .to-top { display: none; }
+  .theme-toggle, .to-top, .site-foot { display: none; }
 }

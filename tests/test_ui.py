@@ -196,7 +196,7 @@ def test_theme_toggle_script_and_no_inline_js(demo, world):
     assert js.status_code == 200 and "localStorage" in js.text and "IntersectionObserver" in js.text
     css = c.get("/static/style.css").text
     assert "var(--card)" not in css
-    assert css.count(':root[data-theme="dark"]') >= 2 and css.count(':root:not([data-theme="light"])') == 2
+    assert css.count(':root[data-theme="dark"]') >= 2 and css.count(':root:not([data-theme="light"])') >= 2
     assert "@media (prefers-reduced-motion: no-preference)" in css and "[hidden] { display: none !important; }" in css
 
 
@@ -223,3 +223,19 @@ def test_home_art_and_progressive_filters(demo, world):
     for raw in re.findall(r"data-units='([^']+)'", form):
         units.update(json.loads(html.unescape(raw)))
     assert units["hbv_dna"] == "МЕ/мл" and units["flow_panel"] == "%"
+
+
+def test_home_full_screen_painting_and_footer(demo, world):
+    """Главная на всю высоту: картина Бёклина (общественное достояние) под обе темы; подпись внизу всех страниц."""
+    c = enter(demo)
+    home = c.get("/").text
+    assert '<main class="main-home">' in home and 'class="home-painting"' in home
+    assert '<img src="/static/img/boecklin-odysseus-calypso.jpg"' in home and "общественное достояние" in home
+    img = c.get("/static/img/boecklin-odysseus-calypso.jpg")
+    assert img.status_code == 200 and img.headers["content-type"] == "image/jpeg" and len(img.content) < 600_000
+    footer = "Created by Aidos Akhmetali and the Lymphoma Working Group · Version 0.1"
+    for url in ("/", "/patients", "/survival"):
+        assert footer in c.get(url).text, url
+    assert '<main class="">' in c.get("/patients").text
+    css = c.get("/static/style.css").text
+    assert css.count(".home-painting img { filter: brightness(.6)") == 2   # тёмная: по системе и переключателем
