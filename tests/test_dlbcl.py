@@ -189,7 +189,7 @@ def test_deauville_landmark(world, mixed):
     assert groups(res) == {"Deauville 4–5": (1, 1), "Deauville 1–3": (1, 0)}
     a = next(r for r in res["rows"] if r["patient_id"] == mixed["a"])
     assert str(a["start"]) == "2021-08-20" and a["days"] == 73      # отсчёт от ПЭТ-КТ до прогрессии
-    assert res["landmark"] == {"missing": 0, "dropped": 0}
+    assert (res["landmark"]["missing"], res["landmark"]["dropped"]) == (0, 0) and "ПЭТ-КТ" in res["landmark"]["text"]
     registry.add_observation(world.db, world.doc_a, mixed["b"], {**R, "obs_date": "2021-08-22", "event_type": "relapse"})
     res = analytics.explore(world.db, world.curator, "PFS", line_no=1, grouping="deauville_eot1")
     assert res["landmark"]["dropped"] == 1                              # событие до ориентира — вне анализа

@@ -39,7 +39,8 @@
     {% if c.flags.quality %}<ul>{% for f in c.flags.quality %}<li>{{ flag(f) }}</li>{% endfor %}</ul>
     {% else %}<p>Противоречий не найдено.</p>{% endif %}
   </div>
-  {% set part_names = {'age': 'возраст', 'stage': 'стадия', 'b2m': 'β2M', 'LDH': 'ЛДГ', 'extranodal': 'экстранод.'} %}
+  {% set part_names = {'age': 'возраст', 'stage': 'стадия', 'b2m': 'β2M', 'LDH': 'ЛДГ', 'extranodal': 'экстранод.',
+                      'nodal': 'зоны л/у', 'node': 'л/у > 6 см', 'BM': 'КМ'} %}
   {% for ix in c.indices %}
   <div class="panel">
     <h2>{{ ix.name }}</h2>
@@ -52,6 +53,12 @@
         {% if ix.stored and pt.index_name == ix.name and pt.index_score != ix.result.score %}<br><span class="badge warn">не совпадает с карточкой</span>{% endif %}
       {% else %}<span class="muted">недостаточно данных ({{ ix.needs }})</span>{% endif %}
     </p>
+  </div>
+  {% endfor %}
+  {% for info in c.module_info %}
+  <div class="panel{{ ' warn' if info.warn else '' }}">
+    <h2>{{ info.title }}</h2>
+    <p>{{ info.text }}</p>
   </div>
   {% endfor %}
 </section>

@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Iterable, Optional
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
@@ -472,6 +472,9 @@ INDEXES = {
     "IPI": {"max": 5, "groups": ((1, "low"), (2, "low_intermediate"), (3, "high_intermediate"), (5, "high"))},
     "R-IPI": {"max": 5, "groups": ((0, "very_good"), (2, "good"), (5, "poor"))},
     "NCCN-IPI": {"max": 8, "groups": ((1, "low"), (3, "low_intermediate"), (5, "high_intermediate"), (8, "high"))},
+    "FLIPI": {"max": 5, "groups": ((1, "low"), (2, "intermediate"), (5, "high"))},
+    "FLIPI-2": {"max": 5, "groups": ((0, "low"), (2, "intermediate"), (5, "high"))},
+    "PRIMA-PI": {"max": 2, "groups": ((0, "low"), (1, "intermediate"), (2, "high"))},
 }
 LDH_CATEGORIES = ("le_uln", "uln_1_3", "gt_3_uln")   # ЛДГ: ≤ ВГН, > 1–3 × ВГН, > 3 × ВГН
 RESPONSES = {
@@ -564,6 +567,85 @@ def check_response(criteria: Optional[str], value: Optional[str], basis: Optiona
     return flags
 
 
+# ---------------------------------------------------------------------------
+# 8. Фолликулярная лимфома: FLIPI, FLIPI-2, PRIMA-PI, POD24
+# ---------------------------------------------------------------------------
+def flipi(age: Optional[float], advanced: Optional[bool], hb_g_l: Optional[float],
+          ldh: Optional[str], nodal_areas_gt4: Optional[bool]) -> Optional[dict]:
+    """FLIPI (Solal-Céligny, 2004), по 1 баллу: возраст > 60, стадия III–IV, Hb < 120 г/л,
+    ЛДГ > ВГН, > 4 зон поражения лимфоузлов. Группы: 0–1 низкий, 2 промежуточный, 3–5 высокий."""
+    parts = {
+        "age": None if age is None else int(age > 60),
+        "stage": None if advanced is None else int(advanced),
+        "Hb": None if hb_g_l is None else int(hb_g_l < 120),
+        "LDH": None if ldh not in LDH_CATEGORIES else int(ldh != "le_uln"),
+        "nodal": None if nodal_areas_gt4 is None else int(nodal_areas_gt4),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("FLIPI", score), "components": parts}
+
+
+def flipi2(age: Optional[float], hb_g_l: Optional[float], b2m_above_uln: Optional[bool],
+           largest_node_gt6: Optional[bool], bm_involved: Optional[bool]) -> Optional[dict]:
+    """FLIPI-2 (Federico, 2009), по 1 баллу: возраст > 60, Hb < 120 г/л, β2-микроглобулин > ВГН,
+    наибольший лимфоузел > 6 см, поражение костного мозга. Группы: 0 низкий, 1–2 промежуточный, 3–5 высокий."""
+    parts = {
+        "age": None if age is None else int(age > 60),
+        "Hb": None if hb_g_l is None else int(hb_g_l < 120),
+        "b2m": None if b2m_above_uln is None else int(b2m_above_uln),
+        "node": None if largest_node_gt6 is None else int(largest_node_gt6),
+        "BM": None if bm_involved is None else int(bm_involved),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("FLIPI-2", score), "components": parts}
+
+
+def prima_pi(b2m_mg_l: Optional[float], bm_involved: Optional[bool]) -> Optional[dict]:
+    """PRIMA-PI (Bachy, 2018): β2-микроглобулин > 3 мг/л — высокий риск; иначе поражение
+    костного мозга — промежуточный, без него — низкий. Балл: 2 / 1 / 0 (для единого вида)."""
+    if b2m_mg_l is None:
+        return None
+    if b2m_mg_l > 3:                       # костный мозг при высоком β2M не влияет на группу
+        return {"score": 2, "group": index_group("PRIMA-PI", 2), "components": {"b2m": 1}}
+    if bm_involved is None:
+        return None
+    score = int(bm_involved)
+    return {"score": score, "group": index_group("PRIMA-PI", score), "components": {"b2m": 0, "BM": score}}
+
+
+POD24_DAYS = 730
+
+
+def pod24(patient: dict, lines: list[dict], observations: list[dict],
+          chemoimmunotherapy: Iterable[str]) -> dict:
+    """POD24 (Casulo, 2015): прогрессия или рецидив ≤ 24 мес. от начала 1-й линии иммунохимиотерапии.
+    status: pod24 | no_pod24 | not_applicable (1-я линия не иммунохимиотерапия или её нет) |
+    undetermined (наблюдение < 24 мес. без прогрессии или смерть без прогрессии до 24 мес.).
+    Режимы сравниваются по названию без учёта регистра."""
+    allowed = {r.casefold() for r in chemoimmunotherapy}
+    line = next((l for l in lines if l["line_no"] == 1), None)
+    if line is None or not line.get("start_date") or (line.get("regimen") or "").strip().casefold() not in allowed:
+        return {"status": "not_applicable"}
+    start = impute_date(line["start_date"], line.get("start_precision"))
+    limit = start + timedelta(days=POD24_DAYS)
+    events = sorted(impute_date(o["event_date"], "day") for o in observations
+                    if o.get("event_type") in ("progression", "relapse") and o.get("event_date"))
+    early = [d for d in events if start < d <= limit]
+    if early:
+        return {"status": "pod24", "date": early[0], "landmark": limit, "months": round((early[0] - start).days / 30.44, 1)}
+    if any(o.get("event_type") == "death" and o.get("event_date") and impute_date(o["event_date"], "day") <= limit
+           for o in observations):
+        return {"status": "undetermined", "reason": "смерть без прогрессии до 24 мес.", "landmark": limit}
+    censor = impute_date(patient["last_contact_date"], patient.get("last_contact_precision"))
+    if censor is None or censor < limit:
+        return {"status": "undetermined", "reason": "наблюдение меньше 24 мес.", "landmark": limit}
+    return {"status": "no_pod24", "landmark": limit}
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -599,6 +681,7 @@ if __name__ == "__main__":
     assert ipi(50, 0, False, "le_uln", False)["score"] == 0 and r_ipi(0)["group"] == "very_good"
     assert nccn_ipi(80, 2, True, "gt_3_uln", True)["score"] == 8
     assert check_response("Lugano 2014", "CMR", "pet_ct", 4) == ["deauville_mismatch"]
+    assert flipi(65, True, 110, "uln_1_3", True)["group"] == "high" and prima_pi(3.5, False)["group"] == "high"
     try:
         kaplan_meier([-1], [1])
         raise AssertionError("отрицательное время должно отвергаться")

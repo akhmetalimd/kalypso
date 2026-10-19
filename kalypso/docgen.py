@@ -58,6 +58,7 @@ def patient_summary(card: dict) -> dict:
         "stage": f"{pt['stage_system']} {pt['stage_value']}" if pt["stage_system"] else "не указана",
         "ecog": pt["ecog"], "cirs": pt["cirs_score"],
         "indices": indices,
+        "module_info": [f"{i['title']}: {i['text']}." for i in card.get("module_info", [])],
         "markers": markers, "lines": lines, "events": events,
         "status": label("status_last_contact", pt["status_last_contact"]),
         "last_contact": _d(pt["last_contact_date"], pt["last_contact_precision"]),
@@ -77,6 +78,7 @@ def tumor_board_text(s: dict) -> str:
              f"CIRS-G: {s['cirs'] if s['cirs'] is not None else 'н/д'}.",
              *[(f"{ix['name']}: в карточке {ix['stored'] or 'не указан'}; " if ix["show_stored"] else f"{ix['name']}: ")
                + f"расчёт по данным {ix['computed'] or 'недостаточно данных'}." for ix in s["indices"]],
+             *s["module_info"],
              "", "Маркеры:"]
     lines += [f"  - {m['label']}: {m['value']}" + (f" ({m['date']})" if m["date"] else "") for m in s["markers"]]
     lines += ["", "Терапия:"]

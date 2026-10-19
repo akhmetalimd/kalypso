@@ -25,8 +25,8 @@
   <h2>{{ r.endpoint }}{% if r.endpoint in line_endpoints %} от старта {{ r.line_no }}-й линии{% endif %} · {{ grouping_label }}</h2>
   <p class="muted">{{ endpoints[r.endpoint] }}. Когорта: {{ r.n_cohort }}; в анализе {{ r.groups|sum(attribute='n') }}{% if r.not_applicable %}, неприменимо {{ r.not_applicable }} (нет нужной линии){% endif %}{% if r.excluded %}, исключено {{ r.excluded|length }}{% endif %}.
     {% if r.baseline_grouping %}Признак берётся на момент начала отсчёта (окно {{ r.window_days }} дней), позже измеренное — «не определено на старте».{% endif %}</p>
-  {% if r.landmark %}<div class="note">Анализ от ориентира: отсчёт — от первой ПЭТ-КТ с баллом Deauville после окончания 1-й линии
-    (если она позже начала отсчёта). Без такой ПЭТ-КТ — {{ r.landmark.missing }}; событие или цензура до неё — {{ r.landmark.dropped }}: в анализ не входят.</div>{% endif %}
+  {% if r.landmark %}<div class="note">Анализ от ориентира: {{ r.landmark.text }} (если ориентир позже начала отсчёта).
+    Без ориентира — {{ r.landmark.missing }}; событие или цензура до него — {{ r.landmark.dropped }}: в анализ не входят.</div>{% endif %}
   {% for n in r.notes %}<div class="note warn">{{ n }}</div>{% endfor %}
   {% if r.groups %}
     {{ charts.km_chart(r.groups, 'Кривые Каплана–Майера')|safe }}

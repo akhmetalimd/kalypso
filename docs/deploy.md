@@ -44,7 +44,7 @@ sudo docker compose up -d --build
 | Шаг | Команда | Ожидаемо |
 |---|---|---|
 | Контейнеры | `sudo docker compose ps` | `db`, `app`, `nginx` — `running (healthy)`; `migrate` — `exited (0)` |
-| Миграции | `sudo docker compose logs migrate` | `Применено: 0001_baseline, … 0006_ops` |
+| Миграции | `sudo docker compose logs migrate` | `Применено: 0001_baseline, … 0007_follicular` |
 | Готовность | `sudo docker compose exec app python -m kalypso.cli check` | `Готово к запуску…` |
 | HTTPS | открыть `https://kalypso.clinic.local` | страница входа; `http://` переадресуется на `https://` |
 | БД закрыта | `nc -zv <сервер> 5432` с другой машины | соединение отклонено |
@@ -67,7 +67,7 @@ sudo docker compose exec app python -m kalypso.cli create-admin admin "Адми�
 После того как созданы хотя бы один врач и куратор:
 
 ```bash
-sudo docker compose exec app python -m kalypso.cli seed-synthetic --cll 60 --dlbcl 40
+sudo docker compose exec app python -m kalypso.cli seed-synthetic --cll 60 --dlbcl 40 --fl 40
 ```
 
 Пациенты распределяются по врачам (их филиалам). Команда работает только с пустым

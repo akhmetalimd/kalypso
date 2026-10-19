@@ -227,7 +227,7 @@ def test_index_group_matches_cll_ipi():
         assert index_group("CLL-IPI", r["score"]) == r["group"]
         seen.add(r["score"])
     assert seen == set(range(11))
-    assert index_group("IPI", 6) is None and index_group("FLIPI", 1) is None
+    assert index_group("IPI", 6) is None and index_group("MIPI", 1) is None
     assert {name for name in INDEXES} >= {"CLL-IPI", "IPI", "R-IPI", "NCCN-IPI"}
 
 

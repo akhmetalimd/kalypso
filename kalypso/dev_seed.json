@@ -59,5 +59,6 @@
     }
   ],
   "synthetic_patients": 200,
-  "synthetic_patients_dlbcl": 100
+  "synthetic_patients_dlbcl": 100,
+  "synthetic_patients_fl": 80
 }

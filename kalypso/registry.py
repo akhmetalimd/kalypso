@@ -32,6 +32,7 @@ CONDITIONAL_FIELDS = {
 }
 DX_FIELDS = ("who_haem5", "icd_o_3_2", "mkb", "dx_date", "dx_date_precision")
 LOINC_B2M = "1952-1"
+LOINC_HB = "8302-2"
 
 
 class ValidationError(Exception):
@@ -70,7 +71,8 @@ def profile(who_haem5: str | None) -> dict:
     return {"id": node["id"], "name": node["name"], "module": node["module"],
             "stages": node.get("stage_values", {}), "index": node.get("index"),
             "criteria": criteria, "responses": core.RESPONSES.get(criteria, ()),
-            "fields": node.get("core_fields", []), "regimens": node.get("regimens", [])}
+            "fields": node.get("core_fields", []), "regimens": node.get("regimens", []),
+            "pod24_regimens": node.get("pod24_regimens", [])}
 
 
 def core_fields(who_haem5: str = CLL) -> list[dict]:
@@ -78,8 +80,14 @@ def core_fields(who_haem5: str = CLL) -> list[dict]:
 
 
 def all_fields() -> list[dict]:
-    """Поля всех активных модулей (для выгрузки): ключи модулей не пересекаются."""
-    return [f for n in active_nodes() for f in n.get("core_fields", [])]
+    """Поля всех активных модулей (для выгрузки). Общий ключ (ldh_uln у ДВКЛ и ФЛ) —
+    одно поле: смысл и значения у него одинаковые."""
+    seen, out = set(), []
+    for f in (f for n in active_nodes() for f in n.get("core_fields", [])):
+        if f["key"] not in seen:
+            seen.add(f["key"])
+            out.append(f)
+    return out
 
 
 def _fields_of_module(module: str) -> list[dict]:
@@ -497,6 +505,7 @@ def get_card(db: Database, p: Principal, pid) -> dict:
             card["flags"]["completeness"].append(f"empty_{name}")
     card["profile"] = profile(patient["who_haem5"])
     card["indices"] = computed_indices(patient, mm, card["labs"])
+    card["module_info"] = module_info(patient, mm, card["lines"], card["observations"], card["markers"])
     return card
 
 
@@ -509,6 +518,17 @@ def _yes_no(v: str | None) -> bool | None:
 
 def _ldh(v: str | None) -> str | None:
     return "le_uln" if v == "normal_negative" else v
+
+
+def _gt(v: str | None, yes: str, no: str) -> bool | None:
+    return {yes: True, no: False, "normal_negative": False}.get(v or "")
+
+
+def _lab_near(labs: list[dict], loinc: str, t0: date, before: int = 180, after: int = 90) -> float | None:
+    """Каноническое значение анализа, ближайшее к дате диагноза, в окне [t0 − 180; t0 + 90] дней."""
+    cands = [l for l in labs if l["loinc"] == loinc and l["value_canonical"] is not None
+             and -before <= (l["obs_date"] - t0).days <= after]
+    return float(min(cands, key=lambda l: abs((l["obs_date"] - t0).days))["value_canonical"]) if cands else None
 
 
 def _extranodal_gt1(v: str | None) -> bool | None:
@@ -539,6 +559,22 @@ def computed_indices(pt: dict, mm: dict[str, str], labs: list[dict]) -> list[dic
              "result": core.nccn_ipi(age, pt["ecog"], adv, ldh, _yes_no(mm.get("extranodal_nccn"))),
              "needs": "возраст, ECOG, стадия, ЛДГ, поражение КМ/ЦНС/печени-ЖКТ/лёгкого"},
         ]
+    if prof["index"] == "FLIPI":
+        adv = core.advanced_stage(pt["stage_system"], pt["stage_value"])
+        hb = _lab_near(labs, LOINC_HB, pt["dx_date"])
+        bm = _yes_no(mm.get("bm_involvement"))
+        return [
+            {"name": "FLIPI", "stored": True,
+             "result": core.flipi(age, adv, hb, _ldh(mm.get("ldh_uln")), _gt(mm.get("nodal_areas"), "gt_4", "le_4")),
+             "needs": "возраст, стадия Lugano, Hb на диагнозе (анализ), ЛДГ, число зон лимфоузлов"},
+            {"name": "FLIPI-2", "stored": False,
+             "result": core.flipi2(age, hb, _gt(mm.get("b2m_uln"), "gt_uln", "le_uln"),
+                                   _gt(mm.get("largest_node"), "gt_6", "le_6"), bm),
+             "needs": "возраст, Hb (анализ), β2M относительно ВГН, наибольший лимфоузел, костный мозг"},
+            {"name": "PRIMA-PI", "stored": False,
+             "result": core.prima_pi(_lab_near(labs, LOINC_B2M, pt["dx_date"]), bm),
+             "needs": "β2-микроглобулин на диагнозе (анализ, мг/л), поражение костного мозга"},
+        ]
     return []
 
 
@@ -547,7 +583,33 @@ def module_quality(pt: dict, mm: dict[str, str]) -> list[str]:
     нозология (DLBCL/HGBL-MYC/BCL2); диагноз не меняем, только просим проверить."""
     if pt["who_haem5"] == "dlbcl" and mm.get("myc_r") == "detected" and mm.get("bcl2_r") == "detected":
         return ["dlbcl_myc_bcl2"]
+    if pt["who_haem5"] == "follicular" and mm.get("grade_icc") == "3B":
+        return ["fl_grade_3b"]                 # ФЛ 3B по ICC; по WHO-HAEM5 ближе к ДВКЛ — проверить диагноз
     return []
+
+
+def pod24_status(pt: dict, lines: list[dict], observations: list[dict]) -> dict:
+    """POD24 для ФЛ (registry_core.pod24) с режимами иммунохимиотерапии из узла дерева."""
+    return core.pod24(pt, lines, observations, profile(pt["who_haem5"])["pod24_regimens"])
+
+
+def module_info(pt: dict, mm: dict[str, str], lines: list[dict], observations: list[dict],
+                markers: list[dict]) -> list[dict]:
+    """Сведения модуля для карточки: [{title, text, warn}]. ФЛ — POD24 и трансформация."""
+    if pt["who_haem5"] != "follicular":
+        return []
+    p = pod24_status(pt, lines, observations)
+    text = {"pod24": f"да — прогрессия через {p.get('months')} мес. от начала 1-й линии",
+            "no_pod24": "нет — без прогрессии 24 мес. от начала 1-й линии",
+            "not_applicable": "не применимо — 1-я линия не иммунохимиотерапия или не начата",
+            }.get(p["status"]) or f"пока не определено — {p.get('reason')}"
+    info = [{"title": "POD24", "text": text, "warn": p["status"] == "pod24"}]
+    tr = [m for m in markers if m["field_key"] == "transformation" and m["value"] == "yes"]
+    if tr:
+        when = tr[-1]["test_date"]
+        info.append({"title": "Трансформация в ДВКЛ", "warn": True,
+                     "text": f"да{f', биопсия {when:%d.%m.%Y}' if when else ''} — исходы после неё анализируйте отдельно"})
+    return info
 
 
 # ---------------------------------------------------------------------------

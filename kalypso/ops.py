@@ -1,7 +1,7 @@
 """Эксплуатация: проверка готовности сервера и загрузка синтетики для обучения.
 
 Пилот идёт только на синтетике (CLAUDE.md, правило 1): seed_synthetic загружает
-синтетические когорты ХЛЛ и ДВКЛ и только в пустой регистр.
+синтетические когорты ХЛЛ, ДВКЛ и ФЛ и только в пустой регистр.
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def run_checks(settings: Settings) -> list[str]:
     return problems
 
 
-def seed_synthetic(db: Database, cll: int = 60, dlbcl: int = 40) -> dict:
+def seed_synthetic(db: Database, cll: int = 60, dlbcl: int = 40, fl: int = 40) -> dict:
     """Синтетические пациенты для обучения врачей — только в пустой регистр.
     Нужны активные врачи (по ним распределяются пациенты) и куратор (видит все филиалы)."""
     with db.tx() as cur:
@@ -73,7 +73,7 @@ def seed_synthetic(db: Database, cll: int = 60, dlbcl: int = 40) -> dict:
         if cur.fetchone()["n"]:
             raise OpsError("В регистре уже есть пациенты — синтетика загружается только в пустой регистр")
     summary = {}
-    for nosology, n, seed in (("cll_sll", cll, 42), ("dlbcl", dlbcl, 7)):
+    for nosology, n, seed in (("cll_sll", cll, 42), ("dlbcl", dlbcl, 7), ("follicular", fl, 19)):
         if n > 0:
             part = synthetic.generate(db, physicians, n=n, seed=seed, duplicates=min(3, n // 10), nosology=nosology)
             part.pop("iins")  # синтетические ИИН не печатаем

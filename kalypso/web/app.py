@@ -1,4 +1,4 @@
-"""Веб-интерфейс: вход, пациенты (ХЛЛ, ДВКЛ), карточка, аналитика, администрирование, аудит.
+"""Веб-интерфейс: вход, пациенты (ХЛЛ, ДВКЛ, ФЛ), карточка, аналитика, администрирование, аудит.
 
 Серверный рендеринг (Jinja2), без JavaScript. ИИН передаётся только в теле POST
 (не в URL — URL попадают в журналы доступа). В интерфейсе ИИН видят только роли
@@ -397,6 +397,15 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         d = analytics.dlbcl_dashboard(db, p, f)
         return render(request, "dashboard_dlbcl.html", p, d=d, f=f, branches=admin.list_branches(db, p),
                       charts=charts, filters_text=_filters_text(f), response_groups=analytics.RESPONSE_GROUPS["dlbcl"])
+
+    @app.get("/dashboard/fl", response_class=HTMLResponse)
+    def dashboard_fl(request: Request):
+        p = current(request)
+        f = {**analytics.parse_filters(dict(request.query_params)), "binet": None}
+        d = analytics.fl_dashboard(db, p, f)
+        return render(request, "dashboard_fl.html", p, d=d, f=f, branches=admin.list_branches(db, p),
+                      charts=charts, filters_text=_filters_text(f),
+                      response_groups=analytics.RESPONSE_GROUPS["follicular"])
 
     def _explore(request: Request, p):
         q = dict(request.query_params)

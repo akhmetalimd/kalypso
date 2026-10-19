@@ -4,7 +4,7 @@
 {% block content %}
 <div class="head">
   <h1>Обзор регистра <span class="muted">{{ d.n }} пациентов</span></h1>
-  <div class="actions"><a class="button" href="/dashboard/cll">ХЛЛ подробно</a><a class="button" href="/dashboard/dlbcl">ДВКЛ подробно</a><a class="button" href="/survival">Исследователь выживаемости</a></div>
+  <div class="actions"><a class="button" href="/dashboard/cll">ХЛЛ подробно</a><a class="button" href="/dashboard/dlbcl">ДВКЛ подробно</a><a class="button" href="/dashboard/fl">ФЛ подробно</a><a class="button" href="/survival">Исследователь выживаемости</a></div>
 </div>
 {{ filters('/dashboard', f, branches) }}
 <p class="muted">{{ filters_text }}.</p>

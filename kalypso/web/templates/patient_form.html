@@ -30,7 +30,8 @@
       <small>Стадия и индекс проверяются по выбранной нозологии: при её смене сначала сохраните диагноз без стадии и индекса.</small>
     </label>
     {% endif %}
-    {% set codes_hint = {'cll_sll': ('9823/3 (ЛМЛ — 9670/3)', 'C91.1 (ЛМЛ — C83.0)'), 'dlbcl': ('9680/3', 'C83.3')}.get(prof.id, ('', '')) %}
+    {% set codes_hint = {'cll_sll': ('9823/3 (ЛМЛ — 9670/3)', 'C91.1 (ЛМЛ — C83.0)'), 'dlbcl': ('9680/3', 'C83.3'),
+                    'follicular': ('9690/3 (грейд 1 — 9695/3, 2 — 9691/3, 3 — 9698/3)', 'C82 или C82.x')}.get(prof.id, ('', '')) %}
     <label>ICD-O-3.2 <input name="icd_o_3_2" value="{{ v.get('icd_o_3_2') or '' }}" placeholder="{{ codes_hint[0] }}"><small>Пусто — код узла нозологии</small></label>
     <label>МКБ-10 <input name="mkb" value="{{ v.get('mkb') or '' }}" placeholder="{{ codes_hint[1] }}"></label>
     {{ date_field('dx_date', 'dx_date_precision', v, 'Дата диагноза (time-zero)', required=True) }}
@@ -89,7 +90,7 @@
           {% set groups = {} %}{% for upper, g in spec.groups %}{% set _ = groups.update({g: label('index_group', g)}) %}{% endfor %}
           {{ select('index_group', groups, v.get('index_group'), blank='группа') }}
         </span>
-        <small>Группа выводится из балла. Расчёт по внесённым данным{% if prof.index == 'IPI' %} (IPI, R-IPI, NCCN-IPI){% endif %} — в карточке.</small>
+        <small>Группа выводится из балла. Расчёт по внесённым данным{{ {'IPI': ' (IPI, R-IPI, NCCN-IPI)', 'FLIPI': ' (FLIPI, FLIPI-2, PRIMA-PI; Hb и β2M — из анализов на диагнозе)'}.get(prof.index, '') }} — в карточке.</small>
       </label>{{ missing_select('index_score', missing) }}
     </div>
     {% endif %}

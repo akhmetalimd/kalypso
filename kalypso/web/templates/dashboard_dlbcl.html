@@ -4,7 +4,7 @@
 {% block content %}
 <div class="head">
   <h1>ДВКЛ (DLBCL, NOS) <span class="muted">{{ d.n }} пациентов</span></h1>
-  <div class="actions"><a class="button" href="/dashboard">Обзор</a><a class="button" href="/dashboard/cll">ХЛЛ</a><a class="button" href="/survival?nosology=dlbcl">Исследователь выживаемости</a></div>
+  <div class="actions"><a class="button" href="/dashboard">Обзор</a><a class="button" href="/dashboard/cll">ХЛЛ</a><a class="button" href="/dashboard/fl">ФЛ</a><a class="button" href="/survival?nosology=dlbcl">Исследователь выживаемости</a></div>
 </div>
 {{ filters('/dashboard/dlbcl', f, branches, nosology=False, binet=False) }}
 <p class="muted">{{ filters_text }}. Маркеры и признаки — последний результат или код пропуска; серым — пропуски и «не внесено».

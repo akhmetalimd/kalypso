@@ -35,8 +35,8 @@ def _dev_secrets() -> dict:
 
 
 def seed_if_empty(db: Database) -> dict | None:
-    """Пустая БД — филиалы, пользователи и когорта ХЛЛ; нет пациентов ДВКЛ — когорта ДВКЛ
-    (так dev-БД, созданная до модуля ДВКЛ, получает её без пересоздания)."""
+    """Пустая БД — филиалы, пользователи и когорта ХЛЛ; нет пациентов ДВКЛ или ФЛ — их когорты
+    (так dev-БД, созданная до нового модуля, получает его пациентов без пересоздания)."""
     seed = json.loads(SEED.read_text(encoding="utf-8"))
     summary = {}
     with db.tx() as cur:
@@ -60,12 +60,14 @@ def seed_if_empty(db: Database) -> dict | None:
     curator = next(u for u in users if u.role == "curator")
     if empty:
         summary["cll_sll"] = synthetic.generate(db, physicians, n=seed["synthetic_patients"])
-    with db.tx(curator.user_id) as cur:     # куратор видит все филиалы (RLS)
-        cur.execute("SELECT count(*) AS n FROM patient WHERE who_haem5 = 'dlbcl'")
-        no_dlbcl = cur.fetchone()["n"] == 0
-    if no_dlbcl:
-        summary["dlbcl"] = synthetic.generate(db, physicians, n=seed.get("synthetic_patients_dlbcl", 100),
-                                              seed=7, duplicates=2, nosology="dlbcl")
+    for nosology, key, n, rnd in (("dlbcl", "synthetic_patients_dlbcl", 100, 7),
+                                  ("follicular", "synthetic_patients_fl", 80, 19)):
+        with db.tx(curator.user_id) as cur:     # куратор видит все филиалы (RLS)
+            cur.execute("SELECT count(*) AS n FROM patient WHERE who_haem5 = %s", (nosology,))
+            missing = cur.fetchone()["n"] == 0
+        if missing:
+            summary[nosology] = synthetic.generate(db, physicians, n=seed.get(key, n), seed=rnd,
+                                                   duplicates=2, nosology=nosology)
     for part in summary.values():
         part.pop("iins")  # синтетические ИИН в консоль не печатаем
     return summary or None

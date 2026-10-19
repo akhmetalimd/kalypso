@@ -9,8 +9,8 @@
 - порог лабораторного показателя — внешний (литература), не подбирается здесь;
 - группирующий маркер/анализ — только измеренный не позже окна (90 дней) после
   начала отсчёта; иначе «не определено на старте» (защита от immortal time bias);
-- признак, который появляется позже старта (Deauville после 1-й линии), — только
-  анализом от ориентира (landmark): отсчёт от даты ПЭТ-КТ, события до неё — вне анализа;
+- признак, который появляется позже старта (Deauville после 1-й линии, POD24 при ФЛ), — только
+  анализом от ориентира (landmark): отсчёт от ориентира, события и цензура до него — вне анализа;
 - нозологии не смешиваются: нозолого-специфичная группировка сужает когорту до своей нозологии.
 """
 from __future__ import annotations
@@ -25,7 +25,7 @@ from kalypso.charts import DAYS_PER_MONTH, MAX_SERIES, km_ticks
 from kalypso.db import Database
 from kalypso.i18n import label
 from kalypso.rbac import Principal, visible_patients_sql
-from kalypso.registry import _marker_map, _tp53_abnormal, active_nodes, computed_indices
+from kalypso.registry import _marker_map, _tp53_abnormal, active_nodes, computed_indices, pod24_status
 
 WINDOW_DAYS = 90
 LAB_LOOKBACK_DAYS = 180
@@ -50,16 +50,29 @@ GROUPINGS = {
     "lugano": "Стадия Lugano (I–II / III–IV)",
     "bulky": "Bulky-очаг",
     "deauville_eot1": "Deauville после 1-й линии (анализ от ориентира)",
+    "flipi": "Группа FLIPI (в карточке)",
+    "flipi2": "FLIPI-2 (расчёт по данным)",
+    "prima_pi": "PRIMA-PI (расчёт по данным)",
+    "grade_icc": "Грейд ФЛ (ICC)",
+    "gelf": "Критерии GELF",
+    "pod24": "POD24 (анализ от ориентира — 24 мес. от начала 1-й линии)",
 }
 # Группировки по нозологиям: выбор такой группировки сужает когорту до её нозологии.
 GROUPING_SETS = {
     None: ("none", "sex", "branch", "line1_regimen", "lab"),
     "cll_sll": ("IGHV", "TP53", "del17p", "dohner", "binet", "cll_ipi"),
     "dlbcl": ("ipi", "r_ipi", "nccn_ipi", "coo_hans", "myc_bcl2", "lugano", "bulky", "deauville_eot1"),
+    "follicular": ("flipi", "flipi2", "prima_pi", "grade_icc", "lugano", "gelf", "pod24"),
 }
-GROUPING_NOSOLOGY = {g: nos for nos, gs in GROUPING_SETS.items() if nos for g in gs}
+GROUPING_NOSOLOGIES: dict[str, set[str]] = defaultdict(set)
+for _nos, _gs in GROUPING_SETS.items():
+    for _g in _gs:
+        if _nos:
+            GROUPING_NOSOLOGIES[_g].add(_nos)
 # Без окна «на старте»: признак карточки или ориентир.
-NOT_BASELINE = {"none", "sex", "branch", "binet", "cll_ipi", "ipi", "lugano", "line1_regimen", "deauville_eot1"}
+NOT_BASELINE = {"none", "sex", "branch", "binet", "cll_ipi", "ipi", "flipi", "lugano", "line1_regimen",
+                "deauville_eot1", "pod24"}
+COMPUTED_INDEX = {"r_ipi": "R-IPI", "nccn_ipi": "NCCN-IPI", "flipi2": "FLIPI-2", "prima_pi": "PRIMA-PI"}
 DOHNER_LABELS = {"del17p": "del(17p)", "del11q": "del(11q)", "tri12": "+12", "normal": "нормальный",
                  "del13q_sole": "del(13q) одна", "unknown": UNDEFINED}
 
@@ -146,6 +159,27 @@ def eot_pet(pt: dict, line_no: int = 1) -> tuple[date, int] | None:
     return next(((d, ds) for d, ds in pets if d >= end), None)
 
 
+def _deauville_landmark(pt: dict) -> tuple[date, str] | None:
+    pet = eot_pet(pt)
+    return None if pet is None else (pet[0], "Deauville 1–3" if pet[1] <= 3 else "Deauville 4–5")
+
+
+def _pod24_landmark(pt: dict) -> tuple[date, str] | None:
+    p = pod24_status(pt, pt["lines"], pt["observations"])
+    if p["status"] not in ("pod24", "no_pod24"):
+        return None
+    return p["landmark"], "POD24" if p["status"] == "pod24" else "без POD24"
+
+
+# Группировки от ориентира: функция -> (дата ориентира, группа) или None (ориентира нет).
+LANDMARKS = {
+    "deauville_eot1": (_deauville_landmark,
+                       "отсчёт — от первой ПЭТ-КТ с баллом Deauville после окончания 1-й линии"),
+    "pod24": (_pod24_landmark,
+              "отсчёт — через 24 мес. от начала 1-й линии иммунохимиотерапии (статус POD24 к этому сроку известен)"),
+}
+
+
 def _index_group(pt: dict, name: str, t0: date) -> str:
     mm = baseline_markers(pt["markers"], t0)
     ix = next((i for i in computed_indices(pt, mm, pt["labs"]) if i["name"] == name), None)
@@ -179,8 +213,10 @@ def _group(pt: dict, grouping: str, t0: date, lab_loinc: str | None, threshold: 
         return label("index_group", pt["index_group"]) if pt["index_name"] == "CLL-IPI" else "нет CLL-IPI"
     if grouping == "ipi":
         return label("index_group", pt["index_group"]) if pt["index_name"] == "IPI" else "нет IPI"
-    if grouping in ("r_ipi", "nccn_ipi"):
-        return _index_group(pt, {"r_ipi": "R-IPI", "nccn_ipi": "NCCN-IPI"}[grouping], t0)
+    if grouping == "flipi":
+        return label("index_group", pt["index_group"]) if pt["index_name"] == "FLIPI" else "нет FLIPI"
+    if grouping in COMPUTED_INDEX:
+        return _index_group(pt, COMPUTED_INDEX[grouping], t0)
     if grouping == "lugano":
         adv = core.advanced_stage(pt["stage_system"], pt["stage_value"])
         return "нет стадии Lugano" if adv is None else ("III–IV" if adv else "I–II")
@@ -220,18 +256,23 @@ def explore(db: Database, p: Principal, endpoint: str = "OS", line_no: int = 1, 
         grouping = "none"
     filters = dict(filters or parse_filters({}))
     notes = []
-    nos = GROUPING_NOSOLOGY.get(grouping)
-    if nos and filters.get("nosology") not in (None, nos):
+    noses = GROUPING_NOSOLOGIES.get(grouping, set())
+    if noses and filters.get("nosology") and filters["nosology"] not in noses:
         grouping = "none"                     # группировка чужой нозологии — не применяем
-    elif nos and not filters.get("nosology"):
-        filters["nosology"] = nos
-        notes.append(f"Группировка относится к нозологии «{_node_name(nos)}» — когорта сужена до неё")
+    elif len(noses) == 1 and not filters.get("nosology"):
+        filters["nosology"] = next(iter(noses))
+        notes.append(f"Группировка относится к нозологии «{_node_name(filters['nosology'])}» — когорта сужена до неё")
     cohort = load_cohort(db, p, filters)
+    if len(noses) > 1 and not filters.get("nosology"):
+        cohort = [pt for pt in cohort if pt["who_haem5"] in noses]   # группировка есть у нескольких нозологий
     if not filters.get("nosology") and len({pt["who_haem5"] for pt in cohort}) > 1:
         notes.append("В когорте несколько нозологий — выберите нозологию в фильтре: их выживаемость несопоставима")
     groups: dict[str, list] = defaultdict(list)
     excluded, rows, not_applicable = [], [], 0
-    landmark = {"missing": 0, "dropped": 0} if grouping == "deauville_eot1" else None
+    landmark = ({"missing": 0, "dropped": 0, "text": LANDMARKS[grouping][1]}
+                if grouping in LANDMARKS else None)
+    if grouping == "pod24" and endpoint != "OS":
+        notes.append("POD24 — признак для общей выживаемости (OS) от ориентира; для PFS 1-й линии он сам — событие")
     for pt in cohort:
         e = core.endpoint(endpoint, pt, pt["lines"], pt["observations"], line_no)
         if e is None:
@@ -241,17 +282,16 @@ def explore(db: Database, p: Principal, endpoint: str = "OS", line_no: int = 1, 
             excluded.append({"patient_id": pt["patient_id"], "reason": e["excluded"]})
             continue
         if landmark is not None:
-            pet = eot_pet(pt)
-            if pet is None:
+            mark = LANDMARKS[grouping][0](pt)
+            if mark is None:
                 landmark["missing"] += 1
                 continue
-            lm, ds = pet
+            lm, g = mark
             if lm > e["start"]:               # ориентир позже начала отсчёта — отсчёт от ориентира
                 if e["end"] <= lm:
-                    landmark["dropped"] += 1  # событие или цензура до ПЭТ-КТ — вне анализа
+                    landmark["dropped"] += 1  # событие или цензура до ориентира — вне анализа
                     continue
                 e = {**e, "start": lm, "days": (e["end"] - lm).days}
-            g = "Deauville 1–3" if ds <= 3 else "Deauville 4–5"
         else:
             g = _group(pt, grouping, e["start"], lab_loinc, threshold)
         groups[g].append(e)
@@ -361,6 +401,7 @@ RESPONSE_GROUPS = {
     "cll_sll": [("CR", "CR / CRi"), ("PR", "PR / nPR / PR-L"), ("SD", "SD"), ("PD", "PD")],
     "dlbcl": [("CR", "CR / CMR"), ("PR", "PR / PMR"), ("SD", "SD / NMR"), ("PD", "PD / PMD")],
 }
+RESPONSE_GROUPS["follicular"] = RESPONSE_GROUPS["dlbcl"]    # тоже Lugano 2014
 NOT_ENTERED = "Не внесено"
 
 
@@ -496,4 +537,39 @@ def dlbcl_dashboard(db: Database, p: Principal, filters: dict | None = None) -> 
         **_therapy(cohort),
         "os_median_months": os_median,
         "os_n": os_n,
+    }
+
+
+POD24_LABELS = {"pod24": "POD24", "no_pod24": "без POD24", "undetermined": "пока не определено",
+                "not_applicable": "1-я линия не иммунохимиотерапия / без лечения"}
+
+
+def fl_dashboard(db: Database, p: Principal, filters: dict | None = None) -> dict:
+    p.require("patient.read")
+    cohort = _nosology_cohort(db, p, filters, "follicular")
+    stages = core.find_node(core.NOSOLOGY_TREE, "follicular")["stage_values"]["Lugano"]
+    group_codes = lambda name: [g for _, g in core.INDEXES[name]["groups"]]  # noqa: E731
+    pods = [pod24_status(pt, pt["lines"], pt["observations"])["status"] for pt in cohort]
+    transformed = sum(1 for pt in cohort if _marker_map(pt["markers"]).get("transformation") == "yes")
+    ttft_median, ttft_n = _median_months(cohort, "TTFT")
+    os_median, os_n = _median_months(cohort, "OS")
+    return {
+        "n": len(cohort),
+        "stage": _dist([f"Lugano {pt['stage_value']}" if pt["stage_system"] == "Lugano" else "нет стадии Lugano"
+                        for pt in cohort], order=[f"Lugano {s}" for s in stages] + ["нет стадии Lugano"],
+                       muted={"нет стадии Lugano"}),
+        "flipi_stored": _stored_dist(cohort, "FLIPI", group_codes("FLIPI")),
+        "flipi_agree": _stored_vs_computed(cohort, "FLIPI"),
+        "flipi2": _computed_dist(cohort, "FLIPI-2", group_codes("FLIPI-2")),
+        "prima_pi": _computed_dist(cohort, "PRIMA-PI", group_codes("PRIMA-PI")),
+        "markers": {key: _marker_dist(cohort, key)
+                    for key in ("grade_icc", "nodal_areas", "largest_node", "bm_involvement", "ldh_uln", "b2m_uln", "gelf")},
+        "pod24": _dist([POD24_LABELS[s] for s in pods], order=list(POD24_LABELS.values()),
+                       muted={POD24_LABELS["undetermined"], POD24_LABELS["not_applicable"]}),
+        "pod24_known": (pods.count("pod24"), pods.count("pod24") + pods.count("no_pod24")),
+        "watch_wait": (sum(1 for pt in cohort if not pt["lines"]), len(cohort)),
+        "transformed": (transformed, len(cohort)),
+        **_therapy(cohort),
+        "ttft_median_months": ttft_median, "ttft_n": ttft_n,
+        "os_median_months": os_median, "os_n": os_n,
     }

@@ -62,14 +62,49 @@
         },
         {
           "id": "follicular",
-          "name": "Индолентные B-НХЛ (фолликулярная, MZL)",
-          "status": "coming_soon",
+          "name": "Фолликулярная лимфома (ФЛ)",
+          "status": "active",
           "module": "follicular",
           "codes": { "icd_o_3_2": "9690/3", "mkb10": "C82" },
+          "alt_codes": [
+            { "icd_o_3_2": "9695/3", "mkb10": "C82", "_comment": "ФЛ, грейд 1" },
+            { "icd_o_3_2": "9691/3", "mkb10": "C82", "_comment": "ФЛ, грейд 2" },
+            { "icd_o_3_2": "9698/3", "mkb10": "C82", "_comment": "ФЛ, грейд 3 (3A/3B)" }
+          ],
           "staging": ["Lugano"],
+          "stage_values": { "Lugano": ["I", "IE", "II", "IIE", "III", "IV"] },
           "index": "FLIPI",
           "response_criteria": "Lugano 2014",
-          "markers": ["grade"]
+          "markers": ["grade"],
+          "regimens": ["BR", "R-CHOP", "R-CVP", "Обинутузумаб + бендамустин", "Обинутузумаб + CHOP",
+                       "Обинутузумаб + CVP", "Ритуксимаб (монотерапия)", "Леналидомид + ритуксимаб (R²)",
+                       "Лучевая терапия", "Мосунетузумаб", "Эпкоритамаб", "CAR-T (axi-cel)", "CAR-T (tisa-cel)",
+                       "Таземетостат"],
+          "_comment_pod24": "POD24 — прогрессия ≤ 24 мес. от начала 1-й линии ИММУНОХИМИОтерапии: только эти режимы",
+          "pod24_regimens": ["BR", "R-CHOP", "R-CVP", "Обинутузумаб + бендамустин", "Обинутузумаб + CHOP",
+                             "Обинутузумаб + CVP"],
+          "core_fields": [
+            { "key": "grade_icc",      "label_ru": "Грейд (ICC)",                                "values": ["1_2", "3A", "3B"] },
+            { "key": "nodal_areas",    "label_ru": "Зоны поражения лимфоузлов (FLIPI: > 4)",     "values": ["le_4", "gt_4"] },
+            { "key": "largest_node",   "label_ru": "Наибольший лимфоузел (FLIPI-2: > 6 см)",     "values": ["le_6", "gt_6"] },
+            { "key": "bm_involvement", "label_ru": "Поражение костного мозга",                   "values": ["yes", "no"] },
+            { "key": "ldh_uln",        "label_ru": "ЛДГ относительно ВГН лаборатории",            "values": ["le_uln", "uln_1_3", "gt_3_uln"] },
+            { "key": "b2m_uln",        "label_ru": "β2-микроглобулин относительно ВГН (FLIPI-2)", "values": ["le_uln", "gt_uln"] },
+            { "key": "gelf",           "label_ru": "Критерии GELF (показание к лечению)",         "values": ["yes", "no"] },
+            { "key": "transformation", "label_ru": "Трансформация в ДВКЛ (дата — дата биопсии)",  "values": ["yes", "no"], "optional": true }
+          ]
+        },
+        {
+          "id": "mzl",
+          "name": "Лимфомы маргинальной зоны (MZL)",
+          "status": "coming_soon",
+          "module": "mzl",
+          "codes": { "icd_o_3_2": "9699/3", "mkb10": "C88.4" },
+          "_comment": "MALT, нодальная, селезёночная — разные поля и коды; уточнить при активации модуля",
+          "staging": ["Lugano"],
+          "index": "MALT-IPI",
+          "response_criteria": "Lugano 2014",
+          "markers": []
         },
         {
           "id": "mcl",

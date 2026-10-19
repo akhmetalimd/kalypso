@@ -1,4 +1,4 @@
-"""Синтетические когорты ХЛЛ и ДВКЛ для разработки и приёмочных тестов.
+"""Синтетические когорты ХЛЛ, ДВКЛ и ФЛ для разработки и приёмочных тестов.
 
 Записи вносятся через доменные сервисы (как вручную врачом), поэтому проходят
 все проверки, аудит и провенанс. Намеренные дефекты: пропущенные маркеры,
@@ -54,8 +54,8 @@ def _pick(rng, weighted: dict):
 
 def generate(db: Database, physicians: list[Principal], n: int = 60,
              seed: int = 42, duplicates: int = 3, nosology: str = "cll_sll") -> dict:
-    """n синтетических пациентов нозологии (cll_sll или dlbcl) + межфилиальные дубликаты."""
-    one = {"cll_sll": _one_patient, "dlbcl": _one_dlbcl}[nosology]
+    """n синтетических пациентов нозологии (cll_sll, dlbcl, follicular) + межфилиальные дубликаты."""
+    one = {"cll_sll": _one_patient, "dlbcl": _one_dlbcl, "follicular": _one_fl}[nosology]
     rng = random.Random(seed)
     made: list[tuple[str, Principal]] = []
     for _ in range(n):
@@ -348,6 +348,171 @@ def _one_dlbcl(db: Database, doc: Principal, rng: random.Random) -> str:
     lo, hi = _LDH_RANGE[ldh]
     for loinc, value, unit in [("2532-0", rng.randint(lo, hi), "U/L"), ("8302-2", round(rng.uniform(90, 150)), "g/L"),
                                ("777-3", rng.randint(90, 420), "10*9/L"), ("6690-2", round(rng.uniform(3, 12), 1), "10*9/L")]:
+        registry.add_lab(db, doc, pid, {"loinc": loinc, "value": value, "unit": unit,
+                                        "obs_date": _d(dx), "provenance": provenance})
+
+    line_ids: dict[int, str] = {}
+    for kind, e in timeline:
+        if kind == "line":
+            res = registry.add_line(db, doc, pid, {**e, "provenance": provenance})
+            line_ids[len(line_ids) + 1] = str(res.record_id)
+        elif kind == "response":
+            e = dict(e)
+            line_id = line_ids.get(e.pop("line_no"))
+            registry.add_observation(db, doc, pid, {**e, "line_id": line_id, "provenance": provenance})
+        else:
+            registry.add_observation(db, doc, pid, {**e, "provenance": provenance})
+    if death:
+        registry.add_observation(db, doc, pid, {"obs_date": _d(death), "event_type": "death",
+                                                "death_cause": cause, "provenance": provenance})
+    return iin
+
+
+# ---------------------------------------------------------------------------
+# Фолликулярная лимфома
+# ---------------------------------------------------------------------------
+FL_FIRST = {
+    ("BR", "бендамустин, ритуксимаб", 6): 45,
+    ("R-CHOP", "ритуксимаб, циклофосфамид, доксорубицин, винкристин, преднизолон", 6): 22,
+    ("R-CVP", "ритуксимаб, циклофосфамид, винкристин, преднизолон", 8): 10,
+    ("Обинутузумаб + бендамустин", "обинутузумаб, бендамустин", 6): 13,
+    ("Ритуксимаб (монотерапия)", "ритуксимаб", 4): 10,
+}
+FL_LATER = [("Леналидомид + ритуксимаб (R²)", "леналидомид, ритуксимаб", 12),
+            ("Обинутузумаб + бендамустин", "обинутузумаб, бендамустин", 6),
+            ("Мосунетузумаб", "мосунетузумаб", 8), ("Таземетостат", "таземетостат", None),
+            ("CAR-T (axi-cel)", "аксикабтаген цилолейсел", 1)]
+HISTOLOGY_FL = ("Биопсия лимфоузла: нодулярный рост, фолликулы из центроцитов и центробластов ({cb} в п/зр). "
+                "ИГХ: CD20+, CD10+, BCL6+, BCL2+ в фолликулах. Ki-67 {ki}%. Заключение: фолликулярная лимфома.")
+_B2M_RANGE = {"le_uln": (1.2, 2.3), "gt_uln": (2.6, 6.0)}          # ВГН 2,4 мг/л
+
+
+def _one_fl(db: Database, doc: Principal, rng: random.Random) -> str:
+    dx = date(2015, 1, 1) + timedelta(days=rng.randint(0, int(10.5 * 365)))
+    age = max(28, min(88, int(rng.gauss(60, 11))))
+    sex = "F" if rng.random() < 0.52 else "M"
+    birth = date(dx.year - age, rng.randint(1, 12), rng.randint(1, 28))
+    iin = synthetic_iin(rng, birth, sex)
+    exact_age = (dx - birth).days / 365.25                 # как в карточке (registry._age)
+    provenance = "retrospective" if dx < date(2024, 1, 1) else "prospective"
+
+    stage = _pick(rng, {"I": 10, "IE": 2, "II": 12, "IIE": 2, "III": 26, "IV": 48})
+    adv = stage in ("III", "IV")
+    bm = "yes" if stage == "IV" and rng.random() < 0.75 else "no"
+    ldh = _pick(rng, {"le_uln": 75, "uln_1_3": 22, "gt_3_uln": 3} if adv else {"le_uln": 90, "uln_1_3": 10})
+    b2m_cat = "gt_uln" if rng.random() < (0.45 if adv else 0.15) else "le_uln"
+    hb = round(rng.uniform(98, 119)) if rng.random() < (0.22 if adv else 0.05) else round(rng.uniform(121, 155))
+    b2m = round(rng.uniform(*_B2M_RANGE[b2m_cat]), 1)
+    fields = {
+        "grade_icc": _pick(rng, {"1_2": 80, "3A": 17, "3B": 3}),
+        "nodal_areas": "gt_4" if adv and rng.random() < 0.6 else "le_4",
+        "largest_node": "gt_6" if rng.random() < 0.22 else "le_6",
+        "bm_involvement": bm if rng.random() < 0.9 else "not_done",
+        "ldh_uln": ldh if rng.random() < 0.95 else None,
+        "b2m_uln": b2m_cat,
+        "gelf": "yes" if rng.random() < (0.6 if adv else 0.2) else "no",
+    }
+    fl = core.flipi(exact_age, adv, hb, ldh, fields["nodal_areas"] == "gt_4")
+    risk = fl["score"]
+
+    # --- хронология: наблюдение без лечения или 1-я линия; POD24; поздние рецидивы; трансформация ---
+    timeline: list[tuple[str, dict]] = []
+    t = dx
+    if stage in ("I", "II") and rng.random() < 0.5:
+        first = ("Лучевая терапия", "ЛТ 24 Гр на зону поражения", None)
+        start = dx + _months(rng, 0.5, 2)
+    elif fields["gelf"] == "yes":
+        first = _pick(rng, FL_FIRST)
+        start = dx + _months(rng, 0.3, 2)
+    else:
+        first = _pick(rng, FL_FIRST) if rng.random() < 0.55 else None       # watch & wait, затем лечение
+        start = dx + _months(rng, 8, 60)
+    progressing, transformed = False, None
+    plan = [first] + rng.sample(FL_LATER, 2) if first else []
+    p_early = min(0.4, 0.06 + 0.05 * risk)                                   # POD24 ~ 20 % (Casulo, 2015)
+    for i, (name, drugs, cycles) in enumerate(plan):
+        if i:
+            start = t + _months(rng, 1, 6)
+        end = start + (_months(rng, 0.8, 1.5) if name in ("Лучевая терапия", "CAR-T (axi-cel)") else _months(rng, 4, 7))
+        if end > REFERENCE_DATE:
+            break
+        timeline.append(("line", {"regimen": name, "drug": drugs, "cycles": cycles, "start_date": _d(start),
+                                  "end_date": _d(end), "stop_reason": "завершён план"}))
+        r_date = end + _months(rng, 0.7, 2)
+        if r_date > REFERENCE_DATE:
+            break
+        complete = rng.random() < (0.7 if i == 0 else 0.5)
+        if rng.random() < 0.88:                              # у части линий оценки ответа нет — флаг полноты
+            if complete:
+                value, ds = "CMR", rng.choice([1, 2, 2, 3])
+            else:
+                value = _pick(rng, {"PMR": 75, "NMR": 15, "PMD": 10})
+                ds = 5 if value == "PMD" else rng.choice([4, 4, 5])
+            timeline.append(("response", {"obs_date": _d(r_date), "line_no": i + 1, "response_value": value,
+                                          "response_basis": "pet_ct", "deauville": ds,
+                                          "pet_ct_report": f"ПЭТ-КТ после {i + 1}-й линии: Deauville {ds}."}))
+        if i == 0 and rng.random() < p_early:
+            event_date = start + _months(rng, 7, 23)          # прогрессия в пределах 24 мес. — POD24
+            event_date = max(event_date, r_date + timedelta(days=14))
+        elif rng.random() < (0.45 if i == 0 else 0.6):
+            event_date = r_date + _months(rng, 18 if i == 0 else 4, 90 if i == 0 else 30)
+        else:
+            progressing = False
+            break
+        if event_date > REFERENCE_DATE:
+            break
+        timeline.append(("event", {"obs_date": _d(event_date), "event_type": "progression" if i == 0 else "relapse"}))
+        if transformed is None and rng.random() < 0.12:
+            transformed = event_date
+        t, progressing = event_date, True
+
+    last_event = max([dx] + [date.fromisoformat(e.get("obs_date") or e.get("end_date") or e["start_date"])
+                             for _, e in timeline])
+    death, cause = None, None
+    if progressing and rng.random() < (0.5 if transformed else 0.25):
+        death, cause = last_event + _months(rng, 2, 30), _pick(rng, {"lpd_related": 80, "unknown": 20})
+    elif rng.random() < 0.05:
+        death, cause = last_event + _months(rng, 6, 72), _pick(rng, {"not_related": 75, "unknown": 25})
+    if death and death > REFERENCE_DATE:
+        death = None
+    lost = death is None and rng.random() < 0.04
+    last_contact = death or min(REFERENCE_DATE, last_event + _months(rng, 3, 30 if lost else 24))
+
+    # --- запись через сервисы ---
+    data = {
+        "iin": iin, "sex": sex, "birth_date": _d(birth), "who_haem5": "follicular",
+        "dx_date": _d(dx), "last_contact_date": _d(last_contact), "provenance": provenance,
+        "status_last_contact": "lost_to_follow_up" if lost else "alive",
+        "ecog": _pick(rng, {0: 55, 1: 35, 2: 8, 3: 2}),
+        "b_symptoms": _pick(rng, {"no": 75, "yes": 20, "unknown": 5}),
+        "stage_system": "Lugano", "stage_value": stage,
+        "first_visit_date": _d(dx - timedelta(days=rng.randint(0, 45))),
+        "histology_report": HISTOLOGY_FL.format(cb={"1_2": "0–15", "3A": "> 15", "3B": "сплошные поля"}[fields["grade_icc"]],
+                                                ki=rng.randint(5, 40)) if rng.random() < 0.75 else None,
+    }
+    if age >= 65 and rng.random() < 0.7:
+        data["cirs_score"] = rng.randint(0, 14)
+    else:
+        data["cirs_score__missing"] = "not_done"
+    if rng.random() < 0.85:
+        data["index_score"] = risk
+    else:
+        data["index_score__missing"] = "unknown"
+    pid = registry.register_patient(db, doc, data).record_id
+
+    for key, val in fields.items():
+        if val is None:
+            continue
+        rec = {"field_key": key, "provenance": provenance, "test_date": _d(dx)}
+        rec.update({"missing": val} if val in core.MISSING_CODES else {"value": val})
+        registry.add_marker(db, doc, pid, rec)
+    if transformed:
+        registry.add_marker(db, doc, pid, {"field_key": "transformation", "value": "yes", "provenance": provenance,
+                                           "test_date": _d(transformed)})
+
+    lo, hi = _LDH_RANGE[ldh]
+    for loinc, value, unit in [("8302-2", hb, "g/L"), ("1952-1", b2m, "mg/L"), ("2532-0", rng.randint(lo, hi), "U/L"),
+                               ("777-3", rng.randint(120, 380), "10*9/L")]:
         registry.add_lab(db, doc, pid, {"loinc": loinc, "value": value, "unit": unit,
                                         "obs_date": _d(dx), "provenance": provenance})
 
