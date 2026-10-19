@@ -227,6 +227,7 @@ CALCULATORS = {
     "nlpbcl": (_nlpbcl, ("GHSG",)),
     "hcl": (lambda pt, mm, labs, age: [], ()),                  # прогностического индекса нет
     "mf_ss": (_mf, ("CLIPi",)),
+    "tlgll": (lambda pt, mm, labs, age: [], ()),                # прогностического индекса нет
 }
 
 
@@ -341,7 +342,14 @@ def _mf_info(pt, mm, lines, observations, markers):
     return info
 
 
-INFO = {"mf_ss": _mf_info, "nlpbcl": _nlpbcl_info, "follicular": _fl_info, "mcl": _mcl_info, "mzl": _mzl_info, "hgbl": _hgbl_info, "burkitt": _burkitt_info}
+def _tlgll_info(pt, mm, lines, observations, markers):
+    if mm.get("neutropenia") == "yes" or mm.get("anemia_tx") == "yes":
+        return [{"title": "Показание к лечению", "warn": True,
+                 "text": "тяжёлая нейтропения или трансфузионно-зависимая анемия — иммуносупрессивная терапия"}]
+    return []
+
+
+INFO = {"tlgll": _tlgll_info, "mf_ss": _mf_info, "nlpbcl": _nlpbcl_info, "follicular": _fl_info, "mcl": _mcl_info, "mzl": _mzl_info, "hgbl": _hgbl_info, "burkitt": _burkitt_info}
 
 
 def module_info(pt: dict, mm: dict[str, str], lines: list[dict], observations: list[dict],

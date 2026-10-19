@@ -501,6 +501,7 @@ RESPONSES = {
     "IPCG": ("CR", "CRu", "PR", "SD", "PD"),
     "HCL 2017": ("CR", "PR", "SD", "PD"),          # консенсус по ВКЛ (Grever, 2017): кровь и костный мозг
     "ISCL 2011": ("CR", "PR", "SD", "PD"),         # глобальный ответ при ГМ/СС (Olsen, 2011)
+    "T-LGLL": ("CR", "PR", "NR", "PD"),            # гематологический ответ при T-LGLL (NR — нет ответа)
 }
 LUGANO_METABOLIC = ("CMR", "PMR", "NMR", "PMD")      # ответ по ПЭТ-КТ (Deauville обязателен)
 

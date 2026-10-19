@@ -450,7 +450,7 @@ def overview(db: Database, p: Principal, filters: dict | None = None, today: dat
 
 
 # Ответ — к четырём группам (iwCLL 2018 и Lugano 2014: метаболический — к своему аналогу).
-_RESPONSE_MAP = {"CR": "CR", "CRi": "CR", "CMR": "CR", "VGPR": "CR", "CRu": "CR", "PR": "PR", "nPR": "PR", "PR-L": "PR",
+_RESPONSE_MAP = {"CR": "CR", "CRi": "CR", "CMR": "CR", "VGPR": "CR", "CRu": "CR", "NR": "SD", "PR": "PR", "nPR": "PR", "PR-L": "PR",
                  "PMR": "PR", "MR": "MR", "SD": "SD", "NMR": "SD", "PD": "PD", "PMD": "PD"}
 RESPONSE_GROUPS = {
     "cll_sll": [("CR", "CR / CRi"), ("PR", "PR / nPR / PR-L"), ("SD", "SD"), ("PD", "PD")],
@@ -461,7 +461,8 @@ RESPONSE_GROUPS_BY_CRITERIA = {"iwCLL 2018": RESPONSE_GROUPS["cll_sll"], "Lugano
                                "IWWM-11": [("CR", "CR / VGPR"), ("PR", "PR"), ("MR", "MR"), ("SD", "SD"), ("PD", "PD")],
                                "IPCG": [("CR", "CR / CRu"), ("PR", "PR"), ("SD", "SD"), ("PD", "PD")],
                                "HCL 2017": [("CR", "CR"), ("PR", "PR"), ("SD", "SD"), ("PD", "PD")],
-                               "ISCL 2011": [("CR", "CR"), ("PR", "PR"), ("SD", "SD"), ("PD", "PD")]}
+                               "ISCL 2011": [("CR", "CR"), ("PR", "PR"), ("SD", "SD"), ("PD", "PD")],
+                               "T-LGLL": [("CR", "CR"), ("PR", "PR"), ("SD", "нет ответа (NR)"), ("PD", "PD")]}
 
 
 def response_groups(nosology: str) -> list:

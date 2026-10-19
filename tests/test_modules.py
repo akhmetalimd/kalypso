@@ -137,6 +137,15 @@ CASES = {
         "stored": None, "bad_score": None, "db": None,
         "optional": [],
     },
+    # Без стадирования и индекса; показание к лечению — тяжёлая нейтропения.
+    "tlgll": {
+        "form": {"birth_date": "1960-02-01", "ecog": "1"},
+        "fields": {"stat3": "detected", "neutropenia": "yes", "anemia_tx": "no", "autoimmune": "yes"},
+        "labs": [],
+        "expected": {},
+        "stored": None, "bad_score": None, "db": None,
+        "optional": ["splenomegaly"],
+    },
 }
 NOSOLOGIES = list(CASES)
 
@@ -412,4 +421,17 @@ def test_db_iscl_stage(reg):
     with rejected(reg.con, "stage_iscl"):
         reg.patient("990000000904", who_haem5="mf_ss", icd_o_3_2="9700/3", mkb="C84.0",
                     stage_system="ISCL/EORTC", stage_value="IIC")
+
+
+def test_tlgll_indication_and_nr_response(world):
+    pid = register(world, "tlgll")
+    fill(world, "tlgll", pid)
+    [info] = registry.get_card(world.db, world.doc_a, pid)["module_info"]
+    assert info["title"] == "Показание к лечению"
+    lid = registry.add_line(world.db, world.doc_a, pid, {**R, "regimen": "Метотрексат", "start_date": "2021-03-15",
+                                                         "end_date": "2021-09-15"}).record_id
+    registry.add_observation(world.db, world.doc_a, pid, {**R, "obs_date": "2021-10-01", "line_id": str(lid),
+                                                          "response_value": "NR", "response_basis": "laboratory"})
+    assert analytics.module_dashboard(world.db, world.curator, "tlgll")["responses"] == [("Линия 1", {"SD": 1})]
+    assert analytics.response_groups("tlgll")[2] == ("SD", "нет ответа (NR)")
 

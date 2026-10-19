@@ -612,4 +612,29 @@ SPECS = {
         "histology": lambda rng, f: ("Биопсия кожи: эпидермотропный инфильтрат из атипичных лимфоцитов с церебриформными ядрами, "
                                      "микроабсцессы Потрие. ИГХ: CD3+, CD4+, CD7-, CD8-. Заключение: грибовидный микоз."),
     },
+    "tlgll": {
+        "age": (62, 12, 25, 90), "male": 0.5, "response_basis": "laboratory",
+        "watch_if": lambda f: f["neutropenia"] != "yes" and f["anemia_tx"] != "yes",
+        "stage": {}, "ecog": {0: 50, 1: 40, 2: 10},
+        "fields": lambda rng, ctx: {
+            "stat3": _maybe(rng, "detected" if rng.random() < 0.4 else "not_detected", 0.2),
+            "neutropenia": "yes" if rng.random() < 0.45 else "no",
+            "anemia_tx": "yes" if rng.random() < 0.15 else "no",
+            "autoimmune": "yes" if rng.random() < 0.25 else "no",
+            "splenomegaly": "yes" if rng.random() < 0.3 else None,
+        },
+        "labs": lambda rng, ctx, f: [("751-8", round(rng.uniform(0.1, 0.49) if f["neutropenia"] == "yes" else rng.uniform(0.6, 2.5), 2), "10*9/L"),
+                                     ("8302-2", round(rng.uniform(65, 95) if f["anemia_tx"] == "yes" else rng.uniform(100, 145)), "g/L"),
+                                     ("731-0", round(rng.uniform(2, 8), 1), "10*9/L")],
+        "first": lambda rng, ctx, f: pick(rng, {("Метотрексат", "метотрексат 10 мг/м² в неделю", None): 60,
+                                                 ("Циклофосфамид", "циклофосфамид 100 мг/сут", None): 25,
+                                                 ("Циклоспорин A", "циклоспорин A", None): 15}),
+        "duration": (4, 12),
+        "later": [("Циклофосфамид", "циклофосфамид 100 мг/сут", None), ("Циклоспорин A", "циклоспорин A", None),
+                  ("Алемтузумаб", "алемтузумаб", None)],
+        "p_complete": lambda risk: 0.35, "p_relapse": lambda risk: 0.5,
+        "relapse_months": (12, 60), "partial_progress": 0.5, "partial_months": (6, 36), "death_progressive": 0.1,
+        "histology": lambda rng, f: ("Проточная цитометрия крови: клональные CD3+ CD8+ CD57+ CD16+ большие гранулярные "
+                                     "лимфоциты > 0,5 ×10⁹/л; клональная перестройка TCR. Заключение: T-LGLL."),
+    },
 }

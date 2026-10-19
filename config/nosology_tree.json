@@ -311,6 +311,26 @@
           ]
         },
         {
+          "id": "tlgll",
+          "name": "T-клеточный лейкоз из больших гранулярных лимфоцитов (T-LGLL)",
+          "status": "active",
+          "module": "tlgll",
+          "codes": { "icd_o_3_2": "9831/3", "mkb10": "C91.7" },
+          "staging": [],
+          "index": null,
+          "response_criteria": "T-LGLL",
+          "markers": ["STAT3"],
+          "regimens": ["Метотрексат", "Циклофосфамид", "Циклоспорин A", "Метотрексат + преднизолон", "Алемтузумаб",
+                       "Руксолитиниб", "Г-КСФ (поддерживающе)", "Спленэктомия"],
+          "core_fields": [
+            { "key": "stat3",        "label_ru": "Мутация STAT3",                                 "values": ["detected", "not_detected"] },
+            { "key": "neutropenia",  "label_ru": "Тяжёлая нейтропения (< 0,5 ×10⁹/л)",            "values": ["yes", "no"] },
+            { "key": "anemia_tx",    "label_ru": "Трансфузионно-зависимая анемия",                "values": ["yes", "no"] },
+            { "key": "autoimmune",   "label_ru": "Аутоиммунное заболевание (РА и др.)",           "values": ["yes", "no"] },
+            { "key": "splenomegaly", "label_ru": "Спленомегалия",                                "values": ["yes", "no"], "optional": true }
+          ]
+        },
+        {
           "id": "mf_ss",
           "name": "Грибовидный микоз / синдром Сезари (ГМ/СС)",
           "status": "active",
