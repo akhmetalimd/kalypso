@@ -546,4 +546,27 @@ SPECS = {
         "histology": lambda rng, f: ("Биопсия лимфоузла: нодулярная пролиферация, LP-клетки («попкорн») на фоне малых "
                                      "B-лимфоцитов. ИГХ: CD20+, CD45+, PAX5+, OCT2+, CD15-, CD30-. Заключение: NLPBCL."),
     },
+    "hcl": {
+        "age": (55, 11, 30, 85), "male": 0.8, "response_basis": "laboratory",
+        "watch_if": lambda f: f["hcl_indication"] == "no",
+        "stage": {}, "ecog": {0: 50, 1: 40, 2: 10},
+        "fields": lambda rng, ctx: {
+            "braf": _maybe(rng, "detected" if rng.random() < 0.92 else "not_detected", 0.1),
+            "hcl_indication": "yes" if rng.random() < 0.8 else "no",
+            "hcl_variant": "yes" if rng.random() < 0.04 else "no",
+            "splenomegaly": "yes" if rng.random() < 0.7 else None,
+        },
+        "labs": lambda rng, ctx, f: [("8302-2", round(rng.uniform(80, 125)), "g/L"), ("777-3", rng.randint(30, 140), "10*9/L"),
+                                     ("751-8", round(rng.uniform(0.3, 1.5), 2), "10*9/L"), ("6690-2", round(rng.uniform(1.2, 4.5), 1), "10*9/L")],
+        "first": lambda rng, ctx, f: pick(rng, {("Кладрибин", "кладрибин 0,14 мг/кг × 5 дней", 1): 70,
+                                                 ("Кладрибин + ритуксимаб", "кладрибин, ритуксимаб", 1): 20,
+                                                 ("Пентостатин", "пентостатин", 12): 10}),
+        "duration": (1, 3),
+        "later": [("Вемурафениб + ритуксимаб", "вемурафениб, ритуксимаб", None), ("Пентостатин + ритуксимаб", "пентостатин, ритуксимаб", 8),
+                  ("Ибрутиниб", "ибрутиниб", None)],
+        "p_complete": lambda risk: 0.8, "p_relapse": lambda risk: 0.4,
+        "relapse_months": (36, 120), "partial_progress": 0.6, "partial_months": (24, 72), "death_progressive": 0.15,
+        "histology": lambda rng, f: ("Трепанобиопсия: интерстициальная инфильтрация клетками с «яичницей-глазуньей», ретикулиновый "
+                                     "фиброз. Иммунофенотип: CD19+, CD11c+, CD25+, CD103+, CD123+, аннексин A1+. Заключение: ВКЛ."),
+    },
 }

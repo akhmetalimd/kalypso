@@ -211,6 +211,26 @@
           ]
         },
         {
+          "id": "hcl",
+          "name": "Волосатоклеточный лейкоз (ВКЛ)",
+          "status": "active",
+          "module": "hcl",
+          "codes": { "icd_o_3_2": "9940/3", "mkb10": "C91.4" },
+          "staging": [],
+          "index": null,
+          "response_criteria": "HCL 2017",
+          "markers": ["BRAF V600E"],
+          "regimens": ["Кладрибин", "Кладрибин + ритуксимаб", "Пентостатин", "Пентостатин + ритуксимаб",
+                       "Вемурафениб + ритуксимаб", "Дабрафениб + траметиниб", "Ибрутиниб", "Ритуксимаб (монотерапия)",
+                       "Спленэктомия"],
+          "core_fields": [
+            { "key": "braf",           "label_ru": "BRAF V600E",                                   "values": ["detected", "not_detected"] },
+            { "key": "hcl_indication", "label_ru": "Показания к лечению (цитопении, симптомы)",     "values": ["yes", "no"] },
+            { "key": "hcl_variant",    "label_ru": "Вариантный ВКЛ (CD25−, CD123−, без BRAF)",      "values": ["yes", "no"] },
+            { "key": "splenomegaly",   "label_ru": "Спленомегалия",                                "values": ["yes", "no"], "optional": true }
+          ]
+        },
+        {
           "id": "mcl",
           "name": "Мантийноклеточная лимфома (МКЛ)",
           "status": "active",

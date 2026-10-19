@@ -498,6 +498,7 @@ RESPONSES = {
     "Lugano 2014": ("CMR", "PMR", "NMR", "PMD", "CR", "PR", "SD", "PD"),
     "IWWM-11": ("CR", "VGPR", "PR", "MR", "SD", "PD"),
     "IPCG": ("CR", "CRu", "PR", "SD", "PD"),
+    "HCL 2017": ("CR", "PR", "SD", "PD"),          # консенсус по ВКЛ (Grever, 2017): кровь и костный мозг
 }
 LUGANO_METABOLIC = ("CMR", "PMR", "NMR", "PMD")      # ответ по ПЭТ-КТ (Deauville обязателен)
 

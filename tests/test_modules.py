@@ -119,6 +119,15 @@ CASES = {
         "stored": None, "bad_score": None, "db": None,
         "optional": ["transformation"],
     },
+    # Без стадирования и без индекса.
+    "hcl": {
+        "form": {"birth_date": "1965-02-01", "ecog": "0"},
+        "fields": {"braf": "detected", "hcl_indication": "yes", "hcl_variant": "no"},
+        "labs": [],
+        "expected": {},
+        "stored": None, "bad_score": None, "db": None,
+        "optional": ["splenomegaly"],
+    },
 }
 NOSOLOGIES = list(CASES)
 
@@ -362,4 +371,18 @@ def test_nlpbcl_no_stored_index_and_variant_panel(world):
     fill(world, "nlpbcl", pid, {**CASES["nlpbcl"]["fields"], "nlp_pattern": "variant"})
     [info] = registry.get_card(world.db, world.doc_a, pid)["module_info"]
     assert info["title"].startswith("Вариантный")
+
+
+def test_hcl_variant_flag_and_response(world):
+    pid = register(world, "hcl")
+    card = registry.get_card(world.db, world.doc_a, pid)
+    assert card["indices"] == [] and not {"empty_index_score", "empty_stage_value"} & set(card["flags"]["completeness"])
+    fill(world, "hcl", pid, {**CASES["hcl"]["fields"], "hcl_variant": "yes"})
+    assert "hcl_variant" in registry.get_card(world.db, world.doc_a, pid)["flags"]["quality"]
+    lid = registry.add_line(world.db, world.doc_a, pid, {**R, "regimen": "Кладрибин", "start_date": "2021-03-15",
+                                                         "end_date": "2021-03-20"}).record_id
+    oid = registry.add_observation(world.db, world.doc_a, pid, {**R, "obs_date": "2021-07-01", "line_id": str(lid),
+                                                                "response_value": "CR", "response_basis": "morphology"}).record_id
+    assert registry.get_record(world.db, world.doc_a, pid, "observation", oid)["response_criteria"] == "HCL 2017"
+    assert analytics.response_groups("hcl")[0] == ("CR", "CR")
 

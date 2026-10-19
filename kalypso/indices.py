@@ -218,6 +218,7 @@ CALCULATORS = {
     "burkitt": (_burkitt, ("BL-IPI",)),
     "pcnsl": (_pcnsl, ("IELSG", "MSKCC")),
     "nlpbcl": (_nlpbcl, ("GHSG",)),
+    "hcl": (lambda pt, mm, labs, age: [], ()),                  # прогностического индекса нет
 }
 
 
@@ -243,6 +244,8 @@ def module_quality(pt: dict, mm: dict[str, str]) -> list[str]:
         return ["hgbl_myc_bcl2_unconfirmed"]
     if pt["who_haem5"] == "burkitt" and mm.get("myc_ig") == "not_detected":
         return ["burkitt_no_myc"]
+    if pt["who_haem5"] == "hcl" and mm.get("hcl_variant") == "yes":
+        return ["hcl_variant"]
     return []
 
 
