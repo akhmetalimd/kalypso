@@ -62,7 +62,8 @@ KALYPSO (KAzakhstan LYmphoma Patients Survival and Outcomes) — пробная 
   0005 — проверки модуля ДВКЛ (стадия Lugano, IPI, ответ Lugano 2014 и Deauville);
   0006 — чтение `schema_migrations` для `check`; 0007 — FLIPI; 0008 — sMIPI; 0009 — IPS;
   0010 — IPSS-WM и ответ IWWM-11; 0011 — MALT-IPI; 0012 — aaIPI; 0013 — BL-IPI; 0014 — IELSG, IPCG, МРТ;
-  0015 — ответ ВКЛ; 0016 — стадирование ISCL/EORTC и ответ ISCL; 0017 — ответ T-LGLL. Миграции не должны требовать суперпользователя:
+  0015 — ответ ВКЛ; 0016 — стадирование ISCL/EORTC и ответ ISCL; 0017 — ответ T-LGLL;
+  0018 — исследования карточки (таблица `investigation`, RLS, аудит) и перенос вирусных полей модулей. Миграции не должны требовать суперпользователя:
   их применяет владелец схемы (`tests/test_deploy.py` репетирует это на чистом кластере).
 - В БД хранятся **коды**, а не русские подписи (`alive`, `death`, `M`…). Подписи на
   русском/казахском — в слое локализации. Названия систем и критериев (`Rai`, `Binet`,
@@ -108,10 +109,18 @@ KALYPSO (KAzakhstan LYmphoma Patients Survival and Outcomes) — пробная 
 - `kalypso/auth.py`, `kalypso/rbac.py` + `config/roles.json` — вход, сессии, CSRF, роли.
 - `kalypso/admin.py`, `kalypso/export.py` — пользователи/филиалы/аудит/запросы, деидент. выгрузка.
 - `kalypso/analytics.py`, `kalypso/charts.py`, `kalypso/docgen.py` — аналитика, графики, документы.
-- `kalypso/web/` — FastAPI + Jinja2, без JS.
+- `kalypso/web/` — FastAPI + Jinja2, без JS. Главная (`/`) — название и расшифровка KALYPSO.
+  Демо-режим пробной версии (`KALYPSO_DEMO_MODE=1`, в dev — по умолчанию): вход без пароля,
+  переключатель роли в шапке; права, RLS и аудит — как при обычном входе.
 - `kalypso/locales/*.json` — подписи кодов (ru; kk — заготовка).
 - `kalypso/migrate.py` — `schema.sql` + `db/migrations/*.sql`, учёт в `schema_migrations`.
 - `kalypso/indices.py` — индексы по данным карточки и сведения модулей (POD24, высокий риск МКЛ…).
+  Сведения модулей — только констатация данных и проверки качества, **без советов по лечению**
+  (решение владельца: платформа — инструмент анализа данных, а не клинический помощник).
+- `kalypso/investigations.py` + `config/investigations.json` — исследования карточки: ИФТ (маркеры
+  панели «как в заключении»), генетика, вирусный статус, аутоиммунный скрининг. Необязательные:
+  нет записи — не проводилось. Генетика — сами исследования; поле модуля — вывод для индекса,
+  расхождение — предупреждение `inv_mismatch_<поле>`. Вирусный статус — только здесь (не в модулях).
 - `kalypso/synthetic.py` — синтетические когорты ХЛЛ, ДВКЛ и ФЛ через те же сервисы;
   `kalypso/synthetic_generic.py` — остальные нозологии по описанию (индекс карточки = расчёт).
 - `kalypso/cli.py` + `kalypso/ops.py` — эксплуатация: `migrate`, `check` (роль входа не обходит RLS,

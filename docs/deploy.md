@@ -44,7 +44,7 @@ sudo docker compose up -d --build
 | Шаг | Команда | Ожидаемо |
 |---|---|---|
 | Контейнеры | `sudo docker compose ps` | `db`, `app`, `nginx` — `running (healthy)`; `migrate` — `exited (0)` |
-| Миграции | `sudo docker compose logs migrate` | `Применено: 0001_baseline, … 0017_tlgll` |
+| Миграции | `sudo docker compose logs migrate` | `Применено: 0001_baseline, … 0018_investigations` |
 | Готовность | `sudo docker compose exec app python -m kalypso.cli check` | `Готово к запуску…` |
 | HTTPS | открыть `https://kalypso.clinic.local` | страница входа; `http://` переадресуется на `https://` |
 | БД закрыта | `nc -zv <сервер> 5432` с другой машины | соединение отклонено |

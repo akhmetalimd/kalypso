@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import registry_core as core
-from kalypso import admin, analytics, auth, charts, docgen, export, i18n, registry
+from kalypso import admin, analytics, auth, charts, docgen, export, i18n, investigations, registry
 from kalypso.config import Settings
 from kalypso.db import Database
 from kalypso.rbac import AccessDenied, NotFound, Principal
@@ -77,7 +77,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
                        active_nodes=registry.active_nodes, missing_codes=registry.MISSING,
                        conditional_fields=registry.CONDITIONAL_FIELDS,
                        profile=registry.profile, indexes=core.INDEXES, dashboard_url=dashboard_url,
-                       nosology_groups=registry.nosology_groups)
+                       nosology_groups=registry.nosology_groups, inv=investigations)
     env.filters.update(d=_fmt_date, short=_short,
                        nosology=lambda node_id: (core.find_node(core.NOSOLOGY_TREE, node_id or "") or {}).get("name", node_id))
 
@@ -394,15 +394,18 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     _record_route("observations", registry.add_observation)
     _record_route("labs", registry.add_lab)
     _record_route("markers", registry.add_marker)
+    _record_route("investigations", registry.add_investigation)
 
     editors = {"line": registry.update_line, "observation": registry.update_observation,
-               "lab": registry.update_lab, "marker": registry.update_marker}
+               "lab": registry.update_lab, "marker": registry.update_marker,
+               "investigation": registry.update_investigation}
 
     def _record_form(request, p, pid, kind, rid, v, status_code=200, errors=None):
         card = registry.get_card(db, p, pid_of(pid))
         rec = registry.get_record(db, p, pid_of(pid), kind, pid_of(rid))
         return render(request, "record_form.html", p, status_code, errors=errors, kind=kind, pid=pid, rid=rid,
-                      v=v, pt=card["patient"], lines=card["lines"], field_key=rec.get("field_key"))
+                      v=v, pt=card["patient"], lines=card["lines"], field_key=rec.get("field_key"),
+                      inv_kind=rec.get("kind"))
 
     @app.get("/patients/{pid}/edit/{kind}/{rid}", response_class=HTMLResponse)
     def record_edit(request: Request, pid: str, kind: str, rid: str):
@@ -412,6 +415,8 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         rec = dict(registry.get_record(db, p, pid_of(pid), kind, pid_of(rid)))
         if kind == "lab":  # в форме — исходное значение и единица, как вводил врач
             rec.update(value=rec["value_raw"], unit=rec["unit_raw"])
+        if kind == "investigation":  # маркеры ИФТ — строкой, как в заключении
+            rec["markers"] = investigations.format_markers(rec["markers"])
         return _record_form(request, p, pid, kind, rid, rec)
 
     @app.post("/patients/{pid}/edit/{kind}/{rid}")

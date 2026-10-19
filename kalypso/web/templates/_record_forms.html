@@ -64,3 +64,27 @@
   <label>Дата анализа * <input type="date" name="obs_date" value="{{ fv.get('obs_date') or '' }}" required></label>
   <label>Данные * {{ select('provenance', options('provenance'), fv.get('provenance') or pt.provenance, blank=None) }}</label>
 {% endmacro %}
+
+{% macro inv_fields(fv, pt, kind) %}
+  <input type="hidden" name="kind" value="{{ kind }}">
+  {% set tests = {} %}{% for t in inv.tests(kind) %}{% set _ = tests.update({t.code: t.label ~ (' (' ~ t.unit ~ ')' if t.unit else '')}) %}{% endfor %}
+  <label class="wide">Исследование * {{ select('test_code', tests, fv.get('test_code'), required=True) }}</label>
+  {{ date_field('test_date', 'test_date_precision', fv, 'Дата исследования') }}
+  <label>Материал {{ select('material', inv.MATERIALS, fv.get('material') or inv.CATALOG.kinds[kind].default_material) }}</label>
+  <label>Качественный результат
+    {{ select('qual_result', {'positive': 'есть (положительно)', 'negative': 'нет (отрицательно)', 'equivocal': 'сомнительно'}, fv.get('qual_result')) }}
+    <small>Для IGHV «есть» = мутирован; кариотип «есть» = аномальный.</small></label>
+  <label>Что именно <input name="qual_detail" value="{{ fv.get('qual_detail') or '' }}" maxlength="300"
+    placeholder="{{ {'genetics': 'del(17p), t(11;14), 46,XY,+12…', 'flow': 'фенотип клона', 'virology': 'генотип, серотип…', 'autoimmune': 'тип антител…'}[kind] }}"></label>
+  <label>Количественный результат
+    <span class="pair"><input name="value" inputmode="decimal" value="{{ fv.get('value') if fv.get('value') is not none else '' }}" placeholder="число">
+      <input name="unit" value="{{ fv.get('unit') or '' }}" maxlength="30" placeholder="единица (по умолчанию — из справочника)"></span></label>
+  {% if kind == 'flow' %}
+  <label class="wide">Маркеры (как в заключении)
+    <input name="markers" value="{{ fv.get('markers') or '' }}" placeholder="CD5+ CD19+ CD20 dim CD23+ CD10−">
+    <small>Маркеры той панели, что использовалась: «+», «−», «dim» / «слаб.», «bright» / «ярк.», «частично».</small></label>
+  {% endif %}
+  <label class="wide">Заключение <textarea name="conclusion" rows="2">{{ fv.get('conclusion') or '' }}</textarea>
+    <small>Без ФИО, ИИН и телефонов.</small></label>
+  <label>Данные * {{ select('provenance', options('provenance'), fv.get('provenance') or pt.provenance, blank=None) }}</label>
+{% endmacro %}

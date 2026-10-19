@@ -72,6 +72,12 @@ def seed_if_empty(db: Database) -> dict | None:
                                                    duplicates=2, nosology=nosology)
     for part in summary.values():
         part.pop("iins")  # синтетические ИИН в консоль не печатаем
+    with db.tx(curator.user_id) as cur:     # dev-БД, созданная до раздела исследований
+        cur.execute("SELECT count(*) AS n FROM investigation")
+        no_inv = cur.fetchone()["n"] == 0
+    if no_inv:
+        from kalypso import synthetic_inv
+        summary["investigations"] = synthetic_inv.add_for_all(db, physicians)
     return summary or None
 
 

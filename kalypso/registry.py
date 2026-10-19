@@ -476,6 +476,10 @@ def patient_filter_sql(f: dict) -> tuple[list[str], list]:
         system, value = f["stage"].split(":", 1)
         where.append("p.stage_system = %s AND p.stage_value = %s")
         params += [system, value]
+    if f.get("has"):                     # есть хотя бы одно исследование раздела
+        where.append("EXISTS (SELECT 1 FROM investigation i WHERE i.patient_id = p.patient_id "
+                     "AND i.kind = %s AND i.deleted_at IS NULL)")
+        params.append(f["has"])
     return where, params
 
 
@@ -534,6 +538,8 @@ def get_card(db: Database, p: Principal, pid) -> dict:
             "observations": q("SELECT * FROM observation WHERE patient_id = %s AND deleted_at IS NULL "
                               "ORDER BY obs_date, created_at"),
             "labs": q("SELECT * FROM lab WHERE patient_id = %s AND deleted_at IS NULL ORDER BY obs_date, loinc"),
+            "investigations": q("SELECT * FROM investigation WHERE patient_id = %s AND deleted_at IS NULL "
+                                "ORDER BY kind, test_date NULLS FIRST, created_at"),
         }
     mm = _marker_map(card["markers"])
     card["marker_map"] = mm
@@ -543,7 +549,11 @@ def get_card(db: Database, p: Principal, pid) -> dict:
         quality.update(_quality({**patient, "response_date": o.get("obs_date") if o.get("response_value") else None,
                                  "event_date": o.get("event_date"), "event_type": o.get("event_type"),
                                  "death_cause": o.get("death_cause")}))
+    from kalypso import investigations as inv
     quality.update(module_quality(patient, mm))
+    quality.update(inv.genetics_mismatches(mm, card["investigations"]))
+    card["inv"] = inv.by_kind(card["investigations"])
+    vir = inv.virology(card["investigations"])
     card["flags"]["quality"] = sorted(quality)
     prof = profile(patient["who_haem5"])
     not_applicable = ({"stage_value"} if not prof["stages"] else set()) |                      ({"index_score"} if prof["index"] not in core.INDEXES else set())
@@ -552,7 +562,7 @@ def get_card(db: Database, p: Principal, pid) -> dict:
             card["flags"]["completeness"].append(f"empty_{name}")
     card["profile"] = prof
     card["indices"] = computed_indices(patient, mm, card["labs"])
-    card["module_info"] = module_info(patient, mm, card["lines"], card["observations"], card["markers"])
+    card["module_info"] = module_info(patient, mm, card["lines"], card["observations"], card["markers"], vir)
     return card
 
 
@@ -562,7 +572,8 @@ def get_card(db: Database, p: Principal, pid) -> dict:
 # ---------------------------------------------------------------------------
 PROVENANCES = ("retrospective", "prospective")
 _KINDS = {"line": ("therapy_line", "line_id"), "observation": ("observation", "obs_id"),
-          "lab": ("lab", "lab_id"), "marker": ("module_data", "md_id")}
+          "lab": ("lab", "lab_id"), "marker": ("module_data", "md_id"),
+          "investigation": ("investigation", "inv_id")}
 
 
 def _reason(f: Form) -> str | None:
@@ -849,6 +860,38 @@ def update_marker(db: Database, p: Principal, pid, rid, data: dict) -> Result:
     _db_call(write)
     return Result("saved", rid)
 
+
+
+# --- исследования (ИФТ, генетика, вирусы, аутоиммунный скрининг) ----------------
+def add_investigation(db: Database, p: Principal, pid, data: dict) -> Result:
+    from kalypso import investigations as inv
+    p.require("patient.write")
+    f = Form(data)
+    row = inv.row_from_form(f, f.raw("kind") or "")
+    f.check()
+
+    def write():
+        with db.tx(p.user_id) as cur:
+            _load_visible(cur, p, pid, "patient.write")
+            return _insert(cur, "investigation", {**row, "patient_id": pid, "source": "manual"}, "inv_id")
+    return Result("saved", _db_call(write))
+
+
+def update_investigation(db: Database, p: Principal, pid, rid, data: dict) -> Result:
+    """Раздел записи не меняется (ИФТ остаётся ИФТ); правятся исследование, дата, результат."""
+    from kalypso import investigations as inv
+    p.require("patient.write")
+    kind = get_record(db, p, pid, "investigation", rid)["kind"]
+    f = Form(data)
+    row, reason = inv.row_from_form(f, kind), _reason(f)
+    f.check()
+
+    def write():
+        with db.tx(p.user_id, reason=reason) as cur:
+            _load_visible(cur, p, pid, "patient.write")
+            _update(cur, "investigation", "inv_id", rid, pid, row)
+    _db_call(write)
+    return Result("saved", rid)
 
 def soft_delete(db: Database, p: Principal, pid, kind: str, record_id) -> Result:
     """Мягкое удаление: запись остаётся в БД и аудите, из карточки и расчётов исчезает."""

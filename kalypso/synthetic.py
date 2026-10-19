@@ -53,7 +53,7 @@ def _pick(rng, weighted: dict):
 
 
 def generate(db: Database, physicians: list[Principal], n: int = 60,
-             seed: int = 42, duplicates: int = 3, nosology: str = "cll_sll") -> dict:
+             seed: int = 42, duplicates: int = 3, nosology: str = "cll_sll", investigations: bool = True) -> dict:
     """n синтетических пациентов нозологии + межфилиальные дубликаты. ХЛЛ, ДВКЛ, ФЛ — свои
     генераторы ниже; остальные — kalypso.synthetic_generic.SPECS."""
     one = {"cll_sll": _one_patient, "dlbcl": _one_dlbcl, "follicular": _one_fl}.get(nosology)
@@ -62,11 +62,18 @@ def generate(db: Database, physicians: list[Principal], n: int = 60,
 
         def one(db, doc, rng):
             return synthetic_generic.one_patient(db, doc, rng, nosology, synthetic_iin)
-    rng = random.Random(seed)
+    from kalypso import synthetic_inv
+    rng, inv_rng = random.Random(seed), random.Random(seed + 1000)
     made: list[tuple[str, Principal]] = []
     for _ in range(n):
         doc = rng.choice(physicians)
-        made.append((one(db, doc, rng), doc))
+        iin = one(db, doc, rng)
+        made.append((iin, doc))
+        if investigations:
+            pid = registry.find_by_iin(db, doc, iin)
+            card = registry.get_card(db, doc, pid)
+            synthetic_inv.add_for_patient(db, doc, pid, nosology, card["marker_map"], card["patient"]["dx_date"],
+                                          card["patient"]["provenance"], inv_rng)
 
     requests = 0
     for iin, doc in rng.sample(made, min(duplicates, len(made))):

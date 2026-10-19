@@ -60,6 +60,9 @@ def flag(code: str, lang: str = DEFAULT) -> str:
         return flags[code]
     if code.startswith("missing_response_line_"):
         return flags["missing_response_line"].format(n=code.rsplit("_", 1)[-1])
+    if code.startswith("inv_mismatch_") and code[len("inv_mismatch_"):] in _field_labels():
+        return (f"Генетика: результат исследования расходится с полем «{_field_labels()[code[len('inv_mismatch_'):]]}» "
+                "— проверьте одно из них")
     if code.startswith("missing_") and code[len("missing_"):] in _field_labels():
         return f"Нет «{_field_labels()[code[len('missing_'):]]}» (значения или кода пропуска)"
     return flags.get(code, code)

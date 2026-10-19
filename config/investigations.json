@@ -1,0 +1,83 @@
+{
+  "_comment": "Справочник исследований карточки: ИФТ, генетика, вирусный статус, аутоиммунный скрининг. Исследование = code + label; unit — единица по умолчанию для количественного результата; qual — подписи качественного результата вместо «есть / нет»; links — какой вывод для поля модуля следует из результата (сверка: «результат исследования расходится с полем модуля»). Добавить исследование = одна строка, без изменения кода и схемы.",
+  "materials": {
+    "blood": "Периферическая кровь",
+    "bone_marrow": "Костный мозг",
+    "lymph_node": "Лимфоузел",
+    "tissue": "Ткань (биопсия)",
+    "csf": "Ликвор",
+    "effusion": "Выпот",
+    "skin": "Кожа",
+    "serum": "Сыворотка / плазма",
+    "other": "Другое"
+  },
+  "qual": { "positive": "есть", "negative": "нет", "equivocal": "сомнительно" },
+  "kinds": {
+    "flow": {
+      "label": "Иммунофенотипирование (ИФТ)",
+      "default_material": "blood",
+      "tests": [
+        { "code": "flow_panel", "label": "Проточная цитометрия — диагностическая панель", "unit": "%",
+          "qual": { "positive": "клональная популяция выявлена", "negative": "клональная популяция не выявлена" } },
+        { "code": "flow_mrd",   "label": "МОБ (проточная цитометрия)", "unit": "%",
+          "qual": { "positive": "МОБ выявлена", "negative": "МОБ не выявлена" } }
+      ]
+    },
+    "genetics": {
+      "label": "Генетика",
+      "default_material": "bone_marrow",
+      "tests": [
+        { "code": "karyotype",   "label": "Кариотип (стандартная цитогенетика)", "qual": { "positive": "аномальный", "negative": "нормальный" } },
+        { "code": "fish_del17p", "label": "FISH del(17p) / TP53", "unit": "% ядер", "links": { "del17p": { "positive": "detected", "negative": "not_detected" } } },
+        { "code": "fish_del11q", "label": "FISH del(11q) / ATM", "unit": "% ядер", "links": { "del11q": { "positive": "detected", "negative": "not_detected" } } },
+        { "code": "fish_tri12",  "label": "FISH трисомия 12", "unit": "% ядер", "links": { "tri12": { "positive": "detected", "negative": "not_detected" } } },
+        { "code": "fish_del13q", "label": "FISH del(13q)", "unit": "% ядер", "links": { "del13q": { "positive": "detected", "negative": "not_detected" } } },
+        { "code": "fish_myc",    "label": "FISH перестройка MYC", "unit": "% ядер",
+          "links": { "myc_r": { "positive": "detected", "negative": "not_detected" }, "myc_ig": { "positive": "detected", "negative": "not_detected" } } },
+        { "code": "fish_bcl2",   "label": "FISH перестройка BCL2", "unit": "% ядер", "links": { "bcl2_r": { "positive": "detected", "negative": "not_detected" } } },
+        { "code": "fish_bcl6",   "label": "FISH перестройка BCL6", "unit": "% ядер", "links": { "bcl6_r": { "positive": "detected", "negative": "not_detected" } } },
+        { "code": "fish_ccnd1",  "label": "FISH t(11;14) / CCND1", "unit": "% ядер" },
+        { "code": "tp53_mut",    "label": "Мутация TP53 (секвенирование / NGS)", "unit": "VAF %",
+          "links": { "TP53": { "positive": "mutated", "negative": "wild_type" }, "tp53_mcl": { "positive": "detected" } } },
+        { "code": "ighv",        "label": "Мутационный статус IGHV (секвенирование)", "unit": "% гомологии",
+          "qual": { "positive": "мутирован", "negative": "немутирован" },
+          "links": { "IGHV": { "positive": "mutated", "negative": "unmutated" } } },
+        { "code": "myd88",       "label": "MYD88 L265P (ПЦР)", "links": { "myd88": { "positive": "detected", "negative": "not_detected" } } },
+        { "code": "cxcr4",       "label": "Мутация CXCR4 (секвенирование)", "links": { "cxcr4": { "positive": "detected", "negative": "not_detected" } } },
+        { "code": "braf",        "label": "BRAF V600E", "links": { "braf": { "positive": "detected", "negative": "not_detected" } } },
+        { "code": "stat3",       "label": "Мутация STAT3 (NGS)", "unit": "VAF %", "links": { "stat3": { "positive": "detected", "negative": "not_detected" } } },
+        { "code": "ngs_panel",   "label": "NGS-панель лимфоидных генов", "unit": "VAF %" },
+        { "code": "clonality",   "label": "Клональность IG / TCR (ПЦР)", "qual": { "positive": "клональная", "negative": "поликлональная" } }
+      ]
+    },
+    "virology": {
+      "label": "Вирусный статус",
+      "default_material": "serum",
+      "tests": [
+        { "code": "hbsag",    "label": "HBsAg" },
+        { "code": "anti_hbc", "label": "Анти-HBc" },
+        { "code": "hbv_dna",  "label": "ДНК HBV", "unit": "МЕ/мл" },
+        { "code": "anti_hcv", "label": "Анти-HCV" },
+        { "code": "hcv_rna",  "label": "РНК HCV", "unit": "МЕ/мл" },
+        { "code": "hiv",      "label": "ВИЧ (антиген / антитела)" },
+        { "code": "ebv_dna",  "label": "ДНК EBV в плазме", "unit": "копий/мл" },
+        { "code": "ebv_eber", "label": "EBV в опухоли (EBER)" },
+        { "code": "cmv_dna",  "label": "ДНК CMV", "unit": "копий/мл" },
+        { "code": "htlv1",    "label": "HTLV-1 (антитела)" }
+      ]
+    },
+    "autoimmune": {
+      "label": "Аутоиммунный скрининг",
+      "default_material": "serum",
+      "tests": [
+        { "code": "dat",   "label": "Прямая проба Кумбса" },
+        { "code": "ana",   "label": "Антинуклеарные антитела (АНА)", "unit": "титр 1:" },
+        { "code": "rf",    "label": "Ревматоидный фактор", "unit": "МЕ/мл" },
+        { "code": "cryo",  "label": "Криоглобулины" },
+        { "code": "aiha",  "label": "Аутоиммунная гемолитическая анемия (АИГА)" },
+        { "code": "itp",   "label": "Иммунная тромбоцитопения (ИТП)" },
+        { "code": "ai_other", "label": "Другое аутоиммунное заболевание" }
+      ]
+    }
+  }
+}

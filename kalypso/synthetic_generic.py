@@ -266,7 +266,6 @@ def _mzl_fields(rng, ctx):
     return {
         "mzl_subtype": subtype,
         "ldh_uln": _maybe(rng, pick(rng, {"le_uln": 80, "uln_1_3": 18, "gt_3_uln": 2})),
-        "hcv": _maybe(rng, "detected" if rng.random() < (0.12 if subtype == "splenic" else 0.04) else "not_detected", 0.1),
         "malt_site": site,
         "hp": ("detected" if rng.random() < 0.7 else "not_detected") if site == "stomach" else None,
     }
@@ -302,7 +301,6 @@ def _ptcl_fields(rng, ctx):
         "extranodal_n": pick(rng, {"0": 10, "1": 40, "2plus": 50} if ctx["stage"] == "IV" else {"0": 70, "1": 30}),
         "nasal_type": ("yes" if rng.random() < 0.75 else "no") if enktl else None,
         "distant_ln": ("yes" if ctx["adv"] and rng.random() < 0.5 else "no") if enktl else None,
-        "ebv_dna": ("detected" if rng.random() < 0.6 else "not_detected") if enktl else None,
     }
 
 
@@ -506,8 +504,6 @@ SPECS = {
             "ldh_uln": _maybe(rng, pick(rng, {"le_uln": 15, "uln_1_3": 45, "gt_3_uln": 40})),
             "cns_involvement": "yes" if rng.random() < 0.12 else "no",
             "bm_involvement": "yes" if ctx["stage"] == "IV" and rng.random() < 0.45 else "no",
-            "hiv": _maybe(rng, "detected" if rng.random() < 0.2 else "not_detected", 0.08),
-            "ebv": "detected" if rng.random() < 0.3 else None,
         },
         "labs": lambda rng, ctx, f: [("2532-0", rng.randint(*{"le_uln": (140, 245), "uln_1_3": (260, 740),
                                                               "gt_3_uln": (760, 3000)}.get(f["ldh_uln"], (300, 900))), "U/L"),

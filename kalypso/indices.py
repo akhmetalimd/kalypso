@@ -268,7 +268,7 @@ def pod24_status(pt: dict, lines: list[dict], observations: list[dict]) -> dict:
     return core.pod24(pt, lines, observations, node.get("pod24_regimens", []))
 
 
-def _fl_info(pt, mm, lines, observations, markers):
+def _fl_info(pt, mm, lines, observations, markers, vir):
     p = pod24_status(pt, lines, observations)
     text = {"pod24": f"да — прогрессия через {p.get('months')} мес. от начала 1-й линии",
             "no_pod24": "нет — без прогрессии 24 мес. от начала 1-й линии",
@@ -283,7 +283,7 @@ def _fl_info(pt, mm, lines, observations, markers):
     return info
 
 
-def _mcl_info(pt, mm, lines, observations, markers):
+def _mcl_info(pt, mm, lines, observations, markers, vir):
     risks = [name for name, on in (("TP53", _detected(mm.get("tp53_mcl"))),
                                    ("бластоидный/плеоморфный вариант", _yes_no(mm.get("blastoid")))) if on]
     if not risks:
@@ -292,37 +292,37 @@ def _mcl_info(pt, mm, lines, observations, markers):
              "text": ", ".join(risks)}]
 
 
-def _mzl_info(pt, mm, lines, observations, markers):
+def _mzl_info(pt, mm, lines, observations, markers, vir):
     info = []
     if mm.get("mzl_subtype") == "malt" and mm.get("malt_site") == "stomach" and mm.get("hp") == "detected":
         info.append({"title": "H. pylori+", "warn": False,
                      "text": "желудочная MALT, H. pylori выявлен"})
-    if mm.get("hcv") == "detected":
-        info.append({"title": "HCV+", "warn": False, "text": "HCV выявлен"})
+    if "positive" in (vir.get("anti_hcv"), vir.get("hcv_rna")):
+        info.append({"title": "HCV+", "warn": False, "text": "HCV выявлен (вирусный статус)"})
     return info
 
 
-def _hgbl_info(pt, mm, lines, observations, markers):
+def _hgbl_info(pt, mm, lines, observations, markers, vir):
     info = []
     if mm.get("cns_involvement") == "yes":
         info.append({"title": "Поражение ЦНС", "warn": True, "text": "на диагнозе"})
-    cns = next(i for i in _hgbl(pt, mm, [], _age(pt["birth_date"], pt["dx_date"])) if i["name"] == "CNS-IPI")
+    cns = next(i for i in _hgbl(pt, mm, [], _age(pt["birth_date"], pt["dx_date"])) if i["name"] == "CNS-IPI")  # noqa: F841
     if cns["result"] and cns["result"]["group"] == "high":
         info.append({"title": "Высокий риск рецидива в ЦНС", "warn": True,
                      "text": f"CNS-IPI {cns['result']['score']} — высокий риск"})
     return info
 
 
-def _burkitt_info(pt, mm, lines, observations, markers):
+def _burkitt_info(pt, mm, lines, observations, markers, vir):
     info = []
-    if mm.get("hiv") == "detected":
+    if vir.get("hiv") == "positive":
         info.append({"title": "ВИЧ+", "warn": True, "text": "ВИЧ-ассоциированная лимфома Бёркитта"})
     if mm.get("cns_involvement") == "yes":
         info.append({"title": "Поражение ЦНС", "warn": True, "text": "на диагнозе"})
     return info
 
 
-def _nlpbcl_info(pt, mm, lines, observations, markers):
+def _nlpbcl_info(pt, mm, lines, observations, markers, vir):
     info = []
     if mm.get("nlp_pattern") == "variant":
         info.append({"title": "Вариантный тип роста (C–F)", "warn": True,
@@ -333,7 +333,7 @@ def _nlpbcl_info(pt, mm, lines, observations, markers):
     return info
 
 
-def _mf_info(pt, mm, lines, observations, markers):
+def _mf_info(pt, mm, lines, observations, markers, vir):
     info = []
     if mm.get("lct") == "yes":
         info.append({"title": "Крупноклеточная трансформация", "warn": True, "text": "неблагоприятный прогностический фактор"})
@@ -342,7 +342,7 @@ def _mf_info(pt, mm, lines, observations, markers):
     return info
 
 
-def _tlgll_info(pt, mm, lines, observations, markers):
+def _tlgll_info(pt, mm, lines, observations, markers, vir):
     if mm.get("neutropenia") == "yes" or mm.get("anemia_tx") == "yes":
         return [{"title": "Тяжёлая цитопения", "warn": True,
                  "text": "тяжёлая нейтропения или трансфузионно-зависимая анемия"}]
@@ -353,7 +353,8 @@ INFO = {"tlgll": _tlgll_info, "mf_ss": _mf_info, "nlpbcl": _nlpbcl_info, "follic
 
 
 def module_info(pt: dict, mm: dict[str, str], lines: list[dict], observations: list[dict],
-                markers: list[dict]) -> list[dict]:
-    """Сведения модуля для карточки: [{title, text, warn}]."""
+                markers: list[dict], vir: dict[str, str] | None = None) -> list[dict]:
+    """Сведения модуля для карточки: [{title, text, warn}]. vir — вирусный статус
+    (kalypso.investigations.virology: код исследования -> positive / negative / equivocal)."""
     fn = INFO.get(pt["who_haem5"])
-    return fn(pt, mm, lines, observations, markers) if fn else []
+    return fn(pt, mm, lines, observations, markers, vir or {}) if fn else []

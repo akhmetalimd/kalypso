@@ -33,7 +33,8 @@
   <label>Полнота <select name="completeness"><option value="">все</option>
     <option value="complete"{% if f.completeness == 'complete' %} selected{% endif %}>полно</option>
     <option value="gaps"{% if f.completeness == 'gaps' %} selected{% endif %}>есть пропуски</option></select></label>
-  {% block extra_filters %}{% endblock %}
+  <label>Исследования <select name="has"><option value="">все</option>
+    {% for k in inv.KINDS %}<option value="{{ k }}"{% if f.has == k %} selected{% endif %}>есть: {{ inv.kind_label(k) }}</option>{% endfor %}</select></label>
   <button class="primary">Показать</button>
   <a href="/patients">Сбросить</a>
 </form>

@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf_field with context %}
-{% from "_record_forms.html" import marker_fields, line_fields, obs_fields, lab_fields with context %}
+{% from "_record_forms.html" import marker_fields, line_fields, obs_fields, lab_fields, inv_fields with context %}
 {% set titles = {'line': 'Правка линии терапии', 'observation': 'Правка наблюдения',
-                 'lab': 'Правка анализа', 'marker': 'Правка маркера'} %}
+                 'lab': 'Правка анализа', 'marker': 'Правка маркера', 'investigation': 'Правка исследования'} %}
 {% block title %}{{ titles[kind] }}{% endblock %}
 {% block content %}
 <h1>{{ titles[kind] }} <span class="muted">· пациент <a class="mono" href="/patients/{{ pid }}">{{ pid|short }}</a></span></h1>
@@ -11,6 +11,7 @@
   {% if kind == 'line' %}{{ line_fields(v, pt) }}
   {% elif kind == 'observation' %}{{ obs_fields(v, pt, lines) }}
   {% elif kind == 'lab' %}{{ lab_fields(v, pt) }}
+  {% elif kind == 'investigation' %}{{ inv_fields(v, pt, inv_kind) }}
   {% else %}{{ marker_fields(v, pt, fixed_key=field_key) }}{% endif %}
   <label class="wide">Причина правки
     <input name="change_reason" value="{{ v.get('change_reason') or '' }}" maxlength="500">

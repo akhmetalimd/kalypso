@@ -122,9 +122,7 @@
             { "key": "myc_ig",          "label_ru": "Перестройка IG-MYC, FISH",   "values": ["detected", "not_detected"] },
             { "key": "ldh_uln",         "label_ru": "ЛДГ относительно ВГН лаборатории", "values": ["le_uln", "uln_1_3", "gt_3_uln"] },
             { "key": "cns_involvement", "label_ru": "Поражение ЦНС на диагнозе",  "values": ["yes", "no"] },
-            { "key": "bm_involvement",  "label_ru": "Поражение костного мозга",   "values": ["yes", "no"] },
-            { "key": "hiv",             "label_ru": "ВИЧ",                         "values": ["detected", "not_detected"] },
-            { "key": "ebv",             "label_ru": "EBV в опухоли (EBER)",        "values": ["detected", "not_detected"], "optional": true }
+            { "key": "bm_involvement",  "label_ru": "Поражение костного мозга",   "values": ["yes", "no"] }
           ]
         },
         {
@@ -205,7 +203,6 @@
           "core_fields": [
             { "key": "mzl_subtype", "label_ru": "Подтип ЛМЗ",                              "values": ["malt", "nodal", "splenic"] },
             { "key": "ldh_uln",     "label_ru": "ЛДГ относительно ВГН лаборатории",         "values": ["le_uln", "uln_1_3", "gt_3_uln"] },
-            { "key": "hcv",         "label_ru": "HCV (антитела / РНК)",                     "values": ["detected", "not_detected"] },
             { "key": "malt_site",   "label_ru": "Локализация MALT",                         "values": ["stomach", "ocular_adnexa", "lung", "salivary", "skin", "other"], "optional": true },
             { "key": "hp",          "label_ru": "H. pylori (желудочная MALT)",              "values": ["detected", "not_detected"], "optional": true }
           ]
@@ -306,8 +303,7 @@
             { "key": "bm_involvement",  "label_ru": "Поражение костного мозга",                        "values": ["yes", "no"] },
             { "key": "extranodal_n",    "label_ru": "Экстранодальные очаги, число",                    "values": ["0", "1", "2plus"] },
             { "key": "nasal_type",      "label_ru": "Назальный тип (ENKTL)",                           "values": ["yes", "no"], "optional": true },
-            { "key": "distant_ln",      "label_ru": "Поражение отдалённых лимфоузлов (ENKTL, PINK)",   "values": ["yes", "no"], "optional": true },
-            { "key": "ebv_dna",         "label_ru": "ДНК EBV в плазме (ENKTL)",                        "values": ["detected", "not_detected"], "optional": true }
+            { "key": "distant_ln",      "label_ru": "Поражение отдалённых лимфоузлов (ENKTL, PINK)",   "values": ["yes", "no"], "optional": true }
           ]
         },
         {

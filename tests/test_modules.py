@@ -54,7 +54,7 @@ CASES = {
     # MALT, 71 год, стадия IV, ЛДГ > ВГН: MALT-IPI 3 (высокий).
     "mzl": {
         "form": {"birth_date": "1950-02-01", "stage_system": "Lugano", "stage_value": "IV", "ecog": "1"},
-        "fields": {"mzl_subtype": "malt", "ldh_uln": "uln_1_3", "hcv": "not_detected"},
+        "fields": {"mzl_subtype": "malt", "ldh_uln": "uln_1_3"},
         "labs": [],
         "expected": {"MALT-IPI": (3, "high")},
         "stored": "3", "bad_score": "4", "db": ("MALT-IPI", 4, "high", "index_malt_ipi"),
@@ -67,7 +67,7 @@ CASES = {
         "labs": [],
         "expected": {"IPI": (5, "high"), "PIT": (4, "high"), "PINK": None},
         "stored": "5", "bad_score": "6", "db": ("IPI", 6, "high", "index_ipi"),
-        "optional": ["nasal_type", "distant_ln", "ebv_dna"],
+        "optional": ["nasal_type", "distant_ln"],
     },
     # 71 год, ECOG 2, стадия IV, ЛДГ > ВГН, ≥ 2 экстранодальных: IPI 5; + почки/надпочечники — CNS-IPI 6.
     "hgbl": {
@@ -91,12 +91,11 @@ CASES = {
     # 31 год, ECOG 2, ЛДГ > 3 × ВГН, ЦНС: BL-IPI 3 (высокий; возраст < 40 — 0).
     "burkitt": {
         "form": {"birth_date": "1990-02-01", "stage_system": "Lugano", "stage_value": "IV", "ecog": "2"},
-        "fields": {"myc_ig": "detected", "ldh_uln": "gt_3_uln", "cns_involvement": "yes", "bm_involvement": "yes",
-                   "hiv": "not_detected"},
+        "fields": {"myc_ig": "detected", "ldh_uln": "gt_3_uln", "cns_involvement": "yes", "bm_involvement": "yes"},
         "labs": [],
         "expected": {"BL-IPI": (3, "high")},
         "stored": "3", "bad_score": "5", "db": ("BL-IPI", 5, "high", "index_bl_ipi"),
-        "optional": ["ebv"],
+        "optional": [],
     },
     # Без стадирования. 71 год, ECOG 2, ЛДГ > ВГН, белок ликвора, глубокие структуры: IELSG 5;
     # > 50 лет и KPS < 70 — MSKCC класс 3 (балл 2, высокий).
@@ -171,6 +170,11 @@ def fill(world, nos, pid, fields=None, test_date="2021-03-05"):
     for loinc, value, unit in CASES[nos]["labs"] if fields is None else []:
         registry.add_lab(world.db, world.doc_a, pid, {**R, "loinc": loinc, "value": value, "unit": unit,
                                                       "obs_date": "2021-03-02"})
+
+
+def virus(world, pid, code, qual):
+    registry.add_investigation(world.db, world.doc_a, pid, {**R, "kind": "virology", "test_code": code,
+                                                            "qual_result": qual, "test_date": "2021-03-01"})
 
 
 @pytest.mark.parametrize("nos", NOSOLOGIES)
@@ -320,7 +324,8 @@ def test_db_iwwm_response(reg):
 
 def test_mzl_malt_ipi_only_for_malt_and_info(world):
     pid = register(world, "mzl", stage_value="IE")
-    fill(world, "mzl", pid, {"mzl_subtype": "nodal", "ldh_uln": "le_uln", "hcv": "detected"})
+    fill(world, "mzl", pid, {"mzl_subtype": "nodal", "ldh_uln": "le_uln"})
+    virus(world, pid, "anti_hcv", "positive")                           # HCV — из «Вирусного статуса»
     card = registry.get_card(world.db, world.doc_a, pid)
     [ix] = card["indices"]
     assert ix["result"] is None and "MALT" in ix["needs"]
@@ -354,7 +359,8 @@ def test_hgbl_subtype_check_and_cns_panels(world):
 
 def test_burkitt_myc_check_and_hiv_panel(world):
     pid = register(world, "burkitt")
-    fill(world, "burkitt", pid, {**CASES["burkitt"]["fields"], "myc_ig": "not_detected", "hiv": "detected"})
+    fill(world, "burkitt", pid, {**CASES["burkitt"]["fields"], "myc_ig": "not_detected"})
+    virus(world, pid, "hiv", "positive")
     card = registry.get_card(world.db, world.doc_a, pid)
     assert "burkitt_no_myc" in card["flags"]["quality"]
     assert {i["title"] for i in card["module_info"]} == {"ВИЧ+", "Поражение ЦНС"}

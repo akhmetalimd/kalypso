@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf_field, select, codes, date_field, delete_button, edit_link with context %}
-{% from "_record_forms.html" import marker_fields, line_fields, obs_fields, lab_fields with context %}
+{% from "_record_forms.html" import marker_fields, line_fields, obs_fields, lab_fields, inv_fields with context %}
 {% block title %}Пациент {{ pt.patient_id|short }}{% endblock %}
 {% block content %}
 {% set pid = pt.patient_id %}
@@ -123,6 +123,38 @@
     </form>
   </details>
   {% endif %}
+</section>
+
+<section class="card">
+  <h2>Исследования <small>есть не у всех пациентов — добавляйте проведённые</small></h2>
+  {% for kind in inv.KINDS %}
+  {% set rows = c.inv[kind] %}
+  <h3>{{ inv.kind_label(kind) }} {% if rows %}<span class="badge">{{ rows|length }}</span>{% else %}<span class="muted">— не вносились</span>{% endif %}</h3>
+  {% if rows %}
+  <table class="grid">
+    <thead><tr><th>Дата</th><th>Исследование</th><th>Материал</th><th>Результат</th><th>Количественно</th>{% if kind == 'flow' %}<th>Маркеры</th>{% endif %}<th>Заключение</th><th></th></tr></thead>
+    <tbody>{% for r in rows %}
+      <tr><td>{{ r.test_date|d(r.test_date_precision) }}</td>
+        <td>{{ (inv.test_def(kind, r.test_code) or {}).get('label', r.test_code) }}</td>
+        <td>{{ inv.MATERIALS.get(r.material, '—') }}</td>
+        <td>{% if r.qual_result %}<span class="badge{{ ' warn' if r.qual_result == 'positive' else '' }}">{{ inv.qual_label(kind, r.test_code, r.qual_result) }}</span>{% else %}—{% endif %}{% if r.qual_detail %} {{ r.qual_detail }}{% endif %}</td>
+        <td>{% if r.value is not none %}{{ r.value|float }} {{ r.unit or '' }}{% else %}—{% endif %}</td>
+        {% if kind == 'flow' %}<td class="mono">{{ inv.format_markers(r.markers) or '—' }}</td>{% endif %}
+        <td>{% if r.conclusion %}<details><summary>текст</summary><pre class="doc">{{ r.conclusion }}</pre></details>{% else %}—{% endif %}</td>
+        <td>{% if w %}{{ edit_link(pid, 'investigation', r.inv_id) }} {{ delete_button(pid, 'investigation', r.inv_id) }}{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% endif %}
+  {% if w %}
+  <details{% if open_form == 'investigations' and form_v.get('kind') == kind %} open{% endif %}><summary>Добавить: {{ inv.kind_label(kind) }}</summary>
+    <form method="post" action="/patients/{{ pid }}/investigations" class="form compact">
+      {{ csrf_field() }}
+      {{ inv_fields(form_v if open_form == 'investigations' and form_v.get('kind') == kind else {}, pt, kind) }}
+      <div class="actions"><button class="primary">Добавить</button></div>
+    </form>
+  </details>
+  {% endif %}
+  {% endfor %}
 </section>
 
 <section class="card">
