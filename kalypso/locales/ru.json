@@ -73,14 +73,16 @@
     "response_criteria": {
       "iwCLL 2018": "iwCLL 2018",
       "Lugano 2014": "Lugano 2014",
-      "IWWM-11": "IWWM-11"
+      "IWWM-11": "IWWM-11",
+      "IPCG": "IPCG"
     },
     "response_basis": {
       "clinical": "Клинически",
       "ct": "КТ",
       "pet_ct": "ПЭТ-КТ",
       "morphology": "Морфология",
-      "laboratory": "Лабораторно (парапротеин)"
+      "laboratory": "Лабораторно (парапротеин)",
+      "mri": "МРТ"
     },
     "response_value": {
       "CR": "CR — полная ремиссия",
@@ -95,7 +97,8 @@
       "NMR": "NMR — нет метаболического ответа",
       "PMD": "PMD — метаболическое прогрессирование",
       "VGPR": "VGPR — очень хорошая частичная ремиссия",
-      "MR": "MR — минимальный ответ"
+      "MR": "MR — минимальный ответ",
+      "CRu": "CRu — неподтверждённая полная ремиссия"
     },
     "marker_value": {
       "mutated": "Мутирован",
@@ -150,7 +153,9 @@
       "alcl_alk_neg": "ALCL ALK−",
       "enktl": "ENKTL (NK/T, назальный тип и др.)",
       "myc_bcl2": "DLBCL/HGBL-MYC/BCL2",
-      "hgbl_nos": "HGBL, NOS"
+      "hgbl_nos": "HGBL, NOS",
+      "ge_70": "≥ 70",
+      "lt_70": "< 70"
     },
     "role": {
       "physician": "Лечащий врач",

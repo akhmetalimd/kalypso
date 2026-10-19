@@ -497,4 +497,29 @@ SPECS = {
         "histology": lambda rng, f: ("Биопсия: монотонная пролиферация средних клеток, «звёздное небо». ИГХ: CD20+, CD10+, "
                                      "BCL6+, BCL2-, TdT-. Ki-67 > 95 %. Заключение: лимфома Бёркитта."),
     },
+    "pcnsl": {
+        "age": (63, 10, 25, 88), "male": 0.55, "watch": 0.0, "response_basis": "mri",
+        "stage": {}, "ecog": {0: 20, 1: 35, 2: 25, 3: 15, 4: 5},
+        "fields": lambda rng, ctx: {
+            "ldh_uln": _maybe(rng, pick(rng, {"le_uln": 60, "uln_1_3": 35, "gt_3_uln": 5})),
+            "csf_protein": _maybe(rng, "yes" if rng.random() < 0.5 else "no", 0.2),
+            "deep_brain": "yes" if rng.random() < 0.55 else "no",
+            "kps": "ge_70" if ctx["ecog"] <= 1 else "lt_70",
+            "ocular": "yes" if rng.random() < 0.15 else None,
+            "csf_cytology": ("detected" if rng.random() < 0.15 else "not_detected") if rng.random() < 0.6 else None,
+        },
+        "labs": lambda rng, ctx, f: [("2532-0", rng.randint(*{"le_uln": (140, 245), "uln_1_3": (260, 600),
+                                                              "gt_3_uln": (760, 1000)}.get(f["ldh_uln"], (150, 400))), "U/L"),
+                                     ("2160-0", rng.randint(55, 110), "umol/L")],
+        "first": lambda rng, ctx, f: (("HD-MTX + ритуксимаб", "метотрексат 3,5 г/м², ритуксимаб", 6) if ctx["age"] >= 70 else pick(rng, {
+            ("MATRix", "метотрексат, цитарабин, тиотепа, ритуксимаб", 4): 55, ("R-MPV", "ритуксимаб, метотрексат, прокарбазин, винкристин", 5): 35,
+            ("HD-MTX + темозоломид", "метотрексат, темозоломид", 6): 10})),
+        "later": [("Тиотепа-ВДХТ + аутоТГСК", "тиотепа, кармустин / бусульфан, аутоТГСК", 1), ("Ибрутиниб", "ибрутиниб", None),
+                  ("Облучение всего головного мозга (WBRT)", "WBRT 23,4–36 Гр", None),
+                  ("Леналидомид + ритуксимаб (R²)", "леналидомид, ритуксимаб", 12)],
+        "p_complete": lambda risk: 0.65 - 0.3 * risk, "p_relapse": lambda risk: 0.4 + 0.3 * risk,
+        "relapse_months": (6, 36), "death_progressive": 0.7,
+        "histology": lambda rng, f: ("Стереотаксическая биопсия: периваскулярная инфильтрация крупными атипичными B-клетками. "
+                                     "ИГХ: CD20+, MUM1+, BCL6+, CD10-. Ki-67 80–90 %. Заключение: первичная ДВКЛ ЦНС."),
+    },
 }

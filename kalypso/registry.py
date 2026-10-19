@@ -599,7 +599,7 @@ def _obs_row(f: Form, prof: dict) -> dict:
         "line_id": f.raw("line_id"),
         "response_value": f.choice("response_value", f"Ответ ({prof['criteria']})", prof["responses"]),
         "response_basis": f.choice("response_basis", "Основание оценки",
-                                   ("clinical", "ct", "pet_ct", "morphology", "laboratory")),
+                                   ("clinical", "ct", "pet_ct", "morphology", "laboratory", "mri")),
         "event_type": f.choice("event_type", "Событие",
                                ("none", "progression", "relapse", "death", "new_line_start"), default="none"),
         "event_date": f.date("event_date", "Дата события"),

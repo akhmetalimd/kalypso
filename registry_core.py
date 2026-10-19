@@ -489,12 +489,15 @@ INDEXES = {
     "CNS-IPI": {"max": 6, "groups": ((1, "low"), (3, "intermediate"), (6, "high"))},
     "aaIPI": {"max": 3, "groups": ((0, "low"), (1, "low_intermediate"), (2, "high_intermediate"), (3, "high"))},
     "BL-IPI": {"max": 4, "groups": ((0, "low"), (1, "intermediate"), (4, "high"))},
+    "IELSG": {"max": 5, "groups": ((1, "low"), (3, "intermediate"), (5, "high"))},
+    "MSKCC": {"max": 2, "groups": ((0, "low"), (1, "intermediate"), (2, "high"))},
 }
 LDH_CATEGORIES = ("le_uln", "uln_1_3", "gt_3_uln")   # ЛДГ: ≤ ВГН, > 1–3 × ВГН, > 3 × ВГН
 RESPONSES = {
     "iwCLL 2018": ("CR", "CRi", "nPR", "PR", "PR-L", "SD", "PD"),
     "Lugano 2014": ("CMR", "PMR", "NMR", "PMD", "CR", "PR", "SD", "PD"),
     "IWWM-11": ("CR", "VGPR", "PR", "MR", "SD", "PD"),
+    "IPCG": ("CR", "CRu", "PR", "SD", "PD"),
 }
 LUGANO_METABOLIC = ("CMR", "PMR", "NMR", "PMD")      # ответ по ПЭТ-КТ (Deauville обязателен)
 
@@ -900,6 +903,40 @@ def bl_ipi(age: Optional[float], ecog: Optional[int], ldh: Optional[str], cns: O
     return {"score": score, "group": index_group("BL-IPI", score), "components": parts}
 
 
+# ---------------------------------------------------------------------------
+# 15. Первичная лимфома ЦНС: IELSG, MSKCC
+# ---------------------------------------------------------------------------
+def ielsg(age: Optional[float], ecog: Optional[int], ldh: Optional[str], csf_protein_high: Optional[bool],
+          deep_brain: Optional[bool]) -> Optional[dict]:
+    """IELSG (Ferreri, 2003), по 1 баллу: возраст > 60, ECOG > 1, ЛДГ > ВГН, повышенный белок ликвора,
+    поражение глубоких структур мозга. 0–1 низкий, 2–3 промежуточный, 4–5 высокий."""
+    parts = {
+        "age": None if age is None else int(age > 60),
+        "ECOG": None if ecog is None else int(ecog > 1),
+        "LDH": None if ldh not in LDH_CATEGORIES else int(ldh != "le_uln"),
+        "CSF": None if csf_protein_high is None else int(csf_protein_high),
+        "deep": None if deep_brain is None else int(deep_brain),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("IELSG", score), "components": parts}
+
+
+def mskcc_pcnsl(age: Optional[float], kps_ge70: Optional[bool]) -> Optional[dict]:
+    """Прогностические классы MSKCC (Abrey, 2006): 1 — возраст ≤ 50; 2 — > 50 и KPS ≥ 70;
+    3 — > 50 и KPS < 70. Балл 0 / 1 / 2."""
+    if age is None:
+        return None
+    if age <= 50:
+        score = 0
+    elif kps_ge70 is None:
+        return None
+    else:
+        score = 1 if kps_ge70 else 2
+    return {"score": score, "group": index_group("MSKCC", score), "components": {"class": score + 1}}
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -945,6 +982,7 @@ if __name__ == "__main__":
     assert cns_ipi(70, 2, True, "uln_1_3", True, True)["score"] == 6
     assert aa_ipi(2, True, "uln_1_3")["group"] == "high"
     assert bl_ipi(45, 2, "gt_3_uln", True)["score"] == 4 and bl_ipi(45, 0, "uln_1_3", False)["score"] == 1
+    assert ielsg(65, 2, "uln_1_3", True, True)["group"] == "high" and mskcc_pcnsl(40, None)["group"] == "low"
     try:
         kaplan_meier([-1], [1])
         raise AssertionError("отрицательное время должно отвергаться")

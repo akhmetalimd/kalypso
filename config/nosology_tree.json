@@ -128,6 +128,29 @@
           ]
         },
         {
+          "id": "pcnsl",
+          "name": "Первичная лимфома ЦНС (ПЛЦНС)",
+          "status": "active",
+          "module": "pcnsl",
+          "codes": { "icd_o_3_2": "9680/3", "mkb10": "C83.3" },
+          "_comment": "WHO-HAEM5: первичная крупноклеточная B-лимфома иммунопривилегированных зон; отдельного кода МКБ-10 нет",
+          "staging": [],
+          "index": "IELSG",
+          "response_criteria": "IPCG",
+          "markers": [],
+          "regimens": ["MATRix", "R-MPV", "HD-MTX + ритуксимаб", "HD-MTX + темозоломид", "Тиотепа-ВДХТ + аутоТГСК",
+                       "Облучение всего головного мозга (WBRT)", "Ибрутиниб", "Леналидомид + ритуксимаб (R²)",
+                       "Темозоломид — поддержка"],
+          "core_fields": [
+            { "key": "ldh_uln",     "label_ru": "ЛДГ относительно ВГН лаборатории",           "values": ["le_uln", "uln_1_3", "gt_3_uln"] },
+            { "key": "csf_protein", "label_ru": "Белок ликвора повышен",                      "values": ["yes", "no"] },
+            { "key": "deep_brain",  "label_ru": "Поражение глубоких структур мозга",           "values": ["yes", "no"] },
+            { "key": "kps",         "label_ru": "Индекс Карновского",                         "values": ["ge_70", "lt_70"] },
+            { "key": "ocular",      "label_ru": "Поражение глаз (витреоретинальное)",          "values": ["yes", "no"], "optional": true },
+            { "key": "csf_cytology","label_ru": "Опухолевые клетки в ликворе",                "values": ["detected", "not_detected"], "optional": true }
+          ]
+        },
+        {
           "id": "follicular",
           "name": "Фолликулярная лимфома (ФЛ)",
           "status": "active",

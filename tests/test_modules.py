@@ -98,6 +98,16 @@ CASES = {
         "stored": "3", "bad_score": "5", "db": ("BL-IPI", 5, "high", "index_bl_ipi"),
         "optional": ["ebv"],
     },
+    # Без стадирования. 71 год, ECOG 2, ЛДГ > ВГН, белок ликвора, глубокие структуры: IELSG 5;
+    # > 50 лет и KPS < 70 — MSKCC класс 3 (балл 2, высокий).
+    "pcnsl": {
+        "form": {"birth_date": "1950-02-01", "ecog": "2"},
+        "fields": {"ldh_uln": "uln_1_3", "csf_protein": "yes", "deep_brain": "yes", "kps": "lt_70"},
+        "labs": [],
+        "expected": {"IELSG": (5, "high"), "MSKCC": (2, "high")},
+        "stored": "5", "bad_score": "6", "db": ("IELSG", 6, "high", "index_ielsg"),
+        "optional": ["ocular", "csf_cytology"],
+    },
 }
 NOSOLOGIES = list(CASES)
 
@@ -310,4 +320,26 @@ def test_burkitt_myc_check_and_hiv_panel(world):
     card = registry.get_card(world.db, world.doc_a, pid)
     assert "burkitt_no_myc" in card["flags"]["quality"]
     assert {i["title"] for i in card["module_info"]} == {"ВИЧ+", "Поражение ЦНС"}
+
+
+def test_pcnsl_ipcg_response_by_mri(world):
+    pid = register(world, "pcnsl", index_score="5")
+    lid = registry.add_line(world.db, world.doc_a, pid, {**R, "regimen": "MATRix", "start_date": "2021-03-15",
+                                                         "end_date": "2021-06-15"}).record_id
+    obs = {**R, "obs_date": "2021-07-01", "line_id": str(lid)}
+    oid = registry.add_observation(world.db, world.doc_a, pid, {**obs, "response_value": "CRu", "response_basis": "mri"}).record_id
+    assert registry.get_record(world.db, world.doc_a, pid, "observation", oid)["response_criteria"] == "IPCG"
+    with pytest.raises(ValidationError, match="недопустимое"):
+        registry.add_observation(world.db, world.doc_a, pid, {**obs, "response_value": "CMR", "response_basis": "pet_ct"})
+    assert analytics.module_dashboard(world.db, world.curator, "pcnsl")["responses"] == [("Линия 1", {"CR": 1})]
+
+
+def test_db_ipcg_response(reg):
+    pid = reg.patient("990000000903", who_haem5="pcnsl", icd_o_3_2="9680/3", mkb="C83.3",
+                      stage_system=None, stage_value=None)
+    reg.con.commit()
+    reg.obs(pid, response_value="CRu", response_criteria="IPCG", response_basis="mri")
+    reg.con.commit()
+    with rejected(reg.con, "response_ipcg"):
+        reg.obs(pid, response_value="VGPR", response_criteria="IPCG", response_basis="mri")
 

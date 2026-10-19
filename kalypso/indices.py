@@ -190,6 +190,15 @@ def _burkitt(pt, mm, labs, age):
                 "возраст, ECOG, ЛДГ (> 3 × ВГН), поражение ЦНС", stored=True)]
 
 
+def _pcnsl(pt, mm, labs, age):
+    return [
+        _ix("IELSG", core.ielsg(age, pt["ecog"], _ldh(mm.get("ldh_uln")), _yes_no(mm.get("csf_protein")),
+                                _yes_no(mm.get("deep_brain"))),
+            "возраст, ECOG, ЛДГ, белок ликвора, глубокие структуры мозга", stored=True),
+        _ix("MSKCC", core.mskcc_pcnsl(age, _gt(mm.get("kps"), "ge_70", "lt_70")), "возраст, индекс Карновского"),
+    ]
+
+
 # нозология -> (функция расчёта, названия индексов в порядке вывода; первый — индекс карточки)
 CALCULATORS = {
     "cll_sll": (_cll, ("CLL-IPI",)),
@@ -203,6 +212,7 @@ CALCULATORS = {
     "hgbl": (_hgbl, ("IPI", "CNS-IPI")),
     "pmbcl": (_pmbcl, ("aaIPI",)),
     "burkitt": (_burkitt, ("BL-IPI",)),
+    "pcnsl": (_pcnsl, ("IELSG", "MSKCC")),
 }
 
 

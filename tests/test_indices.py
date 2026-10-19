@@ -1,7 +1,7 @@
 """Формулы индексов нозологий на общей основе (registry_core), без БД."""
 import pytest
 
-from registry_core import (aa_ipi, bl_ipi, cns_ipi, ghsg_group, index_group, index_groups, ips, ipss_wm, malt_ipi, mipi_c, pink, pit,
+from registry_core import (aa_ipi, bl_ipi, cns_ipi, ielsg, mskcc_pcnsl, ghsg_group, index_group, index_groups, ips, ipss_wm, malt_ipi, mipi_c, pink, pit,
                            ripss_wm, smipi)
 
 
@@ -157,4 +157,20 @@ def test_aa_ipi(args, group):
 def test_bl_ipi(args, score, group):
     r = bl_ipi(*args)
     assert (r["score"], r["group"]) == (score, group)
+
+
+# --- ПЛЦНС: IELSG, MSKCC -----------------------------------------------------------
+@pytest.mark.parametrize("args, score, group", [
+    ((60, 1, "le_uln", False, False), 0, "low"), ((61, 2, "le_uln", False, False), 2, "intermediate"),
+    ((61, 2, "uln_1_3", True, False), 4, "high"),
+])
+def test_ielsg(args, score, group):
+    r = ielsg(*args)
+    assert (r["score"], r["group"]) == (score, group)
+
+
+@pytest.mark.parametrize("age, kps, group", [(50, None, "low"), (51, True, "intermediate"), (51, False, "high")])
+def test_mskcc(age, kps, group):
+    assert mskcc_pcnsl(age, kps)["group"] == group
+    assert mskcc_pcnsl(60, None) is None
 
