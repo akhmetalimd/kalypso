@@ -79,6 +79,15 @@ CASES = {
         "stored": "5", "bad_score": "6", "db": ("IPI", 6, "high", "index_ipi"),
         "optional": [],
     },
+    # Стадия IV, ЛДГ > ВГН, ECOG 2: aaIPI 3 (высокий).
+    "pmbcl": {
+        "form": {"birth_date": "1990-02-01", "stage_system": "Lugano", "stage_value": "IV", "ecog": "2"},
+        "fields": {"bulky_med": "yes", "effusion": "no", "ldh_uln": "uln_1_3"},
+        "labs": [],
+        "expected": {"aaIPI": (3, "high")},
+        "stored": "3", "bad_score": "4", "db": ("aaIPI", 4, "high", "index_aa_ipi"),
+        "optional": ["svc_syndrome"],
+    },
 }
 NOSOLOGIES = list(CASES)
 

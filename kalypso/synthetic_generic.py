@@ -448,4 +448,26 @@ SPECS = {
                                      "ИГХ: CD20+, CD10+, BCL2+, MYC+ (> 40 %). Ki-67 90 %. "
                                      "Заключение: B-клеточная лимфома высокой степени злокачественности."),
     },
+    "pmbcl": {
+        "age": (35, 10, 18, 70), "male": 0.4, "watch": 0.0,
+        "stage": {"I": 10, "IE": 5, "II": 45, "IIE": 15, "III": 5, "IV": 20},
+        "ecog": {0: 45, 1: 35, 2: 15, 3: 5},
+        "fields": lambda rng, ctx: {
+            "bulky_med": "yes" if rng.random() < 0.7 else "no",
+            "effusion": _maybe(rng, "yes" if rng.random() < 0.35 else "no"),
+            "ldh_uln": _maybe(rng, pick(rng, {"le_uln": 25, "uln_1_3": 55, "gt_3_uln": 20})),
+            "svc_syndrome": "yes" if rng.random() < 0.25 else None,
+        },
+        "labs": lambda rng, ctx, f: [("2532-0", rng.randint(*{"le_uln": (140, 245), "uln_1_3": (260, 740),
+                                                              "gt_3_uln": (760, 1400)}.get(f["ldh_uln"], (200, 500))), "U/L")],
+        "first": lambda rng, ctx, f: pick(rng, {("DA-EPOCH-R", "дозоадаптированный EPOCH, ритуксимаб", 6): 60,
+                                                 ("R-CHOP + ЛТ", "R-CHOP ×6, ЛТ на средостение 30 Гр", 6): 40}),
+        "later": [("Пембролизумаб", "пембролизумаб", 12), ("R-ICE + аутоТГСК", "R-ICE, ВДХТ, аутоТГСК", 3),
+                  ("Ниволумаб + брентуксимаб", "ниволумаб, брентуксимаб ведотин", 8), ("CAR-T (axi-cel)", "аксикабтаген цилолейсел", 1)],
+        "p_complete": lambda risk: 0.88 - 0.3 * risk, "p_relapse": lambda risk: 0.1 + 0.2 * risk,
+        "relapse_months": (3, 24), "death_progressive": 0.55,
+        "histology": lambda rng, f: ("Биопсия опухоли средостения: крупные клетки со светлой цитоплазмой, склероз. "
+                                     "ИГХ: CD20+, CD23+, CD30 слабо+, PD-L1+, MAL+. "
+                                     "Заключение: первичная медиастинальная B-клеточная лимфома."),
+    },
 }

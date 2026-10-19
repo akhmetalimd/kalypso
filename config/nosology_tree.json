@@ -86,6 +86,26 @@
           ]
         },
         {
+          "id": "pmbcl",
+          "name": "Первичная медиастинальная B-клеточная лимфома (ПМБКЛ)",
+          "status": "active",
+          "module": "pmbcl",
+          "codes": { "icd_o_3_2": "9679/3", "mkb10": "C85.2" },
+          "staging": ["Lugano"],
+          "stage_values": { "Lugano": ["I", "IE", "II", "IIE", "III", "IV"] },
+          "index": "aaIPI",
+          "response_criteria": "Lugano 2014",
+          "markers": [],
+          "regimens": ["DA-EPOCH-R", "R-CHOP", "R-CHOP + ЛТ", "Лучевая терапия на средостение", "R-ICE + аутоТГСК",
+                       "Пембролизумаб", "Ниволумаб + брентуксимаб", "CAR-T (axi-cel)", "CAR-T (liso-cel)"],
+          "core_fields": [
+            { "key": "bulky_med", "label_ru": "Массивное поражение средостения (> 1/3 или ≥ 10 см)", "values": ["yes", "no"] },
+            { "key": "effusion",  "label_ru": "Плевральный / перикардиальный выпот",                 "values": ["yes", "no"] },
+            { "key": "ldh_uln",   "label_ru": "ЛДГ относительно ВГН лаборатории",                    "values": ["le_uln", "uln_1_3", "gt_3_uln"] },
+            { "key": "svc_syndrome", "label_ru": "Синдром верхней полой вены",                       "values": ["yes", "no"], "optional": true }
+          ]
+        },
+        {
           "id": "follicular",
           "name": "Фолликулярная лимфома (ФЛ)",
           "status": "active",

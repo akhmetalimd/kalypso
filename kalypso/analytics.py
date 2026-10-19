@@ -60,7 +60,7 @@ GROUPINGS = {
     "deauville_pet2": "Deauville промежуточной ПЭТ-КТ (ПЭТ-2, анализ от ориентира)",
 }
 # Особые группировки нозологий на общей основе (добавляются к автоматическим).
-EXTRA_GROUPINGS = {"hodgkin": ("deauville_pet2",)}
+EXTRA_GROUPINGS = {"hodgkin": ("deauville_pet2",), "pmbcl": ("deauville_eot1",)}
 # Группировки по нозологиям: выбор такой группировки сужает когорту до её нозологии.
 GROUPING_SETS = {
     None: ("none", "sex", "branch", "line1_regimen", "lab"),

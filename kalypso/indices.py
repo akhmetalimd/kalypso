@@ -180,6 +180,11 @@ def _hgbl(pt, mm, labs, age):
     ]
 
 
+def _pmbcl(pt, mm, labs, age):
+    return [_ix("aaIPI", core.aa_ipi(pt["ecog"], _adv(pt), _ldh(mm.get("ldh_uln"))),
+                "стадия Lugano, ЛДГ, ECOG", stored=True)]
+
+
 # нозология -> (функция расчёта, названия индексов в порядке вывода; первый — индекс карточки)
 CALCULATORS = {
     "cll_sll": (_cll, ("CLL-IPI",)),
@@ -191,6 +196,7 @@ CALCULATORS = {
     "mzl": (_mzl, ("MALT-IPI",)),
     "ptcl": (_ptcl, ("IPI", "PIT", "PINK")),
     "hgbl": (_hgbl, ("IPI", "CNS-IPI")),
+    "pmbcl": (_pmbcl, ("aaIPI",)),
 }
 
 
