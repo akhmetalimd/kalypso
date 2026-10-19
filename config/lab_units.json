@@ -59,5 +59,10 @@
     "name": "Альбумин",
     "canonical_unit": "g/L",
     "conversions": { "g/L": 1.0, "g/dL": 10.0 }
+  },
+  "2472-0": {
+    "name": "IgM",
+    "canonical_unit": "g/L",
+    "conversions": { "g/L": 1.0, "mg/dL": 0.01 }
   }
 }

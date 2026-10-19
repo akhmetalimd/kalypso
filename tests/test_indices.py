@@ -1,7 +1,7 @@
 """Формулы индексов нозологий на общей основе (registry_core), без БД."""
 import pytest
 
-from registry_core import ghsg_group, ips, mipi_c, smipi
+from registry_core import ghsg_group, index_group, index_groups, ips, ipss_wm, mipi_c, ripss_wm, smipi
 
 
 # --- MCL ---------------------------------------------------------------------
@@ -65,4 +65,32 @@ def test_ips(args, score, group):
     r = ips(*args)
     assert (r["score"], r["group"]) == (score, group)
     assert ips(None, 140, False, 30, False, 7, 2.0) is None
+
+
+# --- Вальденстрём ----------------------------------------------------------------
+@pytest.mark.parametrize("args, score, group", [
+    ((60, 130, 200, 2.0, 30), 0, "low"),
+    ((60, 110, 200, 2.0, 30), 1, "low"),             # один фактор, не возраст
+    ((70, 130, 200, 2.0, 30), 1, "intermediate"),    # один фактор — возраст > 65
+    ((60, 110, 90, 2.0, 30), 2, "intermediate"),
+    ((60, 115, 100, 3.1, 30), 3, "high"),            # Hb ≤ 115 и тромбоциты ≤ 100 включительно
+    ((70, 110, 90, 4.0, 75), 5, "high"),
+])
+def test_ipss_wm(args, score, group):
+    r = ipss_wm(*args)
+    assert (r["score"], r["group"]) == (score, group)
+    assert index_groups("IPSS-WM", 1) == ("low", "intermediate") and index_group("IPSS-WM", 1) is None
+    assert index_group("IPSS-WM", 2) == "intermediate"
+
+
+@pytest.mark.parametrize("args, score, group", [
+    ((65, 3.9, 249, 35), 0, "very_low"),
+    ((66, 3.9, 249, 35), 1, "low"),
+    ((76, 3.9, 249, 35), 2, "intermediate"),
+    ((76, 4.0, 249, 35), 3, "high"),
+    ((76, 4.0, 250, 34.9), 5, "very_high"),
+])
+def test_ripss_wm(args, score, group):
+    r = ripss_wm(*args)
+    assert (r["score"], r["group"]) == (score, group)
 

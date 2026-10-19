@@ -40,6 +40,17 @@ CASES = {
         "stored": "6", "bad_score": "8", "db": ("IPS", 9, "high", "index_ips"),
         "optional": [],
     },
+    # Без стадирования. 71 год, Hb 110, тромбоциты 90, β2M 4,5, IgM 75: IPSS-WM 5 (высокий);
+    # rIPSS-WM: возраст 66–75 — 1, β2M ≥ 4 — 1, ЛДГ 260 — 1, альбумин 33 — 1 = 4 (очень высокий).
+    "waldenstrom": {
+        "form": {"birth_date": "1950-02-01", "ecog": "1"},
+        "fields": {"myd88": "detected", "cxcr4": "not_detected", "treat_indication": "yes"},
+        "labs": [("8302-2", "110", "g/L"), ("777-3", "90", "10*9/L"), ("1952-1", "4.5", "mg/L"),
+                 ("2472-0", "75", "g/L"), ("2532-0", "260", "U/L"), ("1751-7", "33", "g/L")],
+        "expected": {"IPSS-WM": (5, "high"), "rIPSS-WM": (4, "very_high")},
+        "stored": "5", "bad_score": "6", "db": ("IPSS-WM", 2, "high", "index_ipss_wm"),
+        "optional": ["hyperviscosity"],
+    },
 }
 NOSOLOGIES = list(CASES)
 
@@ -170,4 +181,37 @@ def test_hodgkin_early_stage_ghsg_and_pet2_landmark(world):
     assert res["nosology"] == "hodgkin" and {g["label"] for g in res["groups"]} == {"ПЭТ-2: Deauville 1–3"}
     row = res["rows"][0]
     assert str(row["start"]) == "2021-05-10"                                  # отсчёт от ПЭТ-2
+
+
+def test_wm_no_staging_ambiguous_ipss_and_iwwm(world):
+    with pytest.raises(ValidationError, match="группа зависит от факторов"):
+        register(world, "waldenstrom", index_score="1")
+    pid = register(world, "waldenstrom", index_score="1", index_group="intermediate")   # один фактор — возраст
+    card = registry.get_card(world.db, world.doc_a, pid)
+    assert card["patient"]["index_group"] == "intermediate" and card["patient"]["stage_system"] is None
+    assert "empty_stage_value" not in card["flags"]["completeness"]                    # стадирования нет
+    with pytest.raises(ValidationError, match="группа не соответствует"):
+        register(world, "waldenstrom", index_score="1", index_group="high")
+    lid = registry.add_line(world.db, world.doc_a, pid, {**R, "regimen": "BR", "start_date": "2021-04-01",
+                                                         "end_date": "2021-09-01"}).record_id
+    obs = {**R, "obs_date": "2021-10-01", "line_id": str(lid)}
+    oid = registry.add_observation(world.db, world.doc_a, pid, {**obs, "response_value": "VGPR",
+                                                                "response_basis": "laboratory"}).record_id
+    rec = registry.get_record(world.db, world.doc_a, pid, "observation", oid)
+    assert (rec["response_criteria"], rec["response_value"]) == ("IWWM-11", "VGPR")
+    with pytest.raises(ValidationError, match="недопустимое"):
+        registry.add_observation(world.db, world.doc_a, pid, {**obs, "response_value": "CMR", "response_basis": "pet_ct"})
+    d = analytics.module_dashboard(world.db, world.curator, "waldenstrom")
+    assert d["stages"] == [] and d["responses"] == [("Линия 1", {"CR": 1})]           # VGPR — в группе CR / VGPR
+    assert analytics.response_groups("waldenstrom")[0] == ("CR", "CR / VGPR")
+
+
+def test_db_iwwm_response(reg):
+    pid = reg.patient("990000000902", who_haem5="waldenstrom", icd_o_3_2="9761/3", mkb="C88.0",
+                      stage_system=None, stage_value=None)
+    reg.con.commit()
+    reg.obs(pid, response_value="VGPR", response_criteria="IWWM-11", response_basis="laboratory")
+    reg.con.commit()
+    with rejected(reg.con, "response_iwwm"):
+        reg.obs(pid, response_value="CMR", response_criteria="IWWM-11", response_basis="laboratory")
 

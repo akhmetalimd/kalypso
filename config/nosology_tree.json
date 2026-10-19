@@ -132,14 +132,23 @@
         },
         {
           "id": "waldenstrom",
-          "name": "Макроглобулинемия Вальденстрёма",
-          "status": "coming_soon",
+          "name": "Макроглобулинемия Вальденстрёма (МВ)",
+          "status": "active",
           "module": "waldenstrom",
           "codes": { "icd_o_3_2": "9761/3", "mkb10": "C88.0" },
           "staging": [],
-          "index": null,
-          "response_criteria": "критерии ответа Вальденстрёма",
-          "markers": ["MYD88", "CXCR4"]
+          "index": "IPSS-WM",
+          "response_criteria": "IWWM-11",
+          "markers": ["MYD88", "CXCR4"],
+          "regimens": ["DRC (дексаметазон, ритуксимаб, циклофосфамид)", "BR", "Занубрутиниб", "Ибрутиниб + ритуксимаб",
+                       "Ибрутиниб", "Акалабрутиниб", "Ритуксимаб (монотерапия)", "BDR (бортезомиб, дексаметазон, ритуксимаб)",
+                       "Пиртобрутиниб", "Венетоклакс", "Плазмаферез"],
+          "core_fields": [
+            { "key": "myd88",            "label_ru": "MYD88 L265P",                       "values": ["detected", "not_detected"] },
+            { "key": "cxcr4",            "label_ru": "Мутация CXCR4",                     "values": ["detected", "not_detected"] },
+            { "key": "treat_indication", "label_ru": "Показания к лечению (IWWM)",        "values": ["yes", "no"] },
+            { "key": "hyperviscosity",   "label_ru": "Синдром гипервязкости",             "values": ["yes", "no"], "optional": true }
+          ]
         }
       ]
     },

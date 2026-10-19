@@ -19,6 +19,9 @@ LOINC_HB = "8302-2"
 LOINC_WBC = "6690-2"
 LOINC_LYMPH = "731-0"
 LOINC_ALBUMIN = "1751-7"
+LOINC_PLT = "777-3"
+LOINC_LDH = "2532-0"
+LOINC_IGM = "2472-0"
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +139,17 @@ def _hodgkin(pt, mm, labs, age):
     ]
 
 
+def _wm(pt, mm, labs, age):
+    def lab(loinc):
+        return _lab_near(labs, loinc, pt["dx_date"])
+    return [
+        _ix("IPSS-WM", core.ipss_wm(age, lab(LOINC_HB), lab(LOINC_PLT), lab(LOINC_B2M), lab(LOINC_IGM)),
+            "возраст, Hb, тромбоциты, β2M, IgM (анализы на диагнозе)", stored=True),
+        _ix("rIPSS-WM", core.ripss_wm(age, lab(LOINC_B2M), lab(LOINC_LDH), lab(LOINC_ALBUMIN)),
+            "возраст, β2M, ЛДГ, альбумин (анализы на диагнозе)"),
+    ]
+
+
 # нозология -> (функция расчёта, названия индексов в порядке вывода; первый — индекс карточки)
 CALCULATORS = {
     "cll_sll": (_cll, ("CLL-IPI",)),
@@ -143,6 +157,7 @@ CALCULATORS = {
     "follicular": (_fl, ("FLIPI", "FLIPI-2", "PRIMA-PI")),
     "mcl": (_mcl, ("sMIPI", "MIPI-c")),
     "hodgkin": (_hodgkin, ("IPS", "GHSG")),
+    "waldenstrom": (_wm, ("IPSS-WM", "rIPSS-WM")),
 }
 
 

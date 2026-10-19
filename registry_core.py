@@ -479,21 +479,34 @@ INDEXES = {
     "MIPI-c": {"max": 3, "groups": ((0, "low"), (1, "low_intermediate"), (2, "high_intermediate"), (3, "high"))},
     "IPS": {"max": 7, "groups": ((1, "low"), (3, "intermediate"), (7, "high"))},
     "GHSG": {"max": 2, "groups": ((0, "early_favorable"), (1, "early_unfavorable"), (2, "advanced"))},
+    # IPSS-WM: при одном факторе группа зависит от того, какой он (возраст — промежуточный).
+    "IPSS-WM": {"max": 5, "groups": ((0, "low"), (2, "intermediate"), (5, "high")),
+                "allowed": {1: ("low", "intermediate")}},
+    "rIPSS-WM": {"max": 5, "groups": ((0, "very_low"), (1, "low"), (2, "intermediate"), (3, "high"), (5, "very_high"))},
 }
 LDH_CATEGORIES = ("le_uln", "uln_1_3", "gt_3_uln")   # ЛДГ: ≤ ВГН, > 1–3 × ВГН, > 3 × ВГН
 RESPONSES = {
     "iwCLL 2018": ("CR", "CRi", "nPR", "PR", "PR-L", "SD", "PD"),
     "Lugano 2014": ("CMR", "PMR", "NMR", "PMD", "CR", "PR", "SD", "PD"),
+    "IWWM-11": ("CR", "VGPR", "PR", "MR", "SD", "PD"),
 }
 LUGANO_METABOLIC = ("CMR", "PMR", "NMR", "PMD")      # ответ по ПЭТ-КТ (Deauville обязателен)
 
 
-def index_group(name: str, score) -> Optional[str]:
-    """Группа риска по баллу индекса; None — неизвестный индекс или балл вне шкалы."""
+def index_groups(name: str, score) -> tuple:
+    """Допустимые группы для балла: обычно одна; у IPSS-WM при балле 1 — две."""
     spec = INDEXES.get(name)
     if spec is None or score is None or not 0 <= score <= spec["max"]:
-        return None
-    return next(g for upper, g in spec["groups"] if score <= upper)
+        return ()
+    allowed = spec.get("allowed", {}).get(score)
+    return allowed or (next(g for upper, g in spec["groups"] if score <= upper),)
+
+
+def index_group(name: str, score) -> Optional[str]:
+    """Группа риска по баллу индекса; None — неизвестный индекс, балл вне шкалы
+    или группа по баллу не однозначна (см. index_groups)."""
+    groups = index_groups(name, score)
+    return groups[0] if len(groups) == 1 else None
 
 
 def advanced_stage(stage_system: Optional[str], stage_value: Optional[str]) -> Optional[bool]:
@@ -748,6 +761,44 @@ def ips(albumin_g_l: Optional[float], hb_g_l: Optional[float], male: Optional[bo
     return {"score": score, "group": index_group("IPS", score), "components": parts}
 
 
+# ---------------------------------------------------------------------------
+# 11. Макроглобулинемия Вальденстрёма: IPSS-WM, rIPSS-WM
+# ---------------------------------------------------------------------------
+def ipss_wm(age: Optional[float], hb_g_l: Optional[float], plt_10e9_l: Optional[float],
+            b2m_mg_l: Optional[float], igm_g_l: Optional[float]) -> Optional[dict]:
+    """IPSS-WM (Morel, 2009): возраст > 65, Hb ≤ 115 г/л, тромбоциты ≤ 100 ×10⁹/л, β2M > 3 мг/л,
+    IgM > 70 г/л. Низкий — ≤ 1 фактора, кроме возраста; промежуточный — 2 фактора или возраст > 65;
+    высокий — > 2 факторов. Балл — число факторов."""
+    parts = {
+        "age": None if age is None else int(age > 65),
+        "Hb": None if hb_g_l is None else int(hb_g_l <= 115),
+        "PLT": None if plt_10e9_l is None else int(plt_10e9_l <= 100),
+        "b2m": None if b2m_mg_l is None else int(b2m_mg_l > 3),
+        "IgM": None if igm_g_l is None else int(igm_g_l > 70),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    group = "high" if score > 2 else "intermediate" if score == 2 or parts["age"] else "low"
+    return {"score": score, "group": group, "components": parts}
+
+
+def ripss_wm(age: Optional[float], b2m_mg_l: Optional[float], ldh_u_l: Optional[float],
+             albumin_g_l: Optional[float]) -> Optional[dict]:
+    """rIPSS-WM (Kastritis, 2019): возраст 66–75 — 1, ≥ 76 — 2; β2M ≥ 4 мг/л — 1; ЛДГ ≥ 250 Ед/л — 1;
+    альбумин < 35 г/л — 1. Группы: 0 очень низкий, 1 низкий, 2 промежуточный, 3 высокий, 4–5 очень высокий."""
+    parts = {
+        "age": None if age is None else (0 if age <= 65 else 1 if age < 76 else 2),
+        "b2m": None if b2m_mg_l is None else int(b2m_mg_l >= 4),
+        "LDH": None if ldh_u_l is None else int(ldh_u_l >= 250),
+        "albumin": None if albumin_g_l is None else int(albumin_g_l < 35),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("rIPSS-WM", score), "components": parts}
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -787,6 +838,7 @@ if __name__ == "__main__":
     assert smipi(72, 2, "ge_150", 16)["score"] == 11 and mipi_c("high", True)["group"] == "high"
     assert ghsg_group("IV", None, None, None, None, None)["group"] == "advanced"
     assert ips(35, 100, True, 50, True, 16, 0.5)["score"] == 7
+    assert ipss_wm(70, 120, 150, 2, 30)["group"] == "intermediate" and index_group("IPSS-WM", 1) is None
     try:
         kaplan_meier([-1], [1])
         raise AssertionError("отрицательное время должно отвергаться")

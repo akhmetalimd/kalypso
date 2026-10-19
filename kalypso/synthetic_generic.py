@@ -83,7 +83,7 @@ def one_patient(db: Database, doc: Principal, rng: random.Random, nosology: str,
 
     # --- хронология ---
     timeline: list[tuple[str, dict]] = []
-    if rng.random() < spec.get("watch", 0.05) * (1.5 - risk):
+    if spec.get("watch_if", lambda f: False)(fields) or rng.random() < spec.get("watch", 0.05) * (1.5 - risk):
         start = dx + _months(rng, 6, 48) if rng.random() < 0.5 else None      # watch & wait
     else:
         start = dx + _months(rng, 0.3, 1.5)
@@ -115,7 +115,10 @@ def one_patient(db: Database, doc: Principal, rng: random.Random, nosology: str,
         if complete and rng.random() >= spec["p_relapse"](risk):
             progressing = False
             break                                        # стойкая ремиссия
-        lo_m, hi_m = spec["relapse_months"] if complete else (1, 8)
+        if not complete and rng.random() >= spec.get("partial_progress", 1.0):
+            progressing = False
+            break                                        # частичный ответ без прогрессии за наблюдение
+        lo_m, hi_m = spec["relapse_months"] if complete else spec.get("partial_months", (1, 8))
         event_date = r_date + _months(rng, lo_m, hi_m)
         if event_date > REFERENCE_DATE:
             break
@@ -283,5 +286,36 @@ SPECS = {
         "histology": lambda rng, f: ("Биопсия лимфоузла: клетки Ходжкина и Рид–Штернберга на фоне реактивного "
                                      "микроокружения. ИГХ: CD30+, CD15+, PAX5 слабо+, CD20-, CD45-. "
                                      "Заключение: классическая лимфома Ходжкина."),
+    },
+    "waldenstrom": {
+        "age": (68, 9, 40, 90), "male": 0.6, "watch_if": lambda f: f["treat_indication"] == "no",
+        "stage": {}, "ecog": {0: 40, 1: 40, 2: 15, 3: 5},
+        "fields": lambda rng, ctx: {
+            "myd88": _maybe(rng, "detected" if rng.random() < 0.9 else "not_detected", 0.1),
+            "cxcr4": _maybe(rng, "detected" if rng.random() < 0.35 else "not_detected", 0.25),
+            "treat_indication": "yes" if rng.random() < 0.65 else "no",
+            "hyperviscosity": "yes" if rng.random() < 0.1 else None,
+        },
+        "labs": lambda rng, ctx, f: [
+            ("8302-2", round(rng.uniform(85, 115) if rng.random() < 0.5 else rng.uniform(116, 150)), "g/L"),
+            ("777-3", rng.randint(50, 100) if rng.random() < 0.15 else rng.randint(101, 350), "10*9/L"),
+            ("1952-1", round(rng.uniform(3.1, 7.5) if rng.random() < 0.5 else rng.uniform(1.5, 3.0), 1), "mg/L"),
+            ("2472-0", round(rng.uniform(71, 95) if rng.random() < 0.15 else rng.uniform(5, 70), 1), "g/L"),
+            ("2532-0", rng.randint(250, 380) if rng.random() < 0.2 else rng.randint(140, 249), "U/L"),
+            ("1751-7", round(rng.uniform(28, 34.9) if rng.random() < 0.25 else rng.uniform(35, 46), 1), "g/L"),
+        ],
+        "first": lambda rng, ctx, f: pick(rng, {
+            ("DRC (дексаметазон, ритуксимаб, циклофосфамид)", "дексаметазон, ритуксимаб, циклофосфамид", 6): 35,
+            ("BR", "бендамустин, ритуксимаб", 6): 35, ("Занубрутиниб", "занубрутиниб", None): 15,
+            ("Ибрутиниб + ритуксимаб", "ибрутиниб, ритуксимаб", None): 10,
+            ("Ритуксимаб (монотерапия)", "ритуксимаб", 4): 5}),
+        "later": [("Занубрутиниб", "занубрутиниб", None), ("BR", "бендамустин, ритуксимаб", 6),
+                  ("BDR (бортезомиб, дексаметазон, ритуксимаб)", "бортезомиб, дексаметазон, ритуксимаб", 6),
+                  ("Пиртобрутиниб", "пиртобрутиниб", None)],
+        "p_complete": lambda risk: 0.35 - 0.15 * risk, "p_relapse": lambda risk: 0.35 + 0.3 * risk,
+        "relapse_months": (24, 84), "partial_progress": 0.6, "partial_months": (12, 60), "death_progressive": 0.3,
+        "histology": lambda rng, f: ("Трепанобиопсия: интерстициальная инфильтрация лимфоплазмоцитарными клетками "
+                                     f"({rng.randint(20, 70)} %). ИГХ: CD20+, CD138+ (плазмоцитарный компонент), IgM κ. "
+                                     "Заключение: лимфоплазмоцитарная лимфома / макроглобулинемия Вальденстрёма."),
     },
 }

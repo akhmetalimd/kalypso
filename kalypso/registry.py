@@ -249,10 +249,13 @@ def _stage_and_index(f: Form, prof: dict) -> dict:
     if score is None and group:
         f.errors.append(f"{name}: укажите балл (группа выводится из него)")
     elif score is not None:
-        expected = core.index_group(name, score)
-        if group and group != expected:
+        allowed = core.index_groups(name, score)
+        if group and group not in allowed:
             f.errors.append(f"{name}: группа не соответствует баллу {score}")
-        group = expected
+        elif not group and len(allowed) == 1:
+            group = allowed[0]
+        elif not group:
+            f.errors.append(f"{name}: при балле {score} группа зависит от факторов — укажите её")
     return {"stage_system": system, "stage_value": value if system else None,
             "index_name": name if score is not None else None, "index_score": score,
             "index_group": group if score is not None else None}
@@ -595,7 +598,8 @@ def _obs_row(f: Form, prof: dict) -> dict:
         "obs_precision": f.precision("obs_precision"),
         "line_id": f.raw("line_id"),
         "response_value": f.choice("response_value", f"Ответ ({prof['criteria']})", prof["responses"]),
-        "response_basis": f.choice("response_basis", "Основание оценки", ("clinical", "ct", "pet_ct", "morphology")),
+        "response_basis": f.choice("response_basis", "Основание оценки",
+                                   ("clinical", "ct", "pet_ct", "morphology", "laboratory")),
         "event_type": f.choice("event_type", "Событие",
                                ("none", "progression", "relapse", "death", "new_line_start"), default="none"),
         "event_date": f.date("event_date", "Дата события"),
