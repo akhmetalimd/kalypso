@@ -6,7 +6,7 @@ from kalypso.db import Database
 from kalypso.rbac import MATRIX, NotFound, Principal
 from kalypso.registry import Form, ValidationError, _db_call
 
-HUMAN_ROLES = [r for r in MATRIX if r != "ai_worker"]   # служебная роль не назначается людям
+HUMAN_ROLES = list(MATRIX)
 
 
 # --- филиалы ----------------------------------------------------------------

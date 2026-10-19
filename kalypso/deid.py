@@ -1,14 +1,12 @@
-"""Граница деидентификации: проверка ИИН, HMAC-хэш, поиск идентификаторов в тексте.
+"""ИИН и идентификаторы в тексте: проверка формата и контрольной цифры ИИН, поиск
+идентификаторов в свободном тексте заключений.
 
-ИИН живёт только в памяти вызова: функции модуля не логируют его и не включают
-в тексты исключений. Хэш считается только на сервере (CLAUDE.md, правила 2–3).
+На раннем этапе ИИН хранится в карточке открыто, без хэширования (решение владельца
+проекта). Тексты ошибок модуля никогда не содержат сам ИИН.
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import re
-from dataclasses import dataclass
 from datetime import date
 
 _W1 = list(range(1, 12))
@@ -47,24 +45,6 @@ def normalize_iin(raw: str) -> str:
     return iin
 
 
-@dataclass(frozen=True)
-class IinHasher:
-    """HMAC-SHA256(ИИН, ключ). Ключ один на все филиалы; смена ключа = новая версия."""
-    key: bytes
-    key_version: int = 1
-
-    def __post_init__(self):
-        if len(self.key) < 32:
-            raise ValueError("Ключ HMAC должен быть не короче 32 байт")
-
-    def __repr__(self) -> str:  # ключ не попадает в логи и трейсбеки
-        return f"IinHasher(key=***, key_version={self.key_version})"
-
-    def hash(self, raw_iin: str) -> str:
-        iin = normalize_iin(raw_iin)
-        return hmac.new(self.key, iin.encode("ascii"), hashlib.sha256).hexdigest()
-
-
 # ---------------------------------------------------------------------------
 # Идентификаторы в свободном тексте (гистология, ПЭТ-КТ)
 # ---------------------------------------------------------------------------
@@ -77,8 +57,7 @@ _PATTERNS = {
 
 def find_identifiers(text: str | None) -> list[str]:
     """Типы найденных идентификаторов ('iin', 'phone', 'email') — без самих значений.
-    ФИО регулярками надёжно не ловятся: за них отвечает пользователь (предупреждение
-    в форме) и полноценная деидентификация на этапе П2."""
+    ФИО регулярками надёжно не ловятся: за них отвечает пользователь (предупреждение в форме)."""
     if not text:
         return []
     return [kind for kind, rx in _PATTERNS.items() if rx.search(text)]

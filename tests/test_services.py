@@ -10,13 +10,13 @@ from kalypso.rbac import AccessDenied, NotFound
 from kalypso.registry import ValidationError
 
 
-def _all_text(world) -> str:
-    """Всё содержимое всех таблиц public как текст — для поиска утечек ИИН."""
+def _all_text(world, skip: tuple = ()) -> str:
+    """Всё содержимое таблиц public (кроме skip) как текст — для поиска утечек ИИН."""
     with world.db.tx() as cur:
         cur.execute("RESET ROLE")  # читаем всё, включая служебные таблицы
         cur.execute("SELECT table_name FROM information_schema.tables "
                     "WHERE table_schema = 'public' AND table_type = 'BASE TABLE'")
-        tables = [r["table_name"] for r in cur.fetchall()]
+        tables = [r["table_name"] for r in cur.fetchall() if r["table_name"] not in skip]
         parts = []
         for t in tables:
             cur.execute(f"SELECT t::text AS row FROM {t} t")
@@ -24,31 +24,43 @@ def _all_text(world) -> str:
     return "\n".join(parts)
 
 
-# --- регистрация, хэш, дедупликация -----------------------------------------
-def test_register_stores_hash_not_iin(world):
+# --- регистрация, ИИН, дедупликация ------------------------------------------
+def test_iin_stored_only_in_patient_card(world):
     form = world.patient_form()
-    res = registry.register_patient(world.db, world.hasher, world.doc_a, form)
+    res = registry.register_patient(world.db, world.doc_a, form)
     assert res.status == "created"
-    dump = _all_text(world)
-    assert form["iin"] not in dump
-    assert world.hasher.hash(form["iin"]) in dump
+    with world.db.tx() as cur:
+        cur.execute("RESET ROLE")
+        cur.execute("SELECT iin FROM patient WHERE patient_id = %s", (res.record_id,))
+        assert cur.fetchone()["iin"] == form["iin"]
+    assert form["iin"] not in _all_text(world, skip=("patient",))      # ни в аудите, ни где-то ещё
+
+
+def test_iin_normalized_and_checked(world):
+    form = world.patient_form()
+    spaced = f"{form['iin'][:6]} {form['iin'][6:]}"
+    pid = registry.register_patient(world.db, world.doc_a, {**form, "iin": spaced}).record_id
+    assert registry.find_by_iin(world.db, world.doc_a, form["iin"]) == pid
+    bad = form["iin"][:11] + str((int(form["iin"][11]) + 1) % 10)
+    with pytest.raises(ValidationError, match="контрольная"):
+        registry.find_by_iin(world.db, world.doc_a, bad)
 
 
 def test_same_branch_duplicate_opens_existing(world):
     form = world.patient_form()
-    pid = registry.register_patient(world.db, world.hasher, world.doc_a, form).record_id
-    again = registry.register_patient(world.db, world.hasher, world.doc_a, {"iin": form["iin"]})
+    pid = registry.register_patient(world.db, world.doc_a, form).record_id
+    again = registry.register_patient(world.db, world.doc_a, {"iin": form["iin"]})
     assert (again.status, again.record_id) == ("exists_visible", pid)
 
 
 def test_cross_branch_duplicate_needs_curator(world):
     form = world.patient_form()
-    pid = registry.register_patient(world.db, world.hasher, world.doc_a, form).record_id
-    res = registry.register_patient(world.db, world.hasher, world.doc_b, {"iin": form["iin"]})
+    pid = registry.register_patient(world.db, world.doc_a, form).record_id
+    res = registry.register_patient(world.db, world.doc_b, {"iin": form["iin"]})
     assert (res.status, res.record_id) == ("exists_requested", None)  # id не раскрывается
     with pytest.raises(NotFound):
         registry.get_card(world.db, world.doc_b, pid)
-    assert registry.find_by_iin(world.db, world.hasher, world.doc_b, form["iin"]) is None
+    assert registry.find_by_iin(world.db, world.doc_b, form["iin"]) is None
 
     [req] = admin.list_requests(world.db, world.curator)
     admin.decide_request(world.db, world.curator, req["request_id"], approve=True)
@@ -57,9 +69,9 @@ def test_cross_branch_duplicate_needs_curator(world):
 
 def test_repeated_request_is_not_duplicated(world):
     form = world.patient_form()
-    registry.register_patient(world.db, world.hasher, world.doc_a, form)
+    registry.register_patient(world.db, world.doc_a, form)
     for _ in range(2):
-        registry.register_patient(world.db, world.hasher, world.doc_b, {"iin": form["iin"]})
+        registry.register_patient(world.db, world.doc_b, {"iin": form["iin"]})
     assert len(admin.list_requests(world.db, world.curator)) == 1
 
 
@@ -109,9 +121,15 @@ def test_branch_isolation_and_roles(world):
                                                       "obs_date": "2021-03-01", "provenance": "retrospective"})
 
 
-def test_card_hides_hash(world):
-    pid = world.register().record_id
-    assert "iin_hash" not in registry.get_card(world.db, world.doc_a, pid)["patient"]
+def test_iin_visible_only_to_physician_and_curator(world):
+    form = world.patient_form()
+    pid = registry.register_patient(world.db, world.doc_a, form).record_id
+    for who in (world.doc_a, world.curator):
+        assert registry.get_card(world.db, who, pid)["patient"]["iin"] == form["iin"]
+        assert registry.list_patients(world.db, who)[0]["iin"] == form["iin"]
+    for who in (world.analyst, world.admin):
+        assert "iin" not in registry.get_card(world.db, who, pid)["patient"]
+        assert "iin" not in registry.list_patients(world.db, who)[0]
 
 
 # --- версия диагноза --------------------------------------------------------
@@ -216,21 +234,21 @@ def test_markers_completeness_and_cll_ipi(world):
 # --- выгрузка и синтетика ----------------------------------------------------
 def test_export_is_deidentified(world):
     form = world.patient_form(histology_report="ХЛЛ, CD5+ CD23+ — синт. заключение")
-    registry.register_patient(world.db, world.hasher, world.doc_a, form)
+    registry.register_patient(world.db, world.doc_a, form)
     with pytest.raises(AccessDenied):
         export.patients_csv(world.db, world.doc_a)
     text = export.patients_csv(world.db, world.analyst)
     [row] = list(csv.DictReader(io.StringIO(text)))
     assert row["birth_year"] == "1950" and "birth_date" not in row
-    assert world.hasher.hash(form["iin"]) not in text and "синт. заключение" not in text
+    assert form["iin"] not in text and "синт. заключение" not in text
     assert row["pfs_event"] == "0" and row["pfs_days"] == str((1188))
 
 
-def test_synthetic_cohort_leaves_no_iin(world, caplog):
+def test_synthetic_iins_only_in_patient_table(world, caplog):
     caplog.set_level(logging.DEBUG)
-    summary = synthetic.generate(world.db, world.hasher, [world.doc_a, world.doc_b], n=12, seed=3, duplicates=2)
+    summary = synthetic.generate(world.db, [world.doc_a, world.doc_b], n=12, seed=3, duplicates=2)
     assert summary["patients"] == 12 and summary["access_requests"] == 2
-    dump = _all_text(world)
+    dump = _all_text(world, skip=("patient",))
     leaked = [i for i in summary["iins"] if i in dump or i in caplog.text]
     assert leaked == []
     assert len(registry.list_patients(world.db, world.curator)) == 12

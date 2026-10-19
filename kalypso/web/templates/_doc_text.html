@@ -1,4 +1,0 @@
-{# Текст документа с подсветкой цитат-оснований (номер метки = номер предложения). #}
-{% macro doc_text(segments) %}
-<pre class="doc">{% for s in segments %}{% if s.mark %}<mark id="ev{{ s.mark }}" title="Предложение №{{ s.mark }}">{{ s.text }}<sup>{{ s.mark }}</sup></mark>{% else %}{{ s.text }}{% endif %}{% endfor %}</pre>
-{% endmacro %}

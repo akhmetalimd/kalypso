@@ -95,7 +95,7 @@ def test_docgen_tumor_board(world, cohort):
 
 @pytest.fixture
 def app(world):
-    return create_app(Settings(dsn=world.dsn, hmac_key=world.hasher.key, session_secret=b"s" * 32,
+    return create_app(Settings(dsn=world.dsn, session_secret=b"s" * 32,
                                secure_cookies=False), world.db)
 
 

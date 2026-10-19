@@ -12,16 +12,13 @@ import json
 import os
 import secrets
 import subprocess
-import threading
 from pathlib import Path
 
 import psycopg
 
 from kalypso import auth, migrate, synthetic
-from kalypso.ai import pipeline
 from kalypso.config import Settings
 from kalypso.db import Database
-from kalypso.deid import IinHasher
 
 REPO = Path(__file__).resolve().parent.parent
 DEVDIR = REPO / ".devdb"
@@ -30,13 +27,14 @@ SEED = Path(__file__).resolve().parent / "dev_seed.json"
 
 def _dev_secrets() -> dict:
     path = DEVDIR / "dev_secrets.json"
-    if not path.exists():  # ключ HMAC создаётся один раз: иначе дедупликация сломается
-        path.write_text(json.dumps({"hmac_key": secrets.token_hex(32),
-                                    "session_secret": secrets.token_hex(32)}), encoding="utf-8")
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    if "session_secret" not in data:
+        data["session_secret"] = secrets.token_hex(32)
+        path.write_text(json.dumps(data), encoding="utf-8")
+    return data
 
 
-def seed_if_empty(db: Database, hasher: IinHasher) -> dict | None:
+def seed_if_empty(db: Database) -> dict | None:
     with db.tx() as cur:
         cur.execute("SELECT count(*) AS n FROM app_user")
         if cur.fetchone()["n"]:
@@ -54,64 +52,9 @@ def seed_if_empty(db: Database, hasher: IinHasher) -> dict | None:
                          u["role_code"], u["branch_code"]))
         cur.execute("SELECT * FROM app_user WHERE role_code = 'physician' ORDER BY login")
         physicians = [auth._principal(r) for r in cur.fetchall()]
-    summary = synthetic.generate(db, hasher, physicians, n=seed["synthetic_patients"])
-    summary.pop("iins")  # синтетические ИИН не печатаем и не сохраняем
+    summary = synthetic.generate(db, physicians, n=seed["synthetic_patients"])
+    summary.pop("iins")  # синтетические ИИН в консоль не печатаем
     return summary
-
-
-def top_up_patients(db: Database, hasher: IinHasher) -> int:
-    """Довести синтетическую когорту до synthetic_patients (для существующей .devdb)."""
-    target = json.loads(SEED.read_text(encoding="utf-8"))["synthetic_patients"]
-    with db.tx() as cur:
-        cur.execute("RESET ROLE")
-        cur.execute("SELECT count(*) AS n FROM patient")
-        have = cur.fetchone()["n"]
-        cur.execute("SELECT * FROM app_user WHERE role_code = 'physician' ORDER BY login")
-        physicians = [auth._principal(r) for r in cur.fetchall()]
-    if have >= target or not physicians:
-        return 0
-    return synthetic.generate(db, hasher, physicians, n=target - have, seed=1000 + have, duplicates=0)["patients"]
-
-
-def ingest_synthetic_once(db: Database, hasher: IinHasher) -> dict | None:
-    """Один прогон коннектора по синтетическому МИС-подобному источнику (если ещё не было)."""
-    from kalypso.ingest.connector import run
-    from kalypso.ingest.mapping import load_mapping
-    from kalypso.ingest.synthetic_his import SyntheticHisAdapter
-    with db.tx() as cur:
-        cur.execute("RESET ROLE")
-        cur.execute("SELECT count(*) AS n FROM ingest_run")
-        if cur.fetchone()["n"]:
-            return None
-    return run(db, SyntheticHisAdapter(n=10, seed=77), load_mapping(), hasher)["counts"]
-
-
-def seed_documents_if_empty(db: Database, ai_enabled: bool, n: int = 16) -> int:
-    """Синтетические заключения для части пациентов — чтобы очередь сверки была не пустой."""
-    import random
-
-    from kalypso import documents
-    from kalypso.ai.synthetic_docs import generate
-    with db.tx() as cur:
-        cur.execute("RESET ROLE")   # dev-seed: владелец, мимо RLS
-        cur.execute("SELECT count(*) AS n FROM source_document")
-        if cur.fetchone()["n"]:
-            return 0
-        cur.execute("SELECT patient_id, branch, dx_date, provenance FROM patient WHERE deleted_at IS NULL "
-                    "ORDER BY entry_date")
-        patients = cur.fetchall()
-        cur.execute("SELECT * FROM app_user WHERE role_code = 'physician'")
-        doctors = {r["branch_code"]: auth._principal(r) for r in cur.fetchall()}
-    rng = random.Random(7)
-    made = 0
-    for doc, pt in zip(generate(n, seed=7), rng.sample(patients, min(n, len(patients)))):
-        clean = documents.preview(doc.raw_text)
-        documents.add_document(db, doctors[pt["branch"]], pt["patient_id"], {
-            "doc_type": doc.doc_type, "doc_date": max(doc.doc_date, pt["dx_date"]).isoformat(),
-            "provenance": pt["provenance"], "text": clean.text, "deid_report": json.dumps(clean.report),
-            "confirm": "1"}, ai_enabled=ai_enabled)
-        made += 1
-    return made
 
 
 def main() -> None:
@@ -135,33 +78,11 @@ def main() -> None:
     if done:
         print("Применены миграции:", ", ".join(done))
 
-    # В dev по умолчанию — извлечение на правилах (без сети). Claude — только если явно
-    # задать KALYPSO_AI_EXTRACTOR=claude и ANTHROPIC_API_KEY: это платные вызовы.
-    extractor_kind = os.environ.get("KALYPSO_AI_EXTRACTOR", "rules")
-    settings = Settings(dsn=dsn, hmac_key=sec["hmac_key"].encode(), session_secret=sec["session_secret"].encode(),
-                        secure_cookies=False, ai_extractor=extractor_kind,
-                        ai_model=os.environ.get("KALYPSO_AI_MODEL") or None)
+    settings = Settings(dsn=dsn, session_secret=sec["session_secret"].encode(), secure_cookies=False)
     db = Database(dsn)
-    summary = seed_if_empty(db, IinHasher(settings.hmac_key, settings.hash_key_version))
+    summary = seed_if_empty(db)
     if summary:
         print("Синтетика:", summary, "· учётные записи: kalypso/dev_seed.json")
-    added = top_up_patients(db, IinHasher(settings.hmac_key, settings.hash_key_version))
-    if added:
-        print(f"Синтетика: добавлено пациентов {added}")
-    made = seed_documents_if_empty(db, settings.ai_enabled)
-    if made:
-        print(f"Синтетические документы: {made}")
-    ingested = ingest_synthetic_once(db, IinHasher(settings.hmac_key, settings.hash_key_version))
-    if ingested:
-        print("Синтетический приём из МИС:", ingested)
-
-    extractor = pipeline.make_extractor(settings.ai_extractor, settings.ai_model, settings.ai_effort)
-    if extractor is not None:
-        if extractor.name == "claude":
-            print("ВНИМАНИЕ: AI-извлечение через Claude — платные вызовы API")
-        threading.Thread(target=pipeline.run_forever, args=(db, extractor), daemon=True,
-                         name="ai-worker").start()
-        print(f"AI-обработчик запущен: {extractor.name}")
     uvicorn.run(create_app(settings, db), host="127.0.0.1", port=int(os.environ.get("PORT", "8765")))
 
 

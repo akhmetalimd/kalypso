@@ -1,7 +1,7 @@
 """RLS (0004): второй рубеж — БД сама отсекает чужой филиал, даже если запрос приложения без фильтра."""
 import pytest
 
-from conftest import iin_hash, rejected
+from conftest import rejected
 
 CHILD_TABLES = ["lab", "module_data", "therapy_line", "observation", "diagnosis_version", "patient_branch"]
 
@@ -80,15 +80,10 @@ def test_physician_cannot_touch_other_branch(reg, world2):
 @pytest.mark.parametrize("who", ["cur", "ana", "admin"])
 def test_readers_cannot_write_clinical_data(reg, world2, who):
     user = reg.admin if who == "admin" else world2[who]
-    if who == "cur":   # куратор видит карточку для сверки AI (0005), но страж пускает только диагноз/гистологию
-        with rejected(reg.con, "только диагноз"):
-            reg.as_app(user)
-            reg.cur.execute("UPDATE patient SET ecog = 1 WHERE patient_id = %s", (world2["pa"],))
-    else:
-        reg.as_app(user)
-        reg.cur.execute("UPDATE patient SET ecog = 1 WHERE patient_id = %s", (world2["pa"],))
-        assert reg.cur.rowcount == 0
-        reg.con.rollback()
+    reg.as_app(user)
+    reg.cur.execute("UPDATE patient SET ecog = 1 WHERE patient_id = %s", (world2["pa"],))
+    assert reg.cur.rowcount == 0
+    reg.con.rollback()
     with rejected(reg.con, "row-level security"):
         reg.as_app(user)
         reg.cur.execute("INSERT INTO lab (patient_id, obs_date, loinc, value_raw, unit_raw, value_canonical, "
@@ -106,16 +101,14 @@ def test_only_curator_links_branches(reg, world2):
     assert _ids(reg, reg.doc) == {world2["pa"], world2["pb"]}
 
 
-def test_hash_lookup_reveals_only_id_to_physician(reg, world2):
-    reg.as_app(reg.doc)
-    assert reg.one("SELECT patient_id_by_hash(%s)", iin_hash("990000000302")) == world2["pb"]
+def test_iin_lookup_reveals_only_id_to_physician(reg, world2):
+    reg.as_app(reg.doc)   # пациент чужого филиала: врач узнаёт только id (для запроса доступа)
+    assert reg.one("SELECT patient_id_by_iin(%s)", "990000000302") == world2["pb"]
     reg.con.rollback()
-    reg.as_app(world2["cur"])   # куратор и так видит всех; id нужен ему для приёма из МИС (0006)
-    assert reg.one("SELECT patient_id_by_hash(%s)", iin_hash("990000000302")) == world2["pb"]
-    reg.con.rollback()
-    reg.as_app(world2["ana"])
-    assert reg.one("SELECT patient_id_by_hash(%s)", iin_hash("990000000302")) is None
-    reg.con.rollback()
+    for who in ("cur", "ana"):
+        reg.as_app(world2[who])
+        assert reg.one("SELECT patient_id_by_iin(%s)", "990000000302") is None
+        reg.con.rollback()
 
 
 def test_access_requests_visibility(reg, world2):

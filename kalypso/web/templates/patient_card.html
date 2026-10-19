@@ -54,6 +54,7 @@
 <section class="card">
   <h2>Ядро</h2>
   <dl class="facts">
+    {% if pt.iin %}<dt>ИИН</dt><dd class="mono">{{ pt.iin }}</dd>{% endif %}
     <dt>Нозология</dt><dd>{{ pt.who_haem5|nosology }} · ICD-O {{ pt.icd_o_3_2 }} · МКБ {{ pt.mkb }} · версия диагноза {{ pt.dx_version }}</dd>
     <dt>Диагноз</dt><dd>{{ pt.dx_date|d(pt.dx_date_precision) }}</dd>
     <dt>Пол</dt><dd>{{ label('sex', pt.sex) }}</dd>
@@ -69,21 +70,6 @@
   <h3>Заключение гистологии</h3>
   {% if pt.histology_report %}<pre class="doc">{{ pt.histology_report }}</pre>{% else %}<p class="muted">Не внесено.</p>{% endif %}
   {% if pt.histology_scan %}<p>Скан: <span class="mono">{{ pt.histology_scan }}</span></p>{% endif %}
-</section>
-
-<section class="card">
-  <h2>Первичные документы</h2>
-  <table class="grid">
-    <thead><tr><th>Дата</th><th>Тип</th><th>Статус</th><th>AI-предложения</th><th></th></tr></thead>
-    <tbody>{% for dd in c.documents %}
-      <tr><td>{{ dd.doc_date|d }}</td><td>{{ label('doc_type', dd.doc_type) }}</td>
-        <td>{{ label('doc_status', dd.status) }}{% if dd.status_note %} <small>{{ dd.status_note }}</small>{% endif %}</td>
-        <td>{% if dd.pending %}ждут сверки: {{ dd.pending }}{% endif %}{% if dd.applied %} внесено: {{ dd.applied }}{% endif %}{% if not dd.pending and not dd.applied %}—{% endif %}</td>
-        <td><a href="/documents/{{ dd.doc_id }}">открыть</a></td></tr>
-    {% else %}<tr><td colspan="5" class="muted">Документов нет.</td></tr>{% endfor %}</tbody>
-  </table>
-  {% if p.can('documents.add') %}<p><a class="button" href="/patients/{{ pid }}/documents/new">Добавить документ</a>
-    <small>Гистология, FISH, IGHV/TP53, ПЭТ-КТ: текст очищается от идентификаторов и передаётся AI для предложений.</small></p>{% endif %}
 </section>
 
 <section class="card">

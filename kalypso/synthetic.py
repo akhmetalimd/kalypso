@@ -4,7 +4,7 @@
 все проверки, аудит и провенанс. Намеренные дефекты: пропущенные маркеры,
 коды пропусков, неканонические и нераспознанные единицы, межфилиальные дубликаты,
 завершённые линии без оценки ответа. Все ИИН — сгенерированные числа с корректной
-контрольной цифрой; к реальным людям не относятся и нигде не сохраняются.
+контрольной цифрой; к реальным людям не относятся (хранятся в карточке как обычный ИИН).
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from datetime import date, timedelta
 import registry_core as core
 from kalypso import registry
 from kalypso.db import Database
-from kalypso.deid import IinHasher, iin_check_digit
+from kalypso.deid import iin_check_digit
 from kalypso.rbac import Principal
 
 REFERENCE_DATE = date(2026, 9, 30)  # «сегодня» синтетики: будущих дат не бывает
@@ -52,25 +52,25 @@ def _pick(rng, weighted: dict):
     return rng.choices(list(weighted), weights=list(weighted.values()))[0]
 
 
-def generate(db: Database, hasher: IinHasher, physicians: list[Principal], n: int = 60,
+def generate(db: Database, physicians: list[Principal], n: int = 60,
              seed: int = 42, duplicates: int = 3) -> dict:
     rng = random.Random(seed)
     made: list[tuple[str, Principal]] = []
     for _ in range(n):
         doc = rng.choice(physicians)
-        made.append((_one_patient(db, hasher, doc, rng), doc))
+        made.append((_one_patient(db, doc, rng), doc))
 
     requests = 0
     for iin, doc in rng.sample(made, min(duplicates, len(made))):
         others = [p for p in physicians if p.branch_code != doc.branch_code]
         if not others:
             continue
-        res = registry.register_patient(db, hasher, rng.choice(others), {"iin": iin})
+        res = registry.register_patient(db, rng.choice(others), {"iin": iin})
         requests += res.status == "exists_requested"
     return {"patients": len(made), "access_requests": requests, "iins": [i for i, _ in made]}
 
 
-def _one_patient(db: Database, hasher: IinHasher, doc: Principal, rng: random.Random) -> str:
+def _one_patient(db: Database, doc: Principal, rng: random.Random) -> str:
     dx = date(2015, 1, 1) + timedelta(days=rng.randint(0, 9 * 365))
     age = rng.randint(45, 85)
     sex = rng.choice(["M", "M", "F"])
@@ -149,7 +149,7 @@ def _one_patient(db: Database, hasher: IinHasher, doc: Principal, rng: random.Ra
         data.update(index_score=ipi["score"], index_group=ipi["group"])
     else:
         data["index_score__missing"] = "unknown"
-    pid = registry.register_patient(db, hasher, doc, data).record_id
+    pid = registry.register_patient(db, doc, data).record_id
 
     for key, val in [("IGHV", ighv), ("TP53", tp53), *fish.items()]:
         if val is None:

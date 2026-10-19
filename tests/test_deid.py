@@ -1,13 +1,11 @@
-"""Граница деидентификации: ИИН, HMAC, идентификаторы в тексте (без БД)."""
+"""ИИН (формат, контрольная цифра) и идентификаторы в свободном тексте (без БД)."""
 import random
 from datetime import date
 
 import pytest
 
-from kalypso.deid import IinHasher, InvalidIIN, find_identifiers, iin_check_digit, normalize_iin
+from kalypso.deid import InvalidIIN, find_identifiers, iin_check_digit, normalize_iin
 from kalypso.synthetic import synthetic_iin
-
-KEY = b"k" * 32
 
 
 @pytest.fixture
@@ -41,20 +39,6 @@ def test_impossible_birth_date_rejected():
         pytest.skip("для этих цифр контрольный разряд не существует")
     with pytest.raises(InvalidIIN, match="дату"):
         normalize_iin(head + str(check))
-
-
-def test_hash_deterministic_and_keyed(iin):
-    h = IinHasher(KEY).hash(iin)
-    assert len(h) == 64 and all(c in "0123456789abcdef" for c in h)
-    assert IinHasher(KEY).hash(iin) == h
-    assert IinHasher(b"other-key" * 4).hash(iin) != h
-    assert iin not in h
-
-
-def test_short_key_rejected_and_key_hidden():
-    with pytest.raises(ValueError):
-        IinHasher(b"short")
-    assert "kkkk" not in repr(IinHasher(KEY))
 
 
 @pytest.mark.parametrize("text, kinds", [

@@ -17,7 +17,7 @@ import psycopg
 
 import registry_core as core
 from kalypso.db import Database, db_error_message
-from kalypso.deid import IinHasher, InvalidIIN, find_identifiers
+from kalypso.deid import InvalidIIN, find_identifiers, normalize_iin
 from kalypso.rbac import NotFound, Principal, visible_patients_sql
 
 CLL = "cll_sll"
@@ -261,18 +261,23 @@ def _quality(row: dict) -> list[str]:
     return core.validate_record(row)
 
 
-def register_patient(db: Database, hasher: IinHasher, p: Principal, data: dict) -> Result:
-    """Новый пациент. ИИН -> хэш; при совпадении хэша — дедупликация без раскрытия данных."""
-    p.require("patient.write")
-    f = Form(data)
+def _iin(raw) -> str:
     try:
-        iin_hash = hasher.hash(str(f.raw("iin") or ""))
+        return normalize_iin(str(raw or ""))
     except InvalidIIN as e:
         raise ValidationError([str(e)]) from None
 
+
+def register_patient(db: Database, p: Principal, data: dict) -> Result:
+    """Новый пациент. ИИН — ключ дедупликации: если пациент уже есть в чужом филиале,
+    врач получает запрос доступа к куратору, а не данные пациента."""
+    p.require("patient.write")
+    f = Form(data)
+    iin = _iin(f.raw("iin"))
+
     with db.tx(p.user_id) as cur:
         # Под RLS врач не видит пациентов чужого филиала; функция БД сообщает только факт и id.
-        cur.execute("SELECT patient_id_by_hash(%s) AS pid", (iin_hash,))
+        cur.execute("SELECT patient_id_by_iin(%s) AS pid", (iin,))
         pid = cur.fetchone()["pid"]
         if pid:
             cur.execute("SELECT 1 FROM patient_branch WHERE patient_id = %s AND branch_code = %s",
@@ -287,8 +292,7 @@ def register_patient(db: Database, hasher: IinHasher, p: Principal, data: dict) 
     missing = _missing_codes(f, row)
     death = _death_fields(f, row) if row["status_last_contact"] == "dead" else None
     f.check()
-    row.update(iin_hash=iin_hash, hash_key_version=hasher.key_version,
-               branch=p.branch_code, source="manual")
+    row.update(iin=iin, branch=p.branch_code, source="manual")
 
     def write():
         with db.tx(p.user_id) as cur:
@@ -300,33 +304,6 @@ def register_patient(db: Database, hasher: IinHasher, p: Principal, data: dict) 
     pid = _db_call(write)
     return Result("created", pid, _quality({**row, **(death or {}),
                                             "event_type": "death" if death else None}))
-
-
-def register_from_source(db: Database, p: Principal, iin_hash: str, hash_key_version: int, branch: str,
-                         data: dict, source: str = "his_structured", source_record_id: str | None = None,
-                         reason: str | None = None) -> Result:
-    """Пациент из внешнего источника (МИС) по решению куратора: ИИН у куратора нет — только хэш,
-    посчитанный коннектором тем же ключом. Филиал — из справочника учреждений маппинга."""
-    perm = write_perm(source)
-    p.require(perm)
-    f = Form(data)
-    row = _patient_fields(f)
-    f.check()
-    row.update(iin_hash=iin_hash, hash_key_version=hash_key_version, branch=branch, source=source,
-               source_record_id=source_record_id)
-
-    def write():
-        with db.tx(p.user_id, reason=reason) as cur:
-            cur.execute("SELECT patient_id_by_hash(%s) AS pid", (iin_hash,))
-            existing = cur.fetchone()["pid"]
-            if existing:
-                return existing, "exists"
-            cur.execute("SELECT 1 FROM branch WHERE branch_code = %s AND is_active", (branch,))
-            if not cur.fetchone():
-                raise ValidationError([f"Филиал {branch} не найден или отключён"])
-            return _insert(cur, "patient", row, "patient_id"), "created"
-    pid, status = _db_call(write)
-    return Result(status, pid, _quality(row))
 
 
 def _load_visible(cur, p: Principal, pid, perm="patient.read") -> dict:
@@ -373,15 +350,12 @@ def update_patient(db: Database, p: Principal, pid, data: dict) -> Result:
     return Result("saved", pid, _quality(row))
 
 
-def find_by_iin(db: Database, hasher: IinHasher, p: Principal, iin: str) -> UUID | None:
-    try:
-        h = hasher.hash(iin)
-    except InvalidIIN as e:
-        raise ValidationError([str(e)]) from None
+def find_by_iin(db: Database, p: Principal, iin: str) -> UUID | None:
+    value = _iin(iin)
     cond, params = visible_patients_sql(p)
     with db.tx(p.user_id) as cur:
-        cur.execute(f"SELECT patient_id FROM patient p WHERE iin_hash = %s AND deleted_at IS NULL AND {cond}",
-                    [h, *params])
+        cur.execute(f"SELECT patient_id FROM patient p WHERE iin = %s AND deleted_at IS NULL AND {cond}",
+                    [value, *params])
         row = cur.fetchone()
     return row["patient_id"] if row else None
 
@@ -424,7 +398,8 @@ def _flags_for(patient: dict, markers, lines, observations) -> dict[str, list[st
 def list_patients(db: Database, p: Principal, limit: int = 500) -> list[dict]:
     cond, params = visible_patients_sql(p)
     with db.tx(p.user_id) as cur:
-        cur.execute(f"""SELECT p.patient_id, p.branch, p.sex, p.who_haem5, p.mkb, p.dx_date,
+        iin_col = "p.iin, " if p.can("patient.iin") else ""
+        cur.execute(f"""SELECT {iin_col}p.patient_id, p.branch, p.sex, p.who_haem5, p.mkb, p.dx_date,
                                p.dx_version, p.status_last_contact, p.last_contact_date,
                                p.stage_system, p.stage_value
                         FROM patient p WHERE p.deleted_at IS NULL AND {cond}
@@ -449,7 +424,8 @@ def list_patients(db: Database, p: Principal, limit: int = 500) -> list[dict]:
 def get_card(db: Database, p: Principal, pid) -> dict:
     with db.tx(p.user_id) as cur:
         patient = _load_visible(cur, p, pid)
-        patient.pop("iin_hash")  # псевдоним не показываем и не отдаём в шаблоны
+        if not p.can("patient.iin"):   # ИИН — только врачу филиала и куратору
+            patient.pop("iin")
         q = lambda sql: (cur.execute(sql, (pid,)), cur.fetchall())[1]  # noqa: E731
         card = {
             "patient": patient,
@@ -462,12 +438,6 @@ def get_card(db: Database, p: Principal, pid) -> dict:
             "observations": q("SELECT * FROM observation WHERE patient_id = %s AND deleted_at IS NULL "
                               "ORDER BY obs_date, created_at"),
             "labs": q("SELECT * FROM lab WHERE patient_id = %s AND deleted_at IS NULL ORDER BY obs_date, loinc"),
-            "documents": q("""SELECT d.doc_id, d.doc_type, d.doc_date, d.status, d.status_note,
-                                     count(a.*) FILTER (WHERE a.status = 'pending') AS pending,
-                                     count(a.*) FILTER (WHERE a.status IN ('accepted', 'edited')) AS applied
-                              FROM source_document d LEFT JOIN ai_proposal a USING (doc_id)
-                              WHERE d.patient_id = %s AND d.deleted_at IS NULL
-                              GROUP BY d.doc_id ORDER BY d.doc_date DESC, d.created_at DESC"""),
         }
     mm = _marker_map(card["markers"])
     card["marker_map"] = mm
@@ -498,15 +468,6 @@ _KINDS = {"line": ("therapy_line", "line_id"), "observation": ("observation", "o
           "lab": ("lab", "lab_id"), "marker": ("module_data", "md_id")}
 
 
-CURATED_SOURCES = ("ai_document", "his_structured")
-
-
-def write_perm(source: str) -> str:
-    """Ручной ввод — право врача; запись по принятому AI-предложению или данным МИС —
-    право куратора (review.apply), только с соответствующим источником."""
-    return "review.apply" if source in CURATED_SOURCES else "patient.write"
-
-
 def _reason(f: Form) -> str | None:
     """Необязательная причина правки — уходит в audit_log.reason."""
     return f.text("change_reason", "Причина правки", maxlen=500)
@@ -520,9 +481,9 @@ def _update(cur, table: str, pk: str, rid, pid, row: dict) -> None:
         raise NotFound()
 
 
-def get_record(db: Database, p: Principal, pid, kind: str, rid, source: str = "manual") -> dict:
+def get_record(db: Database, p: Principal, pid, kind: str, rid) -> dict:
     """Запись для формы правки (только действующая и только видимого пациента)."""
-    perm = write_perm(source)
+    perm = "patient.write"
     p.require(perm)
     if kind not in _KINDS:
         raise NotFound()
@@ -647,27 +608,25 @@ def _obs_warnings(patient: dict, row: dict) -> list[str]:
                      "death_cause": row["death_cause"]})
 
 
-def add_observation(db: Database, p: Principal, pid, data: dict, source: str = "manual",
-                    source_record_id: str | None = None, reason: str | None = None) -> Result:
-    perm = write_perm(source)
+def add_observation(db: Database, p: Principal, pid, data: dict) -> Result:
+    perm = "patient.write"
     p.require(perm)
     f = Form(data)
     row = _obs_row(f)
     f.check()
 
     def write():
-        with db.tx(p.user_id, reason=reason) as cur:
+        with db.tx(p.user_id) as cur:
             patient = _load_visible(cur, p, pid, perm)
-            oid = _insert(cur, "observation", {**row, "patient_id": pid, "source": source,
-                                               "source_record_id": source_record_id}, "obs_id")
+            oid = _insert(cur, "observation", {**row, "patient_id": pid, "source": "manual"}, "obs_id")
             _obs_effects(cur, pid, patient, row)
             return oid, patient
     oid, patient = _db_call(write)
     return Result("saved", oid, _obs_warnings(patient, row))
 
 
-def update_observation(db: Database, p: Principal, pid, rid, data: dict, source: str = "manual") -> Result:
-    perm = write_perm(source)
+def update_observation(db: Database, p: Principal, pid, rid, data: dict) -> Result:
+    perm = "patient.write"
     p.require(perm)
     f = Form(data)
     row, reason = _obs_row(f), _reason(f)
@@ -705,24 +664,22 @@ def _lab_row(f: Form) -> tuple[dict, list[str]]:
     return row, [f"lab_{c.flag}"] if c.flag else []
 
 
-def add_lab(db: Database, p: Principal, pid, data: dict, source: str = "manual",
-            source_record_id: str | None = None, reason: str | None = None) -> Result:
-    perm = write_perm(source)
+def add_lab(db: Database, p: Principal, pid, data: dict) -> Result:
+    perm = "patient.write"
     p.require(perm)
     f = Form(data)
     row, warnings = _lab_row(f)
     f.check()
 
     def write():
-        with db.tx(p.user_id, reason=reason) as cur:
+        with db.tx(p.user_id) as cur:
             _load_visible(cur, p, pid, perm)
-            return _insert(cur, "lab", {**row, "patient_id": pid, "source": source,
-                                        "source_record_id": source_record_id}, "lab_id")
+            return _insert(cur, "lab", {**row, "patient_id": pid, "source": "manual"}, "lab_id")
     return Result("saved", _db_call(write), warnings)
 
 
-def update_lab(db: Database, p: Principal, pid, rid, data: dict, source: str = "manual") -> Result:
-    perm = write_perm(source)
+def update_lab(db: Database, p: Principal, pid, rid, data: dict) -> Result:
+    perm = "patient.write"
     p.require(perm)
     f = Form(data)
     (row, warnings), reason = _lab_row(f), _reason(f)
@@ -751,19 +708,18 @@ def _marker_row(f: Form, key: str | None = None) -> dict:
             "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES, required=True)}
 
 
-def add_marker(db: Database, p: Principal, pid, data: dict, source: str = "manual",
-               source_record_id: str | None = None, reason: str | None = None) -> Result:
-    perm = write_perm(source)
+def add_marker(db: Database, p: Principal, pid, data: dict) -> Result:
+    perm = "patient.write"
     p.require(perm)
     f = Form(data)
     row = _marker_row(f)
     f.check()
 
     def write():
-        with db.tx(p.user_id, reason=reason) as cur:
+        with db.tx(p.user_id) as cur:
             _load_visible(cur, p, pid, perm)
-            return _insert(cur, "module_data", {**row, "patient_id": pid, "module": "cll", "source": source,
-                                                "source_record_id": source_record_id}, "md_id")
+            return _insert(cur, "module_data", {**row, "patient_id": pid, "module": "cll",
+                                                "source": "manual"}, "md_id")
     return Result("saved", _db_call(write))
 
 
@@ -781,40 +737,6 @@ def update_marker(db: Database, p: Principal, pid, rid, data: dict) -> Result:
             _update(cur, "module_data", "md_id", rid, pid, row)
     _db_call(write)
     return Result("saved", rid)
-
-
-def revise_diagnosis_codes(db: Database, p: Principal, pid, who_haem5: str, icd_o_3_2: str, mkb: str,
-                           reason: str, source: str = "manual") -> Result:
-    """Пересмотр кодов диагноза (дата диагноза не меняется). Версия диагноза — в БД."""
-    perm = write_perm(source)
-    p.require(perm)
-    flags = core.validate_codes({"who_haem5": who_haem5, "icd_o_3_2": icd_o_3_2, "mkb": mkb})
-    if flags:
-        raise ValidationError([f"Коды диагноза не согласованы: {', '.join(flags)}"])
-
-    def write():
-        with db.tx(p.user_id, reason=reason) as cur:
-            _load_visible(cur, p, pid, perm)
-            cur.execute("UPDATE patient SET who_haem5 = %s, icd_o_3_2 = %s, mkb = %s WHERE patient_id = %s",
-                        (who_haem5, icd_o_3_2, mkb, pid))
-    _db_call(write)
-    return Result("saved", pid)
-
-
-def set_histology_report(db: Database, p: Principal, pid, text: str, source: str = "manual",
-                         reason: str | None = None) -> Result:
-    perm = write_perm(source)
-    p.require(perm)
-    f = Form({"histology_report": text})
-    value = f.free_text("histology_report", "Заключение гистологии")
-    f.check()
-
-    def write():
-        with db.tx(p.user_id, reason=reason) as cur:
-            _load_visible(cur, p, pid, perm)
-            cur.execute("UPDATE patient SET histology_report = %s WHERE patient_id = %s", (value, pid))
-    _db_call(write)
-    return Result("saved", pid)
 
 
 def soft_delete(db: Database, p: Principal, pid, kind: str, record_id) -> Result:

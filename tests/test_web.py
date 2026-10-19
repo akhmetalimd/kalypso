@@ -11,7 +11,7 @@ from kalypso.web.app import COOKIE, create_app
 
 @pytest.fixture
 def app(world):
-    settings = Settings(dsn=world.dsn, hmac_key=world.hasher.key, session_secret=b"s" * 32,
+    settings = Settings(dsn=world.dsn, session_secret=b"s" * 32,
                         secure_cookies=False)
     return create_app(settings, world.db)
 
@@ -64,7 +64,9 @@ def test_create_patient_flow(app, world):
     card_url = r.headers["location"].split("?")[0]
     card = c.get(card_url)
     assert card.status_code == 200 and "ХЛЛ, CD5+ CD23+" in card.text
-    assert form["iin"] not in card.text and world.hasher.hash(form["iin"]) not in card.text
+    assert form["iin"] in card.text                                   # врачу филиала ИИН виден
+    analyst_card = client(app, "analyst").get(card_url).text
+    assert form["iin"] not in analyst_card
 
     # Поиск по ИИН — POST, результат — переход в карточку.
     r = c.post("/patients/search", data={"iin": form["iin"], "csrf": csrf(c)})

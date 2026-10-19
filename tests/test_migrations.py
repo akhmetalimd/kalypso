@@ -11,7 +11,7 @@ def test_schema_and_migrations_apply_on_empty_db(make_db):
         for m in MIGRATIONS:
             apply_sql(con, m)
         con.commit()
-        assert con.execute("SELECT count(*) FROM role").fetchone()[0] == 6   # 4 роли людей + ai_worker + ingest_worker
+        assert con.execute("SELECT count(*) FROM role").fetchone()[0] == 4   # врач, куратор, аналитик, администратор
 
 
 def test_0002_refuses_non_empty_db(make_db):

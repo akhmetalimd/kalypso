@@ -4,12 +4,10 @@
 база postgres) либо встроенный PostgreSQL из pgserver. Миграции применяются один
 раз в шаблонную БД; каждый тест получает свою копию (CREATE DATABASE … TEMPLATE).
 
-Только синтетика: «ИИН» здесь — произвольные 12 цифр, ключ HMAC — тестовый.
+Только синтетика: «ИИН» здесь — произвольные или сгенерированные 12 цифр.
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import os
 import sys
 import uuid
@@ -27,13 +25,6 @@ from kalypso import migrate  # noqa: E402
 
 SCHEMA = migrate.SCHEMA
 MIGRATIONS = [path for _, path in migrate.migration_files()[1:]]
-TEST_HMAC_KEY = b"kalypso-synthetic-test-key"
-
-
-def iin_hash(iin: str) -> str:
-    return hmac.new(TEST_HMAC_KEY, iin.encode(), hashlib.sha256).hexdigest()
-
-
 # ---------------------------------------------------------------------------
 # Сервер и базы
 # ---------------------------------------------------------------------------
@@ -173,7 +164,7 @@ class Registry:
 
     def patient(self, iin: str, user=None, **kw):
         """Пациент от имени врача; филиал synth_b — врачом B (иначе отсечёт RLS)."""
-        row = {**self.PATIENT, "iin_hash": iin_hash(iin), **kw}
+        row = {**self.PATIENT, "iin": iin, **kw}
         self.as_app(user or (self.doc_b if row["branch"] == "synth_b" else self.doc))
         return self._insert("patient", row, "patient_id")
 
@@ -217,11 +208,9 @@ class World:
     def __init__(self, dsn: str):
         from kalypso import auth
         from kalypso.db import Database
-        from kalypso.deid import IinHasher
 
         self.dsn = dsn
         self.db = Database(dsn, min_size=1, max_size=4)
-        self.hasher = IinHasher(TEST_HMAC_KEY + b"-" * 8)
         pw = auth.hash_password(TEST_PASSWORD)
         with self.db.tx() as cur:
             cur.execute("INSERT INTO branch (branch_code, name_ru) VALUES "
@@ -255,7 +244,7 @@ class World:
 
     def register(self, doc=None, **kw):
         from kalypso import registry
-        return registry.register_patient(self.db, self.hasher, doc or self.doc_a, self.patient_form(**kw))
+        return registry.register_patient(self.db, doc or self.doc_a, self.patient_form(**kw))
 
     def close(self) -> None:
         self.db.close()

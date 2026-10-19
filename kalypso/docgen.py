@@ -8,7 +8,6 @@ from __future__ import annotations
 from datetime import date
 
 import registry_core as core
-from kalypso.ai.fields import value_label
 from kalypso.i18n import flag, label
 from kalypso.registry import _age, core_fields
 
@@ -30,7 +29,8 @@ def patient_summary(card: dict) -> dict:
         recs = [m for m in card["markers"] if m["field_key"] == f["key"]]
         last = recs[-1] if recs else None
         markers.append({"label": f["label_ru"],
-                        "value": value_label(f["key"], (last["value"] or last["missing"])) if last else "не внесено",
+                        "value": (label("marker_value", last["value"]) if last["value"]
+                                  else label("missing", last["missing"])) if last else "не внесено",
                         "date": _d(last["test_date"], last["test_date_precision"]) if last and last["test_date"] else None})
     lines = []
     for ln in card["lines"]:

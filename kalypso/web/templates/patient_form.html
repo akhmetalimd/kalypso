@@ -11,7 +11,7 @@
     <legend>Идентификация</legend>
     <label>ИИН *
       <input name="iin" inputmode="numeric" autocomplete="off" maxlength="14" required>
-      <small>Не сохраняется: в регистр попадает только его хэш. Если пациент уже есть в регистре, данные повторно не вносятся.</small>
+      <small>Проверяется контрольная цифра. Если пациент уже есть в регистре, данные повторно не вносятся.</small>
     </label>
     <label>Филиал <input value="{{ p.branch_code }}" disabled></label>
   </fieldset>

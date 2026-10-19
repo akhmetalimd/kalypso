@@ -1,7 +1,7 @@
 """Пациент: идентификация, коды, умные поля, версионность диагноза (B1, I1, I3, I4, I6)."""
 import pytest
 
-from conftest import iin_hash, rejected
+from conftest import rejected
 
 
 def test_patient_created_by_app_role(reg):
@@ -13,7 +13,7 @@ def test_patient_created_by_app_role(reg):
 
 
 @pytest.mark.parametrize("name, kw, match", [
-    ("короткий хэш", {"iin_hash": "abc123"}, "iin_hash_format"),
+    ("ИИН не из 12 цифр", {"iin": "12345"}, "iin_format"),
     ("русский код пола", {"sex": "М"}, "sex_check"),
     ("русский статус", {"status_last_contact": "жив"}, "status_last_contact_check"),
     ("стадия Rai 'A'", {"stage_system": "Rai", "stage_value": "A"}, "stage_rai"),
@@ -27,7 +27,7 @@ def test_patient_created_by_app_role(reg):
 ])
 def test_patient_constraints(reg, name, kw, match):
     with rejected(reg.con, match):
-        reg.patient("990000000002", **kw)
+        reg.patient(kw.pop("iin", "990000000002"), **kw)
 
 
 def test_valid_smart_fields_accepted(reg):
@@ -41,7 +41,7 @@ def test_valid_smart_fields_accepted(reg):
 def test_duplicate_iin_rejected_across_branches(reg):
     reg.patient("990000000004")
     reg.con.commit()
-    with rejected(reg.con, "iin_hash_key"):
+    with rejected(reg.con, "iin_key"):
         reg.patient("990000000004", branch="synth_b")
 
 
@@ -93,7 +93,7 @@ def test_physician_requires_branch(reg):
 def test_unknown_branch_rejected(reg):
     # Мимо RLS (владелец): проверяется именно внешний ключ на справочник филиалов.
     with rejected(reg.con, "patient_branch_fkey"):
-        reg.cur.execute("INSERT INTO patient (iin_hash, branch, sex, who_haem5, icd_o_3_2, mkb, dx_date, "
+        reg.cur.execute("INSERT INTO patient (iin, branch, sex, who_haem5, icd_o_3_2, mkb, dx_date, "
                         "last_contact_date, provenance, status_last_contact, source) VALUES "
                         "(%s, 'nowhere', 'M', 'cll_sll', '9823/3', 'C91.1', '2021-03-01', '2024-06-01', "
-                        "'retrospective', 'alive', 'manual')", (iin_hash("990000000009"),))
+                        "'retrospective', 'alive', 'manual')", ("990000000009",))

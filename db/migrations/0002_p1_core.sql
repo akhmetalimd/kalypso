@@ -7,7 +7,7 @@
 --    B1 версионность диагноза        B5 аудит на триггерах, неизменяемый журнал
 --    B2 наблюдение -> линия терапии  B6 пользователи, роли, филиалы, журнал входов
 --    B3 источник + ретро/проспектив  B7 RESTRICT + мягкое удаление
---       на каждой записи             I1 суррогатный PK + полный iin_hash
+--       на каждой записи             I1 суррогатный PK + ИИН (уникальный)
 --    B4 коды пропусков в module_data I3 запрет 12-значных чисел в свободном тексте
 --    I4 коды вместо русских значений I5 согласованность смерти
 --    I6 ограничения дат и умных полей I7 маркеры с датой теста
@@ -34,7 +34,8 @@ DROP VIEW v_survival;  -- пересоздаётся в конце под нов
 --  Общие типы и функции
 -- ============================================================================
 -- Источник записи (провенанс). Ретро/проспектив остаётся в типе provenance.
-CREATE TYPE record_source AS ENUM ('his_structured', 'ai_document', 'manual');
+-- Сейчас — только ручной ввод; источники AI и МИС добавятся через ALTER TYPE … ADD VALUE.
+CREATE TYPE record_source AS ENUM ('manual');
 
 -- Текущий пользователь приложения (NULL, если правка идёт мимо приложения).
 CREATE FUNCTION app_user_id() RETURNS UUID
@@ -104,7 +105,7 @@ CREATE TRIGGER login_log_no_truncate BEFORE TRUNCATE ON login_log
     FOR EACH STATEMENT EXECUTE FUNCTION forbid_modification();
 
 -- ============================================================================
---  I1. Суррогатный PK пациента + полный iin_hash
+--  I1. Суррогатный PK пациента + ИИН (12 цифр, уникальный — дедупликация между филиалами)
 -- ============================================================================
 ALTER TABLE patient_missing DROP CONSTRAINT patient_missing_patient_id_fkey;
 ALTER TABLE module_data     DROP CONSTRAINT module_data_patient_id_fkey;
@@ -113,13 +114,14 @@ ALTER TABLE observation     DROP CONSTRAINT observation_patient_id_fkey;
 ALTER TABLE lab             DROP CONSTRAINT lab_patient_id_fkey;
 
 ALTER TABLE patient DROP CONSTRAINT patient_pkey;
-ALTER TABLE patient RENAME COLUMN patient_id TO iin_hash;
-COMMENT ON COLUMN patient.iin_hash IS
-    'HMAC-SHA256(ИИН, ключ) полностью, 64 hex. Считается только на сервере. Сам ИИН не хранится.';
+ALTER TABLE patient RENAME COLUMN patient_id TO iin;
+COMMENT ON COLUMN patient.iin IS
+    'ИИН пациента (12 цифр; контрольная цифра проверяется приложением). Хранится открыто — '
+    'на раннем этапе без шифрования (решение владельца проекта). В интерфейсе — только врачу '
+    'филиала и куратору; в выгрузку, аналитику и аудит не попадает.';
 ALTER TABLE patient
-    ADD CONSTRAINT patient_iin_hash_format CHECK (iin_hash ~ '^[0-9a-f]{64}$'),
-    ADD CONSTRAINT patient_iin_hash_key UNIQUE (iin_hash),
-    ADD COLUMN hash_key_version SMALLINT NOT NULL DEFAULT 1 CHECK (hash_key_version >= 1),
+    ADD CONSTRAINT patient_iin_format CHECK (iin ~ '^[0-9]{12}$'),
+    ADD CONSTRAINT patient_iin_key UNIQUE (iin),
     ADD COLUMN patient_id UUID NOT NULL DEFAULT gen_random_uuid(),
     ADD CONSTRAINT patient_pkey PRIMARY KEY (patient_id);
 
@@ -145,7 +147,7 @@ ALTER TABLE lab ADD CONSTRAINT lab_patient_id_fkey
 ALTER TABLE patient ADD CONSTRAINT patient_branch_fkey
     FOREIGN KEY (branch) REFERENCES branch (branch_code) ON DELETE RESTRICT;
 
--- Межфилиальное наблюдение: один пациент (один iin_hash) может вестись в нескольких
+-- Межфилиальное наблюдение: один пациент (один ИИН) может вестись в нескольких
 -- филиалах. Доступ врача к пациенту определяется этой таблицей.
 CREATE TABLE patient_branch (
     patient_id  UUID NOT NULL REFERENCES patient (patient_id) ON DELETE RESTRICT,
@@ -460,6 +462,7 @@ CREATE INDEX audit_log_row_idx ON audit_log (table_name, row_id, ts);
 
 -- Аргументы триггера — имена PK-колонок; row_id = их значения через '|'.
 -- INSERT/DELETE пишут снимок строки, UPDATE — по строке на каждое изменённое поле.
+-- Хэш пароля и ИИН в журнал не пишутся: факт изменения виден, значение — '***'.
 CREATE FUNCTION audit_row() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -484,15 +487,15 @@ BEGIN
             IF (v_new -> v_key) IS DISTINCT FROM (v_old -> v_key) THEN
                 INSERT INTO audit_log (actor, table_name, row_id, action, field, old_value, new_value, reason)
                 VALUES (v_actor, TG_TABLE_NAME, v_row, 'update', v_key,
-                        CASE WHEN v_key = 'password_hash' THEN '***' ELSE v_old ->> v_key END,
-                        CASE WHEN v_key = 'password_hash' THEN '***' ELSE v_new ->> v_key END,
+                        CASE WHEN v_key IN ('password_hash', 'iin') THEN '***' ELSE v_old ->> v_key END,
+                        CASE WHEN v_key IN ('password_hash', 'iin') THEN '***' ELSE v_new ->> v_key END,
                         v_reason);
             END IF;
         END LOOP;
     ELSE
         INSERT INTO audit_log (actor, table_name, row_id, action, field, old_value, new_value, reason)
         VALUES (v_actor, TG_TABLE_NAME, v_row, lower(TG_OP), NULL,
-                (v_old - 'password_hash')::text, (v_new - 'password_hash')::text, v_reason);
+                (v_old - 'password_hash' - 'iin')::text, (v_new - 'password_hash' - 'iin')::text, v_reason);
     END IF;
     RETURN NULL;
 END $$;

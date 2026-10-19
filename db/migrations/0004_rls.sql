@@ -47,17 +47,17 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
     SELECT app_role() = 'physician' AND app_patient_visible(pid)
 $$;
 
--- Дедупликация: врач должен узнать, что пациент с этим хэшем уже есть, не видя
--- его данных. Функция отдаёт только идентификатор и только врачу.
-CREATE FUNCTION patient_id_by_hash(h TEXT) RETURNS UUID
+-- Дедупликация: врач должен узнать, что пациент с этим ИИН уже есть (в другом
+-- филиале), не видя его данных. Функция отдаёт только идентификатор и только врачу.
+CREATE FUNCTION patient_id_by_iin(v TEXT) RETURNS UUID
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-    SELECT patient_id FROM patient WHERE iin_hash = h AND app_role() = 'physician'
+    SELECT patient_id FROM patient WHERE iin = v AND app_role() = 'physician'
 $$;
 
 REVOKE ALL ON FUNCTION app_role(), app_branch(), app_patient_visible(UUID),
-                       app_patient_writable(UUID), patient_id_by_hash(TEXT) FROM PUBLIC;
+                       app_patient_writable(UUID), patient_id_by_iin(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app_role(), app_branch(), app_patient_visible(UUID),
-                          app_patient_writable(UUID), patient_id_by_hash(TEXT) TO kalypso_app;
+                          app_patient_writable(UUID), patient_id_by_iin(TEXT) TO kalypso_app;
 
 -- Проверка смерти должна видеть все наблюдения пациента независимо от RLS.
 ALTER FUNCTION check_death_consistency() SECURITY DEFINER SET search_path = public, pg_temp;

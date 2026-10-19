@@ -11,14 +11,15 @@
   </form>
 </div>
 <p class="muted">{% if p.scope('patient.read') == 'branch' %}Пациенты вашего филиала ({{ p.branch_code }}).{% else %}Все филиалы.{% endif %}
-  ИИН не хранится: поиск идёт по его хэшу.</p>
+  Поиск по ИИН — через форму (ИИН не попадает в адресную строку).</p>
 <table class="grid">
-  <thead><tr><th>ID</th><th>Филиал</th><th>Нозология</th><th>МКБ</th><th>Диагноз</th><th>Стадия</th>
+  <thead><tr><th>ID</th>{% if p.can('patient.iin') %}<th>ИИН</th>{% endif %}<th>Филиал</th><th>Нозология</th><th>МКБ</th><th>Диагноз</th><th>Стадия</th>
     <th>Статус</th><th>Посл. контакт</th><th>Линий</th><th>Полнота</th></tr></thead>
   <tbody>
   {% for r in patients %}
   <tr>
     <td><a href="/patients/{{ r.patient_id }}" class="mono">{{ r.patient_id|short }}</a></td>
+    {% if p.can('patient.iin') %}<td class="mono">{{ r.iin }}</td>{% endif %}
     <td>{{ r.branch }}</td>
     <td>{{ r.who_haem5|nosology }}</td>
     <td>{{ r.mkb }}{% if r.dx_version > 1 %} <span class="badge" title="Диагноз пересматривался">v{{ r.dx_version }}</span>{% endif %}</td>
@@ -30,7 +31,7 @@
     <td>{% if r.flags %}<span class="badge warn" title="{% for f in r.flags %}{{ flag(f) }}&#10;{% endfor %}">{{ r.flags|length }} пропуск.</span>{% else %}<span class="badge ok">полно</span>{% endif %}</td>
   </tr>
   {% else %}
-  <tr><td colspan="10" class="muted">Пациентов пока нет.</td></tr>
+  <tr><td colspan="11" class="muted">Пациентов пока нет.</td></tr>
   {% endfor %}
   </tbody>
 </table>
