@@ -42,7 +42,8 @@
   {% set part_names = {'age': 'возраст', 'stage': 'стадия', 'b2m': 'β2M', 'LDH': 'ЛДГ', 'extranodal': 'экстранод.',
                       'nodal': 'зоны л/у', 'node': 'л/у > 6 см', 'BM': 'КМ', 'distant': 'отдал. л/у',
                       'non_nasal': 'не-назальный', 'albumin': 'альбумин', 'lymph': 'лимфоциты', 'male': 'муж. пол',
-                      'areas': '≥ 3 зон', 'ESR': 'СОЭ', 'bulky': 'средостение', 'PLT': 'тромбоциты'} %}
+                      'areas': '≥ 3 зон', 'ESR': 'СОЭ', 'bulky': 'средостение', 'PLT': 'тромбоциты',
+                      'WBC': 'лейкоциты', 'Ki67': 'Ki-67'} %}
   {% for ix in c.indices %}
   <div class="panel">
     <h2>{{ ix.name }}</h2>
