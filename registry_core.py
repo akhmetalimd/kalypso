@@ -486,6 +486,7 @@ INDEXES = {
     "MALT-IPI": {"max": 3, "groups": ((0, "low"), (1, "intermediate"), (3, "high"))},
     "PIT": {"max": 4, "groups": ((0, "low"), (1, "low_intermediate"), (2, "high_intermediate"), (4, "high"))},
     "PINK": {"max": 4, "groups": ((0, "low"), (1, "intermediate"), (4, "high"))},
+    "CNS-IPI": {"max": 6, "groups": ((1, "low"), (3, "intermediate"), (6, "high"))},
 }
 LDH_CATEGORIES = ("le_uln", "uln_1_3", "gt_3_uln")   # ЛДГ: ≤ ВГН, > 1–3 × ВГН, > 3 × ВГН
 RESPONSES = {
@@ -853,6 +854,21 @@ def pink(age: Optional[float], advanced: Optional[bool], distant_ln: Optional[bo
     return {"score": score, "group": index_group("PINK", score), "components": parts}
 
 
+# ---------------------------------------------------------------------------
+# 14. Агрессивные B-клеточные лимфомы: CNS-IPI
+# ---------------------------------------------------------------------------
+def cns_ipi(age: Optional[float], ecog: Optional[int], advanced: Optional[bool], ldh: Optional[str],
+            extranodal_gt1: Optional[bool], kidney_adrenal: Optional[bool]) -> Optional[dict]:
+    """CNS-IPI (Schmitz, 2016): пять факторов IPI + поражение почек и/или надпочечников, по 1 баллу.
+    Риск рецидива в ЦНС: 0–1 низкий, 2–3 промежуточный, 4–6 высокий."""
+    base = ipi(age, ecog, advanced, ldh, extranodal_gt1)
+    if base is None or kidney_adrenal is None:
+        return None
+    parts = {**base["components"], "kidney": int(kidney_adrenal)}
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("CNS-IPI", score), "components": parts}
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -895,6 +911,7 @@ if __name__ == "__main__":
     assert ipss_wm(70, 120, 150, 2, 30)["group"] == "intermediate" and index_group("IPSS-WM", 1) is None
     assert malt_ipi(70, True, "uln_1_3")["group"] == "high"
     assert pit(65, 2, "uln_1_3", True)["group"] == "high" and pink(50, False, False, False)["group"] == "low"
+    assert cns_ipi(70, 2, True, "uln_1_3", True, True)["score"] == 6
     try:
         kaplan_meier([-1], [1])
         raise AssertionError("отрицательное время должно отвергаться")

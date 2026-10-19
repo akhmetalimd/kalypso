@@ -170,6 +170,16 @@ def _ptcl(pt, mm, labs, age):
     ]
 
 
+def _hgbl(pt, mm, labs, age):
+    adv, ldh, en = _adv(pt), _ldh(mm.get("ldh_uln")), _extranodal_gt1(mm.get("extranodal_n"))
+    return [
+        _ix("IPI", core.ipi(age, pt["ecog"], adv, ldh, en),
+            "возраст, ECOG, стадия Lugano, ЛДГ, число экстранодальных очагов", stored=True),
+        _ix("CNS-IPI", core.cns_ipi(age, pt["ecog"], adv, ldh, en, _yes_no(mm.get("kidney_adrenal"))),
+            "факторы IPI и поражение почек / надпочечников"),
+    ]
+
+
 # нозология -> (функция расчёта, названия индексов в порядке вывода; первый — индекс карточки)
 CALCULATORS = {
     "cll_sll": (_cll, ("CLL-IPI",)),
@@ -180,6 +190,7 @@ CALCULATORS = {
     "waldenstrom": (_wm, ("IPSS-WM", "rIPSS-WM")),
     "mzl": (_mzl, ("MALT-IPI",)),
     "ptcl": (_ptcl, ("IPI", "PIT", "PINK")),
+    "hgbl": (_hgbl, ("IPI", "CNS-IPI")),
 }
 
 
@@ -200,6 +211,9 @@ def module_quality(pt: dict, mm: dict[str, str]) -> list[str]:
         return ["dlbcl_myc_bcl2"]
     if pt["who_haem5"] == "follicular" and mm.get("grade_icc") == "3B":
         return ["fl_grade_3b"]
+    if pt["who_haem5"] == "hgbl" and mm.get("hgbl_subtype") == "myc_bcl2" and not (
+            mm.get("myc_r") == "detected" and mm.get("bcl2_r") == "detected"):
+        return ["hgbl_myc_bcl2_unconfirmed"]
     return []
 
 
@@ -243,7 +257,18 @@ def _mzl_info(pt, mm, lines, observations, markers):
     return info
 
 
-INFO = {"follicular": _fl_info, "mcl": _mcl_info, "mzl": _mzl_info}
+def _hgbl_info(pt, mm, lines, observations, markers):
+    info = []
+    if mm.get("cns_involvement") == "yes":
+        info.append({"title": "Поражение ЦНС", "warn": True, "text": "на диагнозе — режим с проникновением в ЦНС"})
+    cns = next(i for i in _hgbl(pt, mm, [], _age(pt["birth_date"], pt["dx_date"])) if i["name"] == "CNS-IPI")
+    if cns["result"] and cns["result"]["group"] == "high":
+        info.append({"title": "Высокий риск рецидива в ЦНС", "warn": True,
+                     "text": f"CNS-IPI {cns['result']['score']} — рассмотрите профилактику ЦНС"})
+    return info
+
+
+INFO = {"follicular": _fl_info, "mcl": _mcl_info, "mzl": _mzl_info, "hgbl": _hgbl_info}
 
 
 def module_info(pt: dict, mm: dict[str, str], lines: list[dict], observations: list[dict],

@@ -61,6 +61,31 @@
           ]
         },
         {
+          "id": "hgbl",
+          "name": "B-клеточные лимфомы высокой степени злокачественности (HGBL)",
+          "status": "active",
+          "module": "hgbl",
+          "codes": { "icd_o_3_2": "9680/3", "mkb10": "C83.3" },
+          "_comment": "DLBCL/HGBL-MYC/BCL2 и HGBL, NOS (WHO-HAEM5); отдельных кодов МКБ-10 нет",
+          "staging": ["Lugano"],
+          "stage_values": { "Lugano": ["I", "IE", "II", "IIE", "III", "IV"] },
+          "index": "IPI",
+          "response_criteria": "Lugano 2014",
+          "markers": ["MYC", "BCL2", "BCL6"],
+          "regimens": ["DA-EPOCH-R", "R-CHOP", "R-hyper-CVAD / R-MA", "R-CODOX-M / R-IVAC", "Профилактика ЦНС: HD-MTX",
+                       "ВДХТ + аутоТГСК", "R-ICE", "CAR-T (axi-cel)", "CAR-T (liso-cel)", "Глофитамаб", "Эпкоритамаб"],
+          "core_fields": [
+            { "key": "hgbl_subtype",    "label_ru": "Подтип HGBL (WHO-HAEM5)",                         "values": ["myc_bcl2", "hgbl_nos"] },
+            { "key": "myc_r",           "label_ru": "Перестройка MYC, FISH",                          "values": ["detected", "not_detected"] },
+            { "key": "bcl2_r",          "label_ru": "Перестройка BCL2, FISH",                         "values": ["detected", "not_detected"] },
+            { "key": "bcl6_r",          "label_ru": "Перестройка BCL6, FISH",                         "values": ["detected", "not_detected"] },
+            { "key": "ldh_uln",         "label_ru": "ЛДГ относительно ВГН лаборатории",                "values": ["le_uln", "uln_1_3", "gt_3_uln"] },
+            { "key": "extranodal_n",    "label_ru": "Экстранодальные очаги, число",                    "values": ["0", "1", "2plus"] },
+            { "key": "kidney_adrenal",  "label_ru": "Поражение почек / надпочечников (CNS-IPI)",       "values": ["yes", "no"] },
+            { "key": "cns_involvement", "label_ru": "Поражение ЦНС на диагнозе",                       "values": ["yes", "no"] }
+          ]
+        },
+        {
           "id": "follicular",
           "name": "Фолликулярная лимфома (ФЛ)",
           "status": "active",

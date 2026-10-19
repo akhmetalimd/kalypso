@@ -1,7 +1,7 @@
 """Формулы индексов нозологий на общей основе (registry_core), без БД."""
 import pytest
 
-from registry_core import (ghsg_group, index_group, index_groups, ips, ipss_wm, malt_ipi, mipi_c, pink, pit,
+from registry_core import (cns_ipi, ghsg_group, index_group, index_groups, ips, ipss_wm, malt_ipi, mipi_c, pink, pit,
                            ripss_wm, smipi)
 
 
@@ -125,4 +125,16 @@ def test_pit(args, score, group):
 def test_pink(args, group):
     assert pink(*args)["group"] == group
     assert pink(None, True, True, True) is None
+
+
+# --- HGBL: CNS-IPI ---------------------------------------------------------------
+@pytest.mark.parametrize("args, score, group", [
+    ((50, 0, False, "le_uln", False, False), 0, "low"),
+    ((61, 2, False, "le_uln", False, True), 3, "intermediate"),
+    ((61, 2, True, "uln_1_3", False, False), 4, "high"),
+])
+def test_cns_ipi(args, score, group):
+    r = cns_ipi(*args)
+    assert (r["score"], r["group"]) == (score, group)
+    assert cns_ipi(61, 2, True, "uln_1_3", False, None) is None
 

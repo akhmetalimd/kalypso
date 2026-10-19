@@ -40,7 +40,11 @@ def _risk(result: dict | None, name: str | None) -> float:
     return groups.index(result["group"]) / max(1, len(groups) - 1)
 
 
-def _response(rng, criteria: str, complete: bool, line_no: int) -> dict:
+def _response(rng, criteria: str, complete: bool, line_no: int, basis: str | None = None) -> dict:
+    if criteria not in ("IWWM-11", "Lugano 2014"):          # IPCG, HCL, ISCL, T-LGLL: CR — полный ответ
+        values = core.RESPONSES[criteria]
+        value = values[0] if complete else rng.choice([v for v in values[1:]])
+        return {"response_value": value, "response_basis": basis or "clinical"}
     if criteria == "IWWM-11":
         value = pick(rng, {"CR": 15, "VGPR": 85}) if complete else pick(rng, {"PR": 55, "MR": 20, "SD": 15, "PD": 10})
         return {"response_value": value, "response_basis": "laboratory"}
@@ -110,7 +114,7 @@ def one_patient(db: Database, doc: Principal, rng: random.Random, nosology: str,
             break
         complete = rng.random() < (p_complete if i == 0 else p_complete * 0.6)
         if rng.random() < 0.88:                          # у части линий оценки ответа нет — флаг полноты
-            resp = _response(rng, node["response_criteria"], complete, i + 1)
+            resp = _response(rng, node["response_criteria"], complete, i + 1, spec.get("response_basis"))
             timeline.append(("response", {"obs_date": _d(r_date), "line_no": i + 1, **resp}))
         if complete and rng.random() >= spec["p_relapse"](risk):
             progressing = False
@@ -315,6 +319,22 @@ def _ptcl_first(rng, ctx, f):
     return ("CHOP", "циклофосфамид, доксорубицин, винкристин, преднизолон", 6)
 
 
+def _hgbl_fields(rng, ctx):
+    subtype = "myc_bcl2" if rng.random() < 0.7 else "hgbl_nos"
+    if subtype == "myc_bcl2":
+        myc, bcl2 = "detected", "detected"
+    else:
+        myc, bcl2 = pick(rng, {"detected": 30, "not_detected": 70}), "not_detected"
+    stage4 = ctx["stage"] == "IV"
+    return {
+        "hgbl_subtype": subtype, "myc_r": myc, "bcl2_r": bcl2,
+        "bcl6_r": _maybe(rng, "detected" if rng.random() < 0.25 else "not_detected", 0.15),
+        "ldh_uln": _maybe(rng, pick(rng, {"le_uln": 20, "uln_1_3": 50, "gt_3_uln": 30})),
+        "extranodal_n": pick(rng, {"0": 10, "1": 35, "2plus": 55} if stage4 else {"0": 60, "1": 40}),
+        "kidney_adrenal": "yes" if stage4 and rng.random() < 0.2 else "no",
+        "cns_involvement": "yes" if rng.random() < 0.08 else "no",
+    }
+
 SPECS = {
     "mcl": {
         "age": (67, 9, 38, 90), "male": 0.75, "watch": 0.08,
@@ -408,5 +428,24 @@ SPECS = {
         "histology": lambda rng, f: ("Биопсия: диффузная инфильтрация атипичными T-клетками среднего и крупного размера. "
                                      f"ИГХ: CD3+, CD4+/CD8-, потеря CD7, CD30 {'+' if 'alcl' in f['ptcl_subtype'] else '-'}. "
                                      "Ki-67 60–80 %. Заключение: периферическая T-клеточная лимфома."),
+    },
+    "hgbl": {
+        "age": (62, 12, 25, 88), "male": 0.6, "watch": 0.0,
+        "stage": {"I": 4, "IE": 3, "II": 8, "IIE": 5, "III": 20, "IV": 60},
+        "ecog": {0: 20, 1: 40, 2: 25, 3: 12, 4: 3},
+        "fields": _hgbl_fields,
+        "labs": lambda rng, ctx, f: [("2532-0", rng.randint(*{"le_uln": (140, 245), "uln_1_3": (260, 740),
+                                                              "gt_3_uln": (760, 2000)}.get(f["ldh_uln"], (200, 600))), "U/L"),
+                                     ("8302-2", round(rng.uniform(85, 145)), "g/L")],
+        "first": lambda rng, ctx, f: pick(rng, {("DA-EPOCH-R", "дозоадаптированный EPOCH, ритуксимаб", 6): 55,
+                                                 ("R-CHOP", "ритуксимаб, циклофосфамид, доксорубицин, винкристин, преднизолон", 6): 30,
+                                                 ("R-hyper-CVAD / R-MA", "hyper-CVAD, метотрексат, цитарабин, ритуксимаб", 8): 15}),
+        "later": [("R-ICE", "ритуксимаб, ифосфамид, карбоплатин, этопозид", 3), ("CAR-T (axi-cel)", "аксикабтаген цилолейсел", 1),
+                  ("Глофитамаб", "глофитамаб", 12), ("Эпкоритамаб", "эпкоритамаб", None)],
+        "p_complete": lambda risk: 0.65 - 0.35 * risk, "p_relapse": lambda risk: 0.3 + 0.3 * risk,
+        "relapse_months": (3, 24), "death_progressive": 0.75,
+        "histology": lambda rng, f: ("Биопсия: диффузный рост крупных/промежуточных клеток, высокий митотический индекс. "
+                                     "ИГХ: CD20+, CD10+, BCL2+, MYC+ (> 40 %). Ki-67 90 %. "
+                                     "Заключение: B-клеточная лимфома высокой степени злокачественности."),
     },
 }

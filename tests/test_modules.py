@@ -69,6 +69,16 @@ CASES = {
         "stored": "5", "bad_score": "6", "db": ("IPI", 6, "high", "index_ipi"),
         "optional": ["nasal_type", "distant_ln", "ebv_dna"],
     },
+    # 71 год, ECOG 2, стадия IV, ЛДГ > ВГН, ≥ 2 экстранодальных: IPI 5; + почки/надпочечники — CNS-IPI 6.
+    "hgbl": {
+        "form": {"birth_date": "1950-02-01", "stage_system": "Lugano", "stage_value": "IV", "ecog": "2"},
+        "fields": {"hgbl_subtype": "myc_bcl2", "myc_r": "detected", "bcl2_r": "detected", "bcl6_r": "not_detected",
+                   "ldh_uln": "uln_1_3", "extranodal_n": "2plus", "kidney_adrenal": "yes", "cns_involvement": "no"},
+        "labs": [],
+        "expected": {"IPI": (5, "high"), "CNS-IPI": (6, "high")},
+        "stored": "5", "bad_score": "6", "db": ("IPI", 6, "high", "index_ipi"),
+        "optional": [],
+    },
 }
 NOSOLOGIES = list(CASES)
 
@@ -116,6 +126,8 @@ def test_entry_completeness_and_indices(world, nos):
 
 @pytest.mark.parametrize("nos", NOSOLOGIES)
 def test_stored_index_validated(world, nos):
+    if CASES[nos]["db"] is None:
+        pytest.skip("у нозологии нет индекса карточки")
     top = INDEXES[find_node(NOSOLOGY_TREE, nos)["index"]]["max"]
     with pytest.raises(ValidationError, match=f"от 0 до {top}"):
         register(world, nos, index_score=CASES[nos]["bad_score"])
@@ -123,6 +135,8 @@ def test_stored_index_validated(world, nos):
 
 @pytest.mark.parametrize("nos", NOSOLOGIES)
 def test_db_rejects_bad_stored_index(reg, nos):
+    if CASES[nos]["db"] is None:
+        pytest.skip("у нозологии нет индекса карточки")
     name, score, group, constraint = CASES[nos]["db"]
     node = find_node(NOSOLOGY_TREE, nos)
     with rejected(reg.con, constraint):
@@ -136,9 +150,12 @@ def test_synthetic_dashboard_and_groupings(world, nos):
                               nosology=nos)["patients"] == 20
     d = analytics.module_dashboard(world.db, world.curator, nos)
     assert d["n"] == 20 and d["treated"][0] > 0
-    agree = dict(next(items for title, items in d["indices"] if "карточка и расчёт" in title)[i][:2]
-                 for i in range(len(next(items for title, items in d["indices"] if "карточка и расчёт" in title))))
-    assert "расходится" not in agree and agree.get("совпадает", 0) > 0          # карточка = расчёт
+    sections = [items for title, items in d["indices"] if "карточка и расчёт" in title]
+    if CASES[nos]["db"] is not None:
+        agree = {name: n for name, n, _ in sections[0]}
+        assert "расходится" not in agree and agree.get("совпадает", 0) > 0      # карточка = расчёт
+    else:
+        assert sections == []
     for code in analytics.GROUPING_SETS[nos]:
         res = analytics.explore(world.db, world.curator, "OS", grouping=code)
         assert res["grouping"] == code and res["nosology"] in (nos, None), code
@@ -255,4 +272,15 @@ def test_ptcl_enktl_pink_and_tree(world):
     assert (pink["result"]["score"], pink["result"]["group"]) == (3, "high")   # возраст, отдалённые л/у, не-назальный
     assert find_node(NOSOLOGY_TREE, "mature_tnk").get("module") is None        # группа узлов, не нозология
     assert find_node(NOSOLOGY_TREE, "cutaneous_tnk")["status"] == "coming_soon"
+
+
+def test_hgbl_subtype_check_and_cns_panels(world):
+    pid = register(world, "hgbl")
+    fill(world, "hgbl", pid, {**CASES["hgbl"]["fields"], "myc_r": "not_detected", "cns_involvement": "yes"})
+    card = registry.get_card(world.db, world.doc_a, pid)
+    assert "hgbl_myc_bcl2_unconfirmed" in card["flags"]["quality"]
+    assert [i["title"] for i in card["module_info"]] == ["Поражение ЦНС", "Высокий риск рецидива в ЦНС"]  # CNS-IPI 6
+    fill(world, "hgbl", pid, {"myc_r": "detected"}, test_date="2021-03-20")
+    card = registry.get_card(world.db, world.doc_a, pid)
+    assert "hgbl_myc_bcl2_unconfirmed" not in card["flags"]["quality"]
 

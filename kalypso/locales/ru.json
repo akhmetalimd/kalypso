@@ -148,7 +148,9 @@
       "aitl": "AITL / нодальная TFH",
       "alcl_alk_pos": "ALCL ALK+",
       "alcl_alk_neg": "ALCL ALK−",
-      "enktl": "ENKTL (NK/T, назальный тип и др.)"
+      "enktl": "ENKTL (NK/T, назальный тип и др.)",
+      "myc_bcl2": "DLBCL/HGBL-MYC/BCL2",
+      "hgbl_nos": "HGBL, NOS"
     },
     "role": {
       "physician": "Лечащий врач",
@@ -212,8 +214,9 @@
     "lab_unknown_unit": "Единица не распознана — нужна ручная проверка",
     "lab_unknown_loinc": "Показатель не из справочника — нужна ручная проверка",
     "missing_response_line_any": "Нет оценки ответа по завершённой линии",
-    "dlbcl_myc_bcl2": "Перестройки MYC и BCL2: по WHO-HAEM5 это DLBCL/HGBL-MYC/BCL2 — проверьте диагноз",
-    "fl_grade_3b": "Грейд 3B: по ICC — FL 3B, по WHO-HAEM5 ближе к ДВКЛ — проверьте диагноз"
+    "dlbcl_myc_bcl2": "Перестройки MYC и BCL2: по WHO-HAEM5 это DLBCL/HGBL-MYC/BCL2 — проверьте диагноз (в регистре — нозология HGBL)",
+    "fl_grade_3b": "Грейд 3B: по ICC — FL 3B, по WHO-HAEM5 ближе к ДВКЛ — проверьте диагноз",
+    "hgbl_myc_bcl2_unconfirmed": "Подтип DLBCL/HGBL-MYC/BCL2 без подтверждённых по FISH перестроек MYC и BCL2"
   },
   "msg": {
     "created": "Пациент внесён в регистр",
