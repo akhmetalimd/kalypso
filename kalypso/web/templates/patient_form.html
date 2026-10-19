@@ -67,6 +67,7 @@
     <label>Fitness {{ select('cirs_fitness', options('cirs_fitness'), v.get('cirs_fitness')) }}</label>
     <label>Charlson <input type="number" name="charlson_score" min="0" max="40" value="{{ v.get('charlson_score') if v.get('charlson_score') is not none else '' }}"></label>
     <div><label>B-симптомы {{ select('b_symptoms', options('b_symptoms'), v.get('b_symptoms')) }}</label>{{ missing_select('b_symptoms', missing) }}</div>
+    {% if prof.stages %}
     <div>
       <label>Стадия
         <span class="pair">
@@ -81,6 +82,7 @@
         <small>{% for system, values in prof.stages.items() %}{{ system }}: {{ values|join(', ') }}{% if not loop.last %} · {% endif %}{% endfor %}{% if prof.id == 'dlbcl' %}. Bulky — отдельным полем модуля{% endif %}</small>
       </label>{{ missing_select('stage_value', missing) }}
     </div>
+    {% endif %}
     {% set spec = indexes.get(prof.index) %}
     {% if spec %}
     <div>

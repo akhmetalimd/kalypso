@@ -50,6 +50,13 @@ def _short(value) -> str:
     return str(value)[:8] if value else "—"
 
 
+SPECIAL_DASHBOARDS = {"cll_sll": "/dashboard/cll", "dlbcl": "/dashboard/dlbcl", "follicular": "/dashboard/fl"}
+
+
+def dashboard_url(nosology: str) -> str:
+    return SPECIAL_DASHBOARDS.get(nosology, f"/dashboard/m/{nosology}")
+
+
 def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     db = db or Database(settings.dsn)
     app = FastAPI(title="KALYPSO", docs_url=None, redoc_url=None, openapi_url=None)
@@ -62,7 +69,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
                        lab_units=core.LAB_UNITS, core_fields=registry.core_fields,
                        active_nodes=registry.active_nodes, missing_codes=registry.MISSING,
                        conditional_fields=registry.CONDITIONAL_FIELDS,
-                       profile=registry.profile, indexes=core.INDEXES)
+                       profile=registry.profile, indexes=core.INDEXES, dashboard_url=dashboard_url)
     env.filters.update(d=_fmt_date, short=_short,
                        nosology=lambda node_id: (core.find_node(core.NOSOLOGY_TREE, node_id or "") or {}).get("name", node_id))
 
@@ -397,6 +404,19 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         d = analytics.dlbcl_dashboard(db, p, f)
         return render(request, "dashboard_dlbcl.html", p, d=d, f=f, branches=admin.list_branches(db, p),
                       charts=charts, filters_text=_filters_text(f), response_groups=analytics.RESPONSE_GROUPS["dlbcl"])
+
+    @app.get("/dashboard/m/{nosology}", response_class=HTMLResponse)
+    def dashboard_module(request: Request, nosology: str):
+        p = current(request)
+        if nosology in SPECIAL_DASHBOARDS:
+            return RedirectResponse(SPECIAL_DASHBOARDS[nosology], status_code=303)
+        if nosology not in {n["id"] for n in registry.active_nodes()}:
+            raise NotFound()
+        f = {**analytics.parse_filters(dict(request.query_params)), "binet": None}
+        d = analytics.module_dashboard(db, p, nosology, f)
+        return render(request, "dashboard_module.html", p, d=d, f=f, branches=admin.list_branches(db, p),
+                      charts=charts, filters_text=_filters_text({**f, "nosology": nosology}),
+                      response_groups=analytics.response_groups(nosology))
 
     @app.get("/dashboard/fl", response_class=HTMLResponse)
     def dashboard_fl(request: Request):

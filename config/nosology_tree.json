@@ -108,14 +108,27 @@
         },
         {
           "id": "mcl",
-          "name": "Мантийноклеточная",
-          "status": "coming_soon",
+          "name": "Мантийноклеточная лимфома (МКЛ)",
+          "status": "active",
           "module": "mcl",
           "codes": { "icd_o_3_2": "9673/3", "mkb10": "C83.1" },
           "staging": ["Lugano"],
-          "index": "MIPI",
+          "stage_values": { "Lugano": ["I", "IE", "II", "IIE", "III", "IV"] },
+          "index": "sMIPI",
           "response_criteria": "Lugano 2014",
-          "markers": ["t(11;14)", "Ki-67", "TP53"]
+          "markers": ["t(11;14)", "Ki-67", "TP53"],
+          "regimens": ["R-CHOP / R-DHAP + аутоТГСК", "R-CHOP / R-DHAP + ибрутиниб", "BR", "VR-CAP", "R-BAC",
+                       "Акалабрутиниб + BR", "Ибрутиниб + ритуксимаб", "Ибрутиниб", "Акалабрутиниб", "Занубрутиниб",
+                       "Пиртобрутиниб", "Венетоклакс + ибрутиниб", "Леналидомид + ритуксимаб (R²)",
+                       "CAR-T (brexu-cel)", "Ритуксимаб — поддержка"],
+          "core_fields": [
+            { "key": "ldh_ratio",  "label_ru": "ЛДГ / ВГН лаборатории (для MIPI)",         "values": ["lt_067", "067_099", "100_149", "ge_150"] },
+            { "key": "ki67",       "label_ru": "Ki-67",                                    "values": ["lt_30", "ge_30"] },
+            { "key": "tp53_mcl",   "label_ru": "TP53 (мутация или del(17p))",              "values": ["detected", "not_detected"] },
+            { "key": "blastoid",   "label_ru": "Бластоидный / плеоморфный вариант",        "values": ["yes", "no"] },
+            { "key": "leukemic_nn","label_ru": "Лейкемический ненодальный вариант",        "values": ["yes", "no"], "optional": true },
+            { "key": "ccnd1_neg",  "label_ru": "Cyclin D1-негативный (SOX11+) вариант",    "values": ["yes", "no"], "optional": true }
+          ]
         },
         {
           "id": "waldenstrom",
@@ -139,6 +152,17 @@
       "staging": ["Lugano"],
       "index": null,
       "response_criteria": "Lugano 2014 / кожные шкалы",
+      "markers": []
+    },
+    {
+      "id": "nlpbcl",
+      "name": "Нодулярная B-клеточная лимфома с лимфоидным преобладанием (NLPBCL)",
+      "status": "coming_soon",
+      "module": "nlpbcl",
+      "codes": { "icd_o_3_2": "9659/3", "mkb10": "C81.0" },
+      "staging": ["Lugano"],
+      "index": null,
+      "response_criteria": "Lugano 2014",
       "markers": []
     },
     {

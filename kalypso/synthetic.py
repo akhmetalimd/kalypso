@@ -54,8 +54,14 @@ def _pick(rng, weighted: dict):
 
 def generate(db: Database, physicians: list[Principal], n: int = 60,
              seed: int = 42, duplicates: int = 3, nosology: str = "cll_sll") -> dict:
-    """n синтетических пациентов нозологии (cll_sll, dlbcl, follicular) + межфилиальные дубликаты."""
-    one = {"cll_sll": _one_patient, "dlbcl": _one_dlbcl, "follicular": _one_fl}[nosology]
+    """n синтетических пациентов нозологии + межфилиальные дубликаты. ХЛЛ, ДВКЛ, ФЛ — свои
+    генераторы ниже; остальные — kalypso.synthetic_generic.SPECS."""
+    one = {"cll_sll": _one_patient, "dlbcl": _one_dlbcl, "follicular": _one_fl}.get(nosology)
+    if one is None:                     # остальные нозологии — общий генератор по описанию
+        from kalypso import synthetic_generic
+
+        def one(db, doc, rng):
+            return synthetic_generic.one_patient(db, doc, rng, nosology, synthetic_iin)
     rng = random.Random(seed)
     made: list[tuple[str, Principal]] = []
     for _ in range(n):

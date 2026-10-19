@@ -77,7 +77,7 @@ def test_fresh_deploy_rehearsal(cluster, tmp_path):
                 cur.execute("""INSERT INTO app_user (login, display_name, password_hash, role_code, branch_code)
                                VALUES (%s, %s, %s, %s, %s)""",
                             (login, login, auth.hash_password("rehearsal-password"), role, branch))
-        summary = ops.seed_synthetic(db, cll=5, dlbcl=3, fl=0)
+        summary = ops.seed_synthetic(db, cll=5, dlbcl=3, fl=0, other=0)
         assert summary["cll_sll"]["patients"] == 5 and summary["dlbcl"]["patients"] == 3
         with db.tx() as cur:                       # без пользователя RLS не показывает пациентов
             cur.execute("SELECT count(*) AS n FROM patient")

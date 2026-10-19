@@ -53,13 +53,13 @@ def _check(env) -> int:
     return 1 if problems else 0
 
 
-def _seed(env, cll: int, dlbcl: int, fl: int) -> int:
+def _seed(env, cll: int, dlbcl: int, fl: int, other: int) -> int:
     from kalypso.db import Database
     from kalypso.ops import OpsError, seed_synthetic
 
     db = Database(env["KALYPSO_DSN"])
     try:
-        print("Синтетика загружена:", seed_synthetic(db, cll, dlbcl, fl))
+        print("Синтетика загружена:", seed_synthetic(db, cll, dlbcl, fl, other))
     except OpsError as e:
         print(e, file=sys.stderr)
         return 1
@@ -101,6 +101,7 @@ def main(argv=None, env=None) -> int:
     sd.add_argument("--cll", type=int, default=60)
     sd.add_argument("--dlbcl", type=int, default=40)
     sd.add_argument("--fl", type=int, default=40)
+    sd.add_argument("--other", type=int, default=30, help="пациентов каждой из остальных нозологий")
     args = ap.parse_args(argv)
 
     if args.cmd == "migrate":
@@ -116,7 +117,7 @@ def main(argv=None, env=None) -> int:
     if args.cmd == "serve":
         return _serve(env)
     if args.cmd == "seed-synthetic":
-        return _seed(env, args.cll, args.dlbcl, args.fl)
+        return _seed(env, args.cll, args.dlbcl, args.fl, args.other)
     return _create_admin(env, args.login, args.display_name)
 
 

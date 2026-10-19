@@ -475,6 +475,8 @@ INDEXES = {
     "FLIPI": {"max": 5, "groups": ((1, "low"), (2, "intermediate"), (5, "high"))},
     "FLIPI-2": {"max": 5, "groups": ((0, "low"), (2, "intermediate"), (5, "high"))},
     "PRIMA-PI": {"max": 2, "groups": ((0, "low"), (1, "intermediate"), (2, "high"))},
+    "sMIPI": {"max": 11, "groups": ((3, "low"), (5, "intermediate"), (11, "high"))},
+    "MIPI-c": {"max": 3, "groups": ((0, "low"), (1, "low_intermediate"), (2, "high_intermediate"), (3, "high"))},
 }
 LDH_CATEGORIES = ("le_uln", "uln_1_3", "gt_3_uln")   # ЛДГ: ≤ ВГН, > 1–3 × ВГН, > 3 × ВГН
 RESPONSES = {
@@ -646,6 +648,50 @@ def pod24(patient: dict, lines: list[dict], observations: list[dict],
     return {"status": "no_pod24", "landmark": limit}
 
 
+# ---------------------------------------------------------------------------
+# 9. Мантийноклеточная лимфома: sMIPI, MIPI-c
+# ---------------------------------------------------------------------------
+LDH_RATIO_CATEGORIES = ("lt_067", "067_099", "100_149", "ge_150")   # ЛДГ / ВГН: < 0,67 … ≥ 1,5
+
+
+def smipi(age: Optional[float], ecog: Optional[int], ldh_ratio: Optional[str],
+          wbc_10e9_l: Optional[float]) -> Optional[dict]:
+    """Упрощённый MIPI (Hoster, 2008): возраст < 50 — 0, 50–59 — 1, 60–69 — 2, ≥ 70 — 3;
+    ECOG 2–4 — 2; ЛДГ/ВГН < 0,67 — 0, 0,67–0,99 — 1, 1,00–1,49 — 2, ≥ 1,5 — 3;
+    лейкоциты < 6,7 — 0, 6,7–9,99 — 1, 10–14,99 — 2, ≥ 15 ×10⁹/л — 3.
+    Группы: 0–3 низкий, 4–5 промежуточный, 6–11 высокий."""
+    if age is None:
+        age_pts = None
+    else:
+        age_pts = 0 if age < 50 else 1 if age < 60 else 2 if age < 70 else 3
+    if wbc_10e9_l is None:
+        wbc_pts = None
+    else:
+        wbc_pts = 0 if wbc_10e9_l < 6.7 else 1 if wbc_10e9_l < 10 else 2 if wbc_10e9_l < 15 else 3
+    parts = {
+        "age": age_pts,
+        "ECOG": None if ecog is None else (2 if ecog >= 2 else 0),
+        "LDH": None if ldh_ratio not in LDH_RATIO_CATEGORIES else LDH_RATIO_CATEGORIES.index(ldh_ratio),
+        "WBC": wbc_pts,
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("sMIPI", score), "components": parts}
+
+
+def mipi_c(mipi_group: Optional[str], ki67_ge30: Optional[bool]) -> Optional[dict]:
+    """MIPI-c (Hoster, 2016): группа MIPI (0 низкий / 1 промежуточный / 2 высокий) + Ki-67 ≥ 30 % (+1).
+    0 низкий, 1 низкий-промежуточный, 2 высокий-промежуточный, 3 высокий.
+    Здесь от sMIPI — в исследовании использован MIPI; группы sMIPI с ним в основном совпадают."""
+    order = {"low": 0, "intermediate": 1, "high": 2}
+    if mipi_group not in order or ki67_ge30 is None:
+        return None
+    score = order[mipi_group] + int(ki67_ge30)
+    return {"score": score, "group": index_group("MIPI-c", score),
+            "components": {"MIPI": order[mipi_group], "Ki67": int(ki67_ge30)}}
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -682,6 +728,7 @@ if __name__ == "__main__":
     assert nccn_ipi(80, 2, True, "gt_3_uln", True)["score"] == 8
     assert check_response("Lugano 2014", "CMR", "pet_ct", 4) == ["deauville_mismatch"]
     assert flipi(65, True, 110, "uln_1_3", True)["group"] == "high" and prima_pi(3.5, False)["group"] == "high"
+    assert smipi(72, 2, "ge_150", 16)["score"] == 11 and mipi_c("high", True)["group"] == "high"
     try:
         kaplan_meier([-1], [1])
         raise AssertionError("отрицательное время должно отвергаться")

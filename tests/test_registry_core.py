@@ -106,7 +106,7 @@ def test_codes_consistent(icd_o, mkb):
     ({"who_haem5": "cll_sll", "icd_o_3_2": "9670/3", "mkb": "C91.1"}, "code_pair_mismatch"),
     ({"who_haem5": "nope", "icd_o_3_2": "9823/3", "mkb": "C91.1"}, "unknown_who_haem5"),
     ({"icd_o_3_2": "9823/3", "mkb": "C91.1"}, "who_haem5_missing"),
-    ({"who_haem5": "mcl", "icd_o_3_2": "9673/3", "mkb": "C83.1"}, "nosology_not_active"),
+    ({"who_haem5": "nlpbcl", "icd_o_3_2": "9659/3", "mkb": "C81.0"}, "nosology_not_active"),
 ])
 def test_codes_flags(rec, flag):
     assert flag in validate_codes(rec)

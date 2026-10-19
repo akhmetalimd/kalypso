@@ -49,6 +49,8 @@ _CONSTRAINT_MESSAGES = {
     "patient_stage_lugano": "Стадия по Lugano: I, IE, II, IIE, III или IV",
     "patient_index_ipi": "IPI: балл 0–5 и группа риска",
     "patient_index_flipi": "FLIPI: балл 0–5 и группа риска",
+    "patient_index_smipi": "sMIPI: балл 0–11 и группа риска",
+    "patient_index_name": "Неизвестный прогностический индекс",
     "observation_lugano_basis": "Lugano 2014: по ПЭТ-КТ — метаболический ответ (CMR/PMR/NMR/PMD), иначе — CR/PR/SD/PD",
     "observation_lugano_deauville": "Метаболический ответ требует Deauville: CMR — 1–3, PMR/NMR/PMD — 4–5",
     "patient_histology_no_iin": "В тексте гистологии есть 12-значное число (похоже на ИИН) — удалите его",

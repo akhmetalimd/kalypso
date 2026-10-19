@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from collections import Counter, defaultdict
 from datetime import date, timedelta
 
@@ -64,15 +65,50 @@ GROUPING_SETS = {
     "dlbcl": ("ipi", "r_ipi", "nccn_ipi", "coo_hans", "myc_bcl2", "lugano", "bulky", "deauville_eot1"),
     "follicular": ("flipi", "flipi2", "prima_pi", "grade_icc", "lugano", "gelf", "pod24"),
 }
+STORED_INDEX = {"cll_ipi": "CLL-IPI", "ipi": "IPI", "flipi": "FLIPI"}           # группа индекса карточки
+COMPUTED_INDEX = {"r_ipi": "R-IPI", "nccn_ipi": "NCCN-IPI", "flipi2": "FLIPI-2", "prima_pi": "PRIMA-PI"}
+
+
+def _slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def _auto_groupings() -> None:
+    """Нозологии без ручного набора группировок (MCL, ЛХ, …): индекс карточки, расчётные индексы
+    (kalypso.indices.CALCULATORS), стадия Lugano и каждое поле модуля."""
+    from kalypso.indices import CALCULATORS
+
+    for node in active_nodes():
+        nos = node["id"]
+        if nos in GROUPING_SETS:
+            continue
+        codes = []
+        for name in CALCULATORS.get(nos, (None, ()))[1]:
+            code = _slug(name)
+            if name == node.get("index"):
+                STORED_INDEX.setdefault(code, name)
+                GROUPINGS.setdefault(code, f"Группа {name} (в карточке)")
+            else:
+                COMPUTED_INDEX.setdefault(code, name)
+                GROUPINGS.setdefault(code, f"{name} (расчёт по данным)")
+            codes.append(code)
+        if "Lugano" in node.get("staging", []):
+            codes.append("lugano")
+        for f in node.get("core_fields", []):
+            GROUPINGS.setdefault(f["key"], f["label_ru"])
+            codes.append(f["key"])
+        GROUPING_SETS[nos] = tuple(dict.fromkeys(codes))
+
+
+_auto_groupings()
 GROUPING_NOSOLOGIES: dict[str, set[str]] = defaultdict(set)
 for _nos, _gs in GROUPING_SETS.items():
     for _g in _gs:
         if _nos:
             GROUPING_NOSOLOGIES[_g].add(_nos)
 # Без окна «на старте»: признак карточки или ориентир.
-NOT_BASELINE = {"none", "sex", "branch", "binet", "cll_ipi", "ipi", "flipi", "lugano", "line1_regimen",
-                "deauville_eot1", "pod24"}
-COMPUTED_INDEX = {"r_ipi": "R-IPI", "nccn_ipi": "NCCN-IPI", "flipi2": "FLIPI-2", "prima_pi": "PRIMA-PI"}
+NOT_BASELINE = {"none", "sex", "branch", "binet", "lugano", "line1_regimen", "deauville_eot1", "pod24",
+                *STORED_INDEX}
 DOHNER_LABELS = {"del17p": "del(17p)", "del11q": "del(11q)", "tri12": "+12", "normal": "нормальный",
                  "del13q_sole": "del(13q) одна", "unknown": UNDEFINED}
 
@@ -209,12 +245,9 @@ def _group(pt: dict, grouping: str, t0: date, lab_loinc: str | None, threshold: 
         return pt["branch"]
     if grouping == "binet":
         return f"Binet {pt['stage_value']}" if pt["stage_system"] == "Binet" and pt["stage_value"] else "нет стадии Binet"
-    if grouping == "cll_ipi":
-        return label("index_group", pt["index_group"]) if pt["index_name"] == "CLL-IPI" else "нет CLL-IPI"
-    if grouping == "ipi":
-        return label("index_group", pt["index_group"]) if pt["index_name"] == "IPI" else "нет IPI"
-    if grouping == "flipi":
-        return label("index_group", pt["index_group"]) if pt["index_name"] == "FLIPI" else "нет FLIPI"
+    if grouping in STORED_INDEX:
+        name = STORED_INDEX[grouping]
+        return label("index_group", pt["index_group"]) if pt["index_name"] == name else f"нет {name}"
     if grouping in COMPUTED_INDEX:
         return _index_group(pt, COMPUTED_INDEX[grouping], t0)
     if grouping == "lugano":
@@ -402,6 +435,13 @@ RESPONSE_GROUPS = {
     "dlbcl": [("CR", "CR / CMR"), ("PR", "PR / PMR"), ("SD", "SD / NMR"), ("PD", "PD / PMD")],
 }
 RESPONSE_GROUPS["follicular"] = RESPONSE_GROUPS["dlbcl"]    # тоже Lugano 2014
+RESPONSE_GROUPS_BY_CRITERIA = {"iwCLL 2018": RESPONSE_GROUPS["cll_sll"], "Lugano 2014": RESPONSE_GROUPS["dlbcl"]}
+
+
+def response_groups(nosology: str) -> list:
+    node = core.find_node(core.NOSOLOGY_TREE, nosology) or {}
+    return RESPONSE_GROUPS.get(nosology) or RESPONSE_GROUPS_BY_CRITERIA.get(node.get("response_criteria"),
+                                                                            RESPONSE_GROUPS["dlbcl"])
 NOT_ENTERED = "Не внесено"
 
 
@@ -569,6 +609,41 @@ def fl_dashboard(db: Database, p: Principal, filters: dict | None = None) -> dic
         "pod24_known": (pods.count("pod24"), pods.count("pod24") + pods.count("no_pod24")),
         "watch_wait": (sum(1 for pt in cohort if not pt["lines"]), len(cohort)),
         "transformed": (transformed, len(cohort)),
+        **_therapy(cohort),
+        "ttft_median_months": ttft_median, "ttft_n": ttft_n,
+        "os_median_months": os_median, "os_n": os_n,
+    }
+
+
+def module_dashboard(db: Database, p: Principal, nosology: str, filters: dict | None = None) -> dict:
+    """Дашборд нозологии по её узлу дерева: стадии, индексы (карточка, сверка, расчёт), каждое
+    поле модуля, терапия, ответ, смерти, TTFT и OS. Для MCL, ЛХ, WM, MZL, PTCL."""
+    from kalypso.indices import CALCULATORS
+
+    p.require("patient.read")
+    node = core.find_node(core.NOSOLOGY_TREE, nosology)
+    cohort = _nosology_cohort(db, p, filters, nosology)
+    stages = []
+    for system, values in node.get("stage_values", {}).items():
+        none = f"нет стадии {system}"
+        stages.append((f"Стадия {system}", _dist(
+            [f"{system} {pt['stage_value']}" if pt["stage_system"] == system else none for pt in cohort],
+            order=[f"{system} {v}" for v in values] + [none], muted={none})))
+    indices = []
+    for name in CALCULATORS.get(nosology, (None, ()))[1]:
+        groups = [g for _, g in core.INDEXES[name]["groups"]]
+        if name == node.get("index"):
+            indices.append((f"{name} (в карточке)", _stored_dist(cohort, name, groups)))
+            indices.append((f"{name}: карточка и расчёт по данным", _stored_vs_computed(cohort, name)))
+        else:
+            indices.append((f"{name} (расчёт)", _computed_dist(cohort, name, groups)))
+    ttft_median, ttft_n = _median_months(cohort, "TTFT")
+    os_median, os_n = _median_months(cohort, "OS")
+    return {
+        "n": len(cohort), "nosology": nosology, "name": node["name"], "criteria": node.get("response_criteria"),
+        "stages": stages, "indices": indices,
+        "markers": [(f["label_ru"], _marker_dist(cohort, f["key"])) for f in node.get("core_fields", [])],
+        "watch_wait": (sum(1 for pt in cohort if not pt["lines"]), len(cohort)),
         **_therapy(cohort),
         "ttft_median_months": ttft_median, "ttft_n": ttft_n,
         "os_median_months": os_median, "os_n": os_n,

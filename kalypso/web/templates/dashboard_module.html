@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_viz.html" import filters, dist_table, tile with context %}
+{% block title %}{{ d.name }} — дашборд{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ d.name }} <span class="muted">{{ d.n }} пациентов</span></h1>
+  <div class="actions"><a class="button" href="/dashboard">Обзор</a><a class="button" href="/survival?nosology={{ d.nosology }}">Исследователь выживаемости</a></div>
+</div>
+{{ filters(dashboard_url(d.nosology), f, branches, nosology=False, binet=False) }}
+<p class="muted">{{ filters_text }}. Поля модуля — последний результат или код пропуска; серым — пропуски и «не внесено».
+  Расчётные индексы — по данным карточки и анализам у диагноза.</p>
+
+<section class="tiles">
+  {{ tile('Получали терапию', d.treated[0], d.treated[1]) }}
+  {{ tile('Наблюдение без лечения', d.watch_wait[0], d.watch_wait[1]) }}
+  <div class="tile"><div class="label">Медиана времени до 1-й терапии</div>
+    <div class="value">{{ d.ttft_median_months if d.ttft_median_months is not none else 'не достигнута' }}{% if d.ttft_median_months is not none %} мес.{% endif %}</div>
+    <div class="sub">TTFT, n={{ d.ttft_n }} · <a href="/survival?endpoint=TTFT&amp;nosology={{ d.nosology }}">кривая</a></div></div>
+  <div class="tile"><div class="label">Медиана общей выживаемости</div>
+    <div class="value">{{ d.os_median_months if d.os_median_months is not none else 'не достигнута' }}{% if d.os_median_months is not none %} мес.{% endif %}</div>
+    <div class="sub">OS, n={{ d.os_n }} · <a href="/survival?endpoint=OS&amp;nosology={{ d.nosology }}">кривая</a></div></div>
+</section>
+
+<div class="two">
+  {% for title, items in d.stages + d.indices + d.markers %}
+  <section class="card"><h2>{{ title }}</h2>
+    {{ charts.bar_chart(items, title, d.n)|safe }}{{ dist_table(items, d.n) }}</section>
+  {% endfor %}
+  <section class="card"><h2>Число линий терапии</h2>
+    {{ charts.bar_chart(d.lines_per, 'Линии', d.n)|safe }}{{ dist_table(d.lines_per, d.n) }}</section>
+  <section class="card"><h2>Режимы 1-й линии</h2>
+    {% if d.regimen1 %}{{ charts.bar_chart(d.regimen1, 'Режимы 1-й линии')|safe }}{{ dist_table(d.regimen1) }}{% else %}<p class="muted">Нет данных.</p>{% endif %}</section>
+</div>
+
+<section class="card"><h2>Ответ по линиям ({{ d.criteria }}, последняя оценка)</h2>
+  {% if d.responses %}
+  {{ charts.stacked_bars(d.responses, response_groups, 'Ответ по линиям')|safe }}
+  <details class="viz-table"><summary>Таблица</summary><table class="grid small">
+    <thead><tr><th>Линия</th>{% for k, name in response_groups %}<th>{{ name }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for line, counts in d.responses %}<tr><td>{{ line }}</td>{% for k, _ in response_groups %}<td>{{ counts.get(k, 0) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table></details>
+  {% else %}<p class="muted">Оценок ответа нет.</p>{% endif %}
+</section>
+
+<section class="card"><h2>Причины смерти</h2>
+  {% if d.deaths %}{{ charts.bar_chart(d.deaths, 'Причины смерти')|safe }}{{ dist_table(d.deaths) }}{% else %}<p class="muted">Смертей не зарегистрировано.</p>{% endif %}
+</section>
+{% endblock %}

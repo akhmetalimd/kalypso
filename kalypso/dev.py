@@ -35,7 +35,7 @@ def _dev_secrets() -> dict:
 
 
 def seed_if_empty(db: Database) -> dict | None:
-    """Пустая БД — филиалы, пользователи и когорта ХЛЛ; нет пациентов ДВКЛ или ФЛ — их когорты
+    """Пустая БД — филиалы, пользователи и когорта ХЛЛ; нет пациентов другой нозологии — её когорта
     (так dev-БД, созданная до нового модуля, получает его пациентов без пересоздания)."""
     seed = json.loads(SEED.read_text(encoding="utf-8"))
     summary = {}
@@ -60,8 +60,10 @@ def seed_if_empty(db: Database) -> dict | None:
     curator = next(u for u in users if u.role == "curator")
     if empty:
         summary["cll_sll"] = synthetic.generate(db, physicians, n=seed["synthetic_patients"])
+    from kalypso.synthetic_generic import SPECS
     for nosology, key, n, rnd in (("dlbcl", "synthetic_patients_dlbcl", 100, 7),
-                                  ("follicular", "synthetic_patients_fl", 80, 19)):
+                                  ("follicular", "synthetic_patients_fl", 80, 19),
+                                  *((nos, f"synthetic_patients_{nos}", 60, 23 + i) for i, nos in enumerate(SPECS))):
         with db.tx(curator.user_id) as cur:     # куратор видит все филиалы (RLS)
             cur.execute("SELECT count(*) AS n FROM patient WHERE who_haem5 = %s", (nosology,))
             missing = cur.fetchone()["n"] == 0

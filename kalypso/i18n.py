@@ -38,12 +38,30 @@ def label(group: str, code, lang: str = DEFAULT) -> str:
     return catalog(lang)["codes"].get(group, {}).get(str(code), str(code))
 
 
+@lru_cache
+def _field_labels() -> dict[str, str]:
+    """Подписи полей модулей из дерева нозологий — для флагов «нет поля» без отдельной строки."""
+    import registry_core as core
+
+    out: dict[str, str] = {}
+
+    def walk(n):
+        for f in n.get("core_fields", []):
+            out.setdefault(f["key"], f["label_ru"])
+        for ch in n.get("children", []):
+            walk(ch)
+    walk(core.NOSOLOGY_TREE)
+    return out
+
+
 def flag(code: str, lang: str = DEFAULT) -> str:
     flags = catalog(lang)["flags"]
     if code in flags:
         return flags[code]
     if code.startswith("missing_response_line_"):
         return flags["missing_response_line"].format(n=code.rsplit("_", 1)[-1])
+    if code.startswith("missing_") and code[len("missing_"):] in _field_labels():
+        return f"Нет «{_field_labels()[code[len('missing_'):]]}» (значения или кода пропуска)"
     return flags.get(code, code)
 
 

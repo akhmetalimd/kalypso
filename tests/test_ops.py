@@ -147,10 +147,13 @@ def test_check_detects_missing_migration(web_login, world, monkeypatch):
 
 # --- seed-synthetic ------------------------------------------------------------
 def test_seed_synthetic_only_into_empty_registry(world, capsys):
-    summary = ops.seed_synthetic(world.db, cll=6, dlbcl=4, fl=3)
+    from kalypso.synthetic_generic import SPECS
+    summary = ops.seed_synthetic(world.db, cll=6, dlbcl=4, fl=3, other=2)
     assert [summary[k]["patients"] for k in ("cll_sll", "dlbcl", "follicular")] == [6, 4, 3]
+    assert all(summary[nos]["patients"] == 2 for nos in SPECS)
     patients = registry.list_patients(world.db, world.curator)
-    assert len(patients) == 13 and {p["who_haem5"] for p in patients} == {"cll_sll", "dlbcl", "follicular"}
+    assert len(patients) == 13 + 2 * len(SPECS)
+    assert {p["who_haem5"] for p in patients} == {"cll_sll", "dlbcl", "follicular", *SPECS}
     with pytest.raises(ops.OpsError, match="пустой регистр"):
         ops.seed_synthetic(world.db, cll=1, dlbcl=0, fl=0)
     assert cli.main(["seed-synthetic", "--cll", "1"], env={"KALYPSO_DSN": world.dsn}) == 1
