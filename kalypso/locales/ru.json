@@ -143,7 +143,12 @@
       "lung": "Лёгкое",
       "salivary": "Слюнные железы",
       "skin": "Кожа",
-      "other": "Другая"
+      "other": "Другая",
+      "ptcl_nos": "PTCL, NOS",
+      "aitl": "AITL / нодальная TFH",
+      "alcl_alk_pos": "ALCL ALK+",
+      "alcl_alk_neg": "ALCL ALK−",
+      "enktl": "ENKTL (NK/T, назальный тип и др.)"
     },
     "role": {
       "physician": "Лечащий врач",

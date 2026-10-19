@@ -60,6 +60,15 @@ CASES = {
         "stored": "3", "bad_score": "4", "db": ("MALT-IPI", 4, "high", "index_malt_ipi"),
         "optional": ["malt_site", "hp"],
     },
+    # PTCL-NOS, 71 год, ECOG 2, стадия IV, ЛДГ > ВГН, ≥ 2 экстранодальных, КМ: IPI 5, PIT 4; PINK — только ENKTL.
+    "ptcl": {
+        "form": {"birth_date": "1950-02-01", "stage_system": "Lugano", "stage_value": "IV", "ecog": "2"},
+        "fields": {"ptcl_subtype": "ptcl_nos", "ldh_uln": "uln_1_3", "bm_involvement": "yes", "extranodal_n": "2plus"},
+        "labs": [],
+        "expected": {"IPI": (5, "high"), "PIT": (4, "high"), "PINK": None},
+        "stored": "5", "bad_score": "6", "db": ("IPI", 6, "high", "index_ipi"),
+        "optional": ["nasal_type", "distant_ln", "ebv_dna"],
+    },
 }
 NOSOLOGIES = list(CASES)
 
@@ -236,4 +245,14 @@ def test_mzl_malt_ipi_only_for_malt_and_info(world):
     card = registry.get_card(world.db, world.doc_a, pid)
     assert card["indices"][0]["result"]["group"] == "intermediate"             # 71 год — 1; IE, ЛДГ норма — 0
     assert {i["title"] for i in card["module_info"]} == {"H. pylori+", "HCV+"}
+
+
+def test_ptcl_enktl_pink_and_tree(world):
+    pid = register(world, "ptcl", icd_o_3_2="9719/3", mkb="C86.0", ecog="0", stage_value="IE")
+    fill(world, "ptcl", pid, {"ptcl_subtype": "enktl", "ldh_uln": "le_uln", "bm_involvement": "no",
+                              "extranodal_n": "1", "nasal_type": "no", "distant_ln": "yes"})
+    pink = next(i for i in registry.get_card(world.db, world.doc_a, pid)["indices"] if i["name"] == "PINK")
+    assert (pink["result"]["score"], pink["result"]["group"]) == (3, "high")   # возраст, отдалённые л/у, не-назальный
+    assert find_node(NOSOLOGY_TREE, "mature_tnk").get("module") is None        # группа узлов, не нозология
+    assert find_node(NOSOLOGY_TREE, "cutaneous_tnk")["status"] == "coming_soon"
 

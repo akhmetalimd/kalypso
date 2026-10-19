@@ -287,6 +287,34 @@ def _mzl_first(rng, ctx, fields):
                       ("R-CHOP", "ритуксимаб, циклофосфамид, доксорубицин, винкристин, преднизолон", 6): 15})
 
 
+def _ptcl_fields(rng, ctx):
+    subtype = pick(rng, {"ptcl_nos": 35, "aitl": 25, "alcl_alk_neg": 15, "alcl_alk_pos": 10, "enktl": 10, "other": 5})
+    enktl = subtype == "enktl"
+    return {
+        "ptcl_subtype": subtype,
+        "ldh_uln": _maybe(rng, pick(rng, {"le_uln": 40, "uln_1_3": 45, "gt_3_uln": 15} if ctx["adv"] else
+                                    {"le_uln": 65, "uln_1_3": 30, "gt_3_uln": 5})),
+        "bm_involvement": _maybe(rng, "yes" if ctx["stage"] == "IV" and rng.random() < 0.35 else "no", 0.1),
+        "extranodal_n": pick(rng, {"0": 10, "1": 40, "2plus": 50} if ctx["stage"] == "IV" else {"0": 70, "1": 30}),
+        "nasal_type": ("yes" if rng.random() < 0.75 else "no") if enktl else None,
+        "distant_ln": ("yes" if ctx["adv"] and rng.random() < 0.5 else "no") if enktl else None,
+        "ebv_dna": ("detected" if rng.random() < 0.6 else "not_detected") if enktl else None,
+    }
+
+
+def _ptcl_first(rng, ctx, f):
+    if f["ptcl_subtype"] == "enktl":
+        return pick(rng, {("P-GemOx + ЛТ", "пэгаспаргаза, гемцитабин, оксалиплатин, ЛТ", 4): 45,
+                          ("DDGP", "дексаметазон, цисплатин, гемцитабин, пэгаспаргаза", 6): 30,
+                          ("SMILE", "дексаметазон, метотрексат, ифосфамид, L-аспарагиназа, этопозид", 4): 25})
+    if f["ptcl_subtype"] in ("alcl_alk_pos", "alcl_alk_neg"):
+        return pick(rng, {("BV-CHP (брентуксимаб + CHP)", "брентуксимаб ведотин, циклофосфамид, доксорубицин, преднизолон", 6): 60,
+                          ("CHOEP", "CHOP + этопозид", 6): 25, ("CHOP", "циклофосфамид, доксорубицин, винкристин, преднизолон", 6): 15})
+    if ctx["age"] < 60:
+        return ("CHOEP", "CHOP + этопозид", 6)
+    return ("CHOP", "циклофосфамид, доксорубицин, винкристин, преднизолон", 6)
+
+
 SPECS = {
     "mcl": {
         "age": (67, 9, 38, 90), "male": 0.75, "watch": 0.08,
@@ -363,5 +391,22 @@ SPECS = {
         "histology": lambda rng, f: ("Биопсия: инфильтрация мелкими клетками маргинальной зоны (моноцитоидные B-клетки), "
                                      "лимфоэпителиальные поражения. ИГХ: CD20+, CD5-, CD10-, cyclin D1-, CD23-. "
                                      "Заключение: лимфома маргинальной зоны."),
+    },
+    "ptcl": {
+        "age": (60, 14, 20, 88), "male": 0.62, "watch": 0.0,
+        "stage": {"I": 6, "IE": 8, "II": 8, "IIE": 6, "III": 22, "IV": 50},
+        "ecog": {0: 25, 1: 40, 2: 22, 3: 10, 4: 3},
+        "fields": _ptcl_fields, "first": _ptcl_first,
+        "labs": lambda rng, ctx, f: [("2532-0", rng.randint(*{"le_uln": (140, 245), "uln_1_3": (260, 740),
+                                                              "gt_3_uln": (760, 1500)}.get(f["ldh_uln"], (150, 400))), "U/L"),
+                                     ("8302-2", round(rng.uniform(90, 150)), "g/L")],
+        "later": [("ВДХТ + аутоТГСК", "ВДХТ (BEAM), аутоТГСК", 1), ("GDP", "гемцитабин, дексаметазон, цисплатин", 4),
+                  ("Брентуксимаб ведотин", "брентуксимаб ведотин", 8), ("Ромидепсин", "ромидепсин", None),
+                  ("Пралатрексат", "пралатрексат", None)],
+        "p_complete": lambda risk: 0.65 - 0.35 * risk, "p_relapse": lambda risk: 0.45 + 0.35 * risk,
+        "relapse_months": (4, 36), "death_progressive": 0.7,
+        "histology": lambda rng, f: ("Биопсия: диффузная инфильтрация атипичными T-клетками среднего и крупного размера. "
+                                     f"ИГХ: CD3+, CD4+/CD8-, потеря CD7, CD30 {'+' if 'alcl' in f['ptcl_subtype'] else '-'}. "
+                                     "Ki-67 60–80 %. Заключение: периферическая T-клеточная лимфома."),
     },
 }

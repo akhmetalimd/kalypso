@@ -168,14 +168,50 @@
     },
     {
       "id": "mature_tnk",
-      "name": "T-/NK-клеточные и кожные лимфомы, T-LGLL",
-      "status": "coming_soon",
-      "module": "tnk",
-      "codes": { "icd_o_3_2": "9702/3", "mkb10": "C84" },
-      "staging": ["Lugano"],
-      "index": null,
-      "response_criteria": "Lugano 2014 / кожные шкалы",
-      "markers": []
+      "name": "Зрелые T- и NK-клеточные",
+      "children": [
+        {
+          "id": "ptcl",
+          "name": "Периферические T-клеточные лимфомы (ПТКЛ)",
+          "status": "active",
+          "module": "ptcl",
+          "codes": { "icd_o_3_2": "9702/3", "mkb10": "C84.4" },
+          "alt_codes": [
+            { "icd_o_3_2": "9705/3", "mkb10": "C86.5", "_comment": "AITL / нодальная TFH-лимфома" },
+            { "icd_o_3_2": "9714/3", "mkb10": "C84.6", "_comment": "ALCL ALK+" },
+            { "icd_o_3_2": "9715/3", "mkb10": "C84.7", "_comment": "ALCL ALK−" },
+            { "icd_o_3_2": "9719/3", "mkb10": "C86.0", "_comment": "экстранодальная NK/T-клеточная лимфома" }
+          ],
+          "staging": ["Lugano"],
+          "stage_values": { "Lugano": ["I", "IE", "II", "IIE", "III", "IV"] },
+          "index": "IPI",
+          "response_criteria": "Lugano 2014",
+          "markers": [],
+          "regimens": ["CHOP", "CHOEP", "BV-CHP (брентуксимаб + CHP)", "ВДХТ + аутоТГСК", "P-GemOx + ЛТ", "DDGP",
+                       "SMILE", "GDP", "ICE", "Брентуксимаб ведотин", "Ромидепсин", "Белиностат", "Пралатрексат",
+                       "Пембролизумаб", "Лучевая терапия"],
+          "core_fields": [
+            { "key": "ptcl_subtype",    "label_ru": "Подтип ПТКЛ",                                    "values": ["ptcl_nos", "aitl", "alcl_alk_pos", "alcl_alk_neg", "enktl", "other"] },
+            { "key": "ldh_uln",         "label_ru": "ЛДГ относительно ВГН лаборатории",                "values": ["le_uln", "uln_1_3", "gt_3_uln"] },
+            { "key": "bm_involvement",  "label_ru": "Поражение костного мозга",                        "values": ["yes", "no"] },
+            { "key": "extranodal_n",    "label_ru": "Экстранодальные очаги, число",                    "values": ["0", "1", "2plus"] },
+            { "key": "nasal_type",      "label_ru": "Назальный тип (ENKTL)",                           "values": ["yes", "no"], "optional": true },
+            { "key": "distant_ln",      "label_ru": "Поражение отдалённых лимфоузлов (ENKTL, PINK)",   "values": ["yes", "no"], "optional": true },
+            { "key": "ebv_dna",         "label_ru": "ДНК EBV в плазме (ENKTL)",                        "values": ["detected", "not_detected"], "optional": true }
+          ]
+        },
+        {
+          "id": "cutaneous_tnk",
+          "name": "Кожные T-клеточные лимфомы и T-LGLL",
+          "status": "coming_soon",
+          "module": "cutaneous_tnk",
+          "codes": { "icd_o_3_2": "9700/3", "mkb10": "C84.0" },
+          "staging": [],
+          "index": null,
+          "response_criteria": "кожные шкалы",
+          "markers": []
+        }
+      ]
     },
     {
       "id": "nlpbcl",

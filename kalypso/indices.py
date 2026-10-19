@@ -156,6 +156,20 @@ def _mzl(pt, mm, labs, age):
     return [_ix("MALT-IPI", result, "возраст, стадия, ЛДГ; только для экстранодальной ЛМЗ (MALT)", stored=True)]
 
 
+def _ptcl(pt, mm, labs, age):
+    adv, ldh = _adv(pt), _ldh(mm.get("ldh_uln"))
+    nasal = _yes_no(mm.get("nasal_type"))
+    pink = (core.pink(age, adv, _yes_no(mm.get("distant_ln")), None if nasal is None else not nasal)
+            if mm.get("ptcl_subtype") == "enktl" else None)
+    return [
+        _ix("IPI", core.ipi(age, pt["ecog"], adv, ldh, _extranodal_gt1(mm.get("extranodal_n"))),
+            "возраст, ECOG, стадия Lugano, ЛДГ, число экстранодальных очагов", stored=True),
+        _ix("PIT", core.pit(age, pt["ecog"], ldh, _yes_no(mm.get("bm_involvement"))),
+            "возраст, ECOG, ЛДГ, поражение костного мозга"),
+        _ix("PINK", pink, "только для ENKTL: возраст, стадия, отдалённые лимфоузлы, назальный тип"),
+    ]
+
+
 # нозология -> (функция расчёта, названия индексов в порядке вывода; первый — индекс карточки)
 CALCULATORS = {
     "cll_sll": (_cll, ("CLL-IPI",)),
@@ -165,6 +179,7 @@ CALCULATORS = {
     "hodgkin": (_hodgkin, ("IPS", "GHSG")),
     "waldenstrom": (_wm, ("IPSS-WM", "rIPSS-WM")),
     "mzl": (_mzl, ("MALT-IPI",)),
+    "ptcl": (_ptcl, ("IPI", "PIT", "PINK")),
 }
 
 

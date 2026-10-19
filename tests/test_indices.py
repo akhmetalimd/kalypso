@@ -1,8 +1,8 @@
 """Формулы индексов нозологий на общей основе (registry_core), без БД."""
 import pytest
 
-from registry_core import (ghsg_group, index_group, index_groups, ips, ipss_wm, malt_ipi, mipi_c, ripss_wm,
-                           smipi)
+from registry_core import (ghsg_group, index_group, index_groups, ips, ipss_wm, malt_ipi, mipi_c, pink, pit,
+                           ripss_wm, smipi)
 
 
 # --- MCL ---------------------------------------------------------------------
@@ -105,4 +105,24 @@ def test_malt_ipi(args, score, group):
     r = malt_ipi(*args)
     assert (r["score"], r["group"]) == (score, group)
     assert malt_ipi(70, None, "le_uln") is None
+
+
+# --- ПТКЛ ------------------------------------------------------------------------
+@pytest.mark.parametrize("args, score, group", [
+    ((60, 1, "le_uln", False), 0, "low"), ((61, 1, "le_uln", False), 1, "low_intermediate"),
+    ((61, 2, "le_uln", False), 2, "high_intermediate"), ((61, 2, "uln_1_3", False), 3, "high"),
+    ((61, 2, "uln_1_3", True), 4, "high"),
+])
+def test_pit(args, score, group):
+    r = pit(*args)
+    assert (r["score"], r["group"]) == (score, group)
+
+
+@pytest.mark.parametrize("args, group", [
+    ((60, False, False, False), "low"), ((61, False, False, False), "intermediate"),
+    ((61, True, False, False), "high"), ((40, True, True, True), "high"),
+])
+def test_pink(args, group):
+    assert pink(*args)["group"] == group
+    assert pink(None, True, True, True) is None
 

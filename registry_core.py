@@ -484,6 +484,8 @@ INDEXES = {
                 "allowed": {1: ("low", "intermediate")}},
     "rIPSS-WM": {"max": 5, "groups": ((0, "very_low"), (1, "low"), (2, "intermediate"), (3, "high"), (5, "very_high"))},
     "MALT-IPI": {"max": 3, "groups": ((0, "low"), (1, "intermediate"), (3, "high"))},
+    "PIT": {"max": 4, "groups": ((0, "low"), (1, "low_intermediate"), (2, "high_intermediate"), (4, "high"))},
+    "PINK": {"max": 4, "groups": ((0, "low"), (1, "intermediate"), (4, "high"))},
 }
 LDH_CATEGORIES = ("le_uln", "uln_1_3", "gt_3_uln")   # ЛДГ: ≤ ВГН, > 1–3 × ВГН, > 3 × ВГН
 RESPONSES = {
@@ -817,6 +819,40 @@ def malt_ipi(age: Optional[float], advanced: Optional[bool], ldh: Optional[str])
     return {"score": score, "group": index_group("MALT-IPI", score), "components": parts}
 
 
+# ---------------------------------------------------------------------------
+# 13. Периферические T-клеточные лимфомы: PIT, PINK
+# ---------------------------------------------------------------------------
+def pit(age: Optional[float], ecog: Optional[int], ldh: Optional[str], bm_involved: Optional[bool]) -> Optional[dict]:
+    """PIT (Gallamini, 2004), по 1 баллу: возраст > 60, ECOG ≥ 2, ЛДГ > ВГН, поражение костного мозга.
+    Группы 1–4: 0, 1, 2, 3–4 балла (низкий … высокий)."""
+    parts = {
+        "age": None if age is None else int(age > 60),
+        "ECOG": None if ecog is None else int(ecog >= 2),
+        "LDH": None if ldh not in LDH_CATEGORIES else int(ldh != "le_uln"),
+        "BM": None if bm_involved is None else int(bm_involved),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("PIT", score), "components": parts}
+
+
+def pink(age: Optional[float], advanced: Optional[bool], distant_ln: Optional[bool],
+         non_nasal: Optional[bool]) -> Optional[dict]:
+    """PINK (Kim, 2016) для ENKTL, по 1 баллу: возраст > 60, стадия III–IV, поражение отдалённых
+    лимфоузлов, не-назальный тип. Группы: 0 низкий, 1 промежуточный, ≥ 2 высокий."""
+    parts = {
+        "age": None if age is None else int(age > 60),
+        "stage": None if advanced is None else int(advanced),
+        "distant": None if distant_ln is None else int(distant_ln),
+        "non_nasal": None if non_nasal is None else int(non_nasal),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("PINK", score), "components": parts}
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -858,6 +894,7 @@ if __name__ == "__main__":
     assert ips(35, 100, True, 50, True, 16, 0.5)["score"] == 7
     assert ipss_wm(70, 120, 150, 2, 30)["group"] == "intermediate" and index_group("IPSS-WM", 1) is None
     assert malt_ipi(70, True, "uln_1_3")["group"] == "high"
+    assert pit(65, 2, "uln_1_3", True)["group"] == "high" and pink(50, False, False, False)["group"] == "low"
     try:
         kaplan_meier([-1], [1])
         raise AssertionError("отрицательное время должно отвергаться")
