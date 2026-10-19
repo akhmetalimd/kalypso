@@ -255,6 +255,38 @@ def _hl_first(rng, ctx, fields):
     return ("ABVD + ЛТ", "ABVD ×2, ЛТ 20 Гр", 2)
 
 
+def _mzl_fields(rng, ctx):
+    subtype = pick(rng, {"malt": 60, "nodal": 20, "splenic": 20})
+    site = pick(rng, {"stomach": 40, "ocular_adnexa": 15, "lung": 10, "salivary": 15, "skin": 10, "other": 10}) \
+        if subtype == "malt" else None
+    return {
+        "mzl_subtype": subtype,
+        "ldh_uln": _maybe(rng, pick(rng, {"le_uln": 80, "uln_1_3": 18, "gt_3_uln": 2})),
+        "hcv": _maybe(rng, "detected" if rng.random() < (0.12 if subtype == "splenic" else 0.04) else "not_detected", 0.1),
+        "malt_site": site,
+        "hp": ("detected" if rng.random() < 0.7 else "not_detected") if site == "stomach" else None,
+    }
+
+
+def _mzl_labs(rng, fields):
+    lo, hi = {"le_uln": (140, 245), "uln_1_3": (260, 700), "gt_3_uln": (760, 1100)}.get(fields["ldh_uln"], (150, 300))
+    return [("2532-0", rng.randint(lo, hi), "U/L"), ("8302-2", round(rng.uniform(100, 155)), "g/L"),
+            ("777-3", rng.randint(90, 350), "10*9/L")]
+
+
+def _mzl_first(rng, ctx, fields):
+    if fields["hp"] == "detected":
+        return ("Эрадикация H. pylori", "ингибитор протонной помпы, кларитромицин, амоксициллин", None)
+    if fields["mzl_subtype"] == "malt" and not ctx["adv"]:
+        return ("Лучевая терапия", "ЛТ 24 Гр на зону поражения", None)
+    if fields["mzl_subtype"] == "splenic":
+        return pick(rng, {("Ритуксимаб (монотерапия)", "ритуксимаб", 6): 50, ("Спленэктомия", "спленэктомия", None): 20,
+                          ("BR", "бендамустин, ритуксимаб", 6): 30})
+    return pick(rng, {("BR", "бендамустин, ритуксимаб", 6): 40, ("Ритуксимаб (монотерапия)", "ритуксимаб", 4): 25,
+                      ("Ритуксимаб + хлорамбуцил", "ритуксимаб, хлорамбуцил", 6): 20,
+                      ("R-CHOP", "ритуксимаб, циклофосфамид, доксорубицин, винкристин, преднизолон", 6): 15})
+
+
 SPECS = {
     "mcl": {
         "age": (67, 9, 38, 90), "male": 0.75, "watch": 0.08,
@@ -317,5 +349,19 @@ SPECS = {
         "histology": lambda rng, f: ("Трепанобиопсия: интерстициальная инфильтрация лимфоплазмоцитарными клетками "
                                      f"({rng.randint(20, 70)} %). ИГХ: CD20+, CD138+ (плазмоцитарный компонент), IgM κ. "
                                      "Заключение: лимфоплазмоцитарная лимфома / макроглобулинемия Вальденстрёма."),
+    },
+    "mzl": {
+        "age": (66, 11, 30, 90), "male": 0.45, "watch": 0.2,
+        "stage": {"I": 18, "IE": 27, "II": 8, "IIE": 10, "III": 10, "IV": 27},
+        "ecog": {0: 55, 1: 35, 2: 8, 3: 2},
+        "fields": lambda rng, ctx: _mzl_fields(rng, ctx), "labs": lambda rng, ctx, f: _mzl_labs(rng, f),
+        "first": lambda rng, ctx, f: _mzl_first(rng, ctx, f),
+        "later": [("BR", "бендамустин, ритуксимаб", 6), ("Ибрутиниб", "ибрутиниб", None),
+                  ("Занубрутиниб", "занубрутиниб", None), ("Леналидомид + ритуксимаб (R²)", "леналидомид, ритуксимаб", 12)],
+        "p_complete": lambda risk: 0.75 - 0.3 * risk, "p_relapse": lambda risk: 0.3 + 0.3 * risk,
+        "relapse_months": (24, 96), "partial_progress": 0.6, "partial_months": (12, 60), "death_progressive": 0.3,
+        "histology": lambda rng, f: ("Биопсия: инфильтрация мелкими клетками маргинальной зоны (моноцитоидные B-клетки), "
+                                     "лимфоэпителиальные поражения. ИГХ: CD20+, CD5-, CD10-, cyclin D1-, CD23-. "
+                                     "Заключение: лимфома маргинальной зоны."),
     },
 }

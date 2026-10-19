@@ -1,7 +1,8 @@
 """Формулы индексов нозологий на общей основе (registry_core), без БД."""
 import pytest
 
-from registry_core import ghsg_group, index_group, index_groups, ips, ipss_wm, mipi_c, ripss_wm, smipi
+from registry_core import (ghsg_group, index_group, index_groups, ips, ipss_wm, malt_ipi, mipi_c, ripss_wm,
+                           smipi)
 
 
 # --- MCL ---------------------------------------------------------------------
@@ -93,4 +94,15 @@ def test_ipss_wm(args, score, group):
 def test_ripss_wm(args, score, group):
     r = ripss_wm(*args)
     assert (r["score"], r["group"]) == (score, group)
+
+
+# --- ЛМЗ -------------------------------------------------------------------------
+@pytest.mark.parametrize("args, score, group", [
+    ((69, False, "le_uln"), 0, "low"), ((70, False, "le_uln"), 1, "intermediate"),
+    ((70, True, "le_uln"), 2, "high"), ((70, True, "gt_3_uln"), 3, "high"),
+])
+def test_malt_ipi(args, score, group):
+    r = malt_ipi(*args)
+    assert (r["score"], r["group"]) == (score, group)
+    assert malt_ipi(70, None, "le_uln") is None
 

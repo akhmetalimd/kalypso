@@ -150,6 +150,12 @@ def _wm(pt, mm, labs, age):
     ]
 
 
+def _mzl(pt, mm, labs, age):
+    malt = mm.get("mzl_subtype") == "malt"
+    result = core.malt_ipi(age, _adv(pt), _ldh(mm.get("ldh_uln"))) if malt else None
+    return [_ix("MALT-IPI", result, "возраст, стадия, ЛДГ; только для экстранодальной ЛМЗ (MALT)", stored=True)]
+
+
 # нозология -> (функция расчёта, названия индексов в порядке вывода; первый — индекс карточки)
 CALCULATORS = {
     "cll_sll": (_cll, ("CLL-IPI",)),
@@ -158,6 +164,7 @@ CALCULATORS = {
     "mcl": (_mcl, ("sMIPI", "MIPI-c")),
     "hodgkin": (_hodgkin, ("IPS", "GHSG")),
     "waldenstrom": (_wm, ("IPSS-WM", "rIPSS-WM")),
+    "mzl": (_mzl, ("MALT-IPI",)),
 }
 
 
@@ -211,7 +218,17 @@ def _mcl_info(pt, mm, lines, observations, markers):
              "text": ", ".join(risks) + " — учитывайте при выборе терапии (плохой ответ на иммунохимиотерапию)"}]
 
 
-INFO = {"follicular": _fl_info, "mcl": _mcl_info}
+def _mzl_info(pt, mm, lines, observations, markers):
+    info = []
+    if mm.get("mzl_subtype") == "malt" and mm.get("malt_site") == "stomach" and mm.get("hp") == "detected":
+        info.append({"title": "H. pylori+", "warn": False,
+                     "text": "желудочная MALT с H. pylori — эрадикация как первый этап, контроль эндоскопически"})
+    if mm.get("hcv") == "detected":
+        info.append({"title": "HCV+", "warn": False, "text": "рассмотрите противовирусную терапию HCV"})
+    return info
+
+
+INFO = {"follicular": _fl_info, "mcl": _mcl_info, "mzl": _mzl_info}
 
 
 def module_info(pt: dict, mm: dict[str, str], lines: list[dict], observations: list[dict],

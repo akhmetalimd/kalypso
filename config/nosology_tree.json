@@ -96,15 +96,29 @@
         },
         {
           "id": "mzl",
-          "name": "Лимфомы маргинальной зоны (MZL)",
-          "status": "coming_soon",
+          "name": "Лимфомы маргинальной зоны (ЛМЗ)",
+          "status": "active",
           "module": "mzl",
           "codes": { "icd_o_3_2": "9699/3", "mkb10": "C88.4" },
-          "_comment": "MALT, нодальная, селезёночная — разные поля и коды; уточнить при активации модуля",
+          "alt_codes": [
+            { "icd_o_3_2": "9699/3", "mkb10": "C83.0", "_comment": "нодальная ЛМЗ" },
+            { "icd_o_3_2": "9689/3", "mkb10": "C83.0", "_comment": "ЛМЗ селезёнки" }
+          ],
           "staging": ["Lugano"],
+          "stage_values": { "Lugano": ["I", "IE", "II", "IIE", "III", "IV"] },
           "index": "MALT-IPI",
           "response_criteria": "Lugano 2014",
-          "markers": []
+          "markers": [],
+          "regimens": ["Эрадикация H. pylori", "Лучевая терапия", "Ритуксимаб (монотерапия)", "BR",
+                       "Ритуксимаб + хлорамбуцил", "R-CHOP", "Спленэктомия", "Ибрутиниб", "Занубрутиниб",
+                       "Леналидомид + ритуксимаб (R²)", "Противовирусная терапия HCV"],
+          "core_fields": [
+            { "key": "mzl_subtype", "label_ru": "Подтип ЛМЗ",                              "values": ["malt", "nodal", "splenic"] },
+            { "key": "ldh_uln",     "label_ru": "ЛДГ относительно ВГН лаборатории",         "values": ["le_uln", "uln_1_3", "gt_3_uln"] },
+            { "key": "hcv",         "label_ru": "HCV (антитела / РНК)",                     "values": ["detected", "not_detected"] },
+            { "key": "malt_site",   "label_ru": "Локализация MALT",                         "values": ["stomach", "ocular_adnexa", "lung", "salivary", "skin", "other"], "optional": true },
+            { "key": "hp",          "label_ru": "H. pylori (желудочная MALT)",              "values": ["detected", "not_detected"], "optional": true }
+          ]
         },
         {
           "id": "mcl",

@@ -52,6 +52,7 @@ _CONSTRAINT_MESSAGES = {
     "patient_index_smipi": "sMIPI: балл 0–11 и группа риска",
     "patient_index_ips": "IPS: балл 0–7 и группа риска",
     "patient_index_ipss_wm": "IPSS-WM: балл 0–5 и группа риска",
+    "patient_index_malt_ipi": "MALT-IPI: балл 0–3 и группа риска",
     "observation_response_iwwm": "Недопустимое значение ответа для IWWM-11",
     "patient_index_name": "Неизвестный прогностический индекс",
     "observation_lugano_basis": "Lugano 2014: по ПЭТ-КТ — метаболический ответ (CMR/PMR/NMR/PMD), иначе — CR/PR/SD/PD",

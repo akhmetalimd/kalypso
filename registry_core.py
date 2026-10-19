@@ -483,6 +483,7 @@ INDEXES = {
     "IPSS-WM": {"max": 5, "groups": ((0, "low"), (2, "intermediate"), (5, "high")),
                 "allowed": {1: ("low", "intermediate")}},
     "rIPSS-WM": {"max": 5, "groups": ((0, "very_low"), (1, "low"), (2, "intermediate"), (3, "high"), (5, "very_high"))},
+    "MALT-IPI": {"max": 3, "groups": ((0, "low"), (1, "intermediate"), (3, "high"))},
 }
 LDH_CATEGORIES = ("le_uln", "uln_1_3", "gt_3_uln")   # ЛДГ: ≤ ВГН, > 1–3 × ВГН, > 3 × ВГН
 RESPONSES = {
@@ -799,6 +800,23 @@ def ripss_wm(age: Optional[float], b2m_mg_l: Optional[float], ldh_u_l: Optional[
     return {"score": score, "group": index_group("rIPSS-WM", score), "components": parts}
 
 
+# ---------------------------------------------------------------------------
+# 12. Лимфомы маргинальной зоны: MALT-IPI
+# ---------------------------------------------------------------------------
+def malt_ipi(age: Optional[float], advanced: Optional[bool], ldh: Optional[str]) -> Optional[dict]:
+    """MALT-IPI (Thieblemont, 2017), по 1 баллу: возраст ≥ 70, стадия III–IV, ЛДГ > ВГН.
+    Группы: 0 низкий, 1 промежуточный, 2–3 высокий. Только для экстранодальной ЛМЗ (MALT)."""
+    parts = {
+        "age": None if age is None else int(age >= 70),
+        "stage": None if advanced is None else int(advanced),
+        "LDH": None if ldh not in LDH_CATEGORIES else int(ldh != "le_uln"),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("MALT-IPI", score), "components": parts}
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -839,6 +857,7 @@ if __name__ == "__main__":
     assert ghsg_group("IV", None, None, None, None, None)["group"] == "advanced"
     assert ips(35, 100, True, 50, True, 16, 0.5)["score"] == 7
     assert ipss_wm(70, 120, 150, 2, 30)["group"] == "intermediate" and index_group("IPSS-WM", 1) is None
+    assert malt_ipi(70, True, "uln_1_3")["group"] == "high"
     try:
         kaplan_meier([-1], [1])
         raise AssertionError("отрицательное время должно отвергаться")

@@ -51,6 +51,15 @@ CASES = {
         "stored": "5", "bad_score": "6", "db": ("IPSS-WM", 2, "high", "index_ipss_wm"),
         "optional": ["hyperviscosity"],
     },
+    # MALT, 71 год, стадия IV, ЛДГ > ВГН: MALT-IPI 3 (высокий).
+    "mzl": {
+        "form": {"birth_date": "1950-02-01", "stage_system": "Lugano", "stage_value": "IV", "ecog": "1"},
+        "fields": {"mzl_subtype": "malt", "ldh_uln": "uln_1_3", "hcv": "not_detected"},
+        "labs": [],
+        "expected": {"MALT-IPI": (3, "high")},
+        "stored": "3", "bad_score": "4", "db": ("MALT-IPI", 4, "high", "index_malt_ipi"),
+        "optional": ["malt_site", "hp"],
+    },
 }
 NOSOLOGIES = list(CASES)
 
@@ -214,4 +223,17 @@ def test_db_iwwm_response(reg):
     reg.con.commit()
     with rejected(reg.con, "response_iwwm"):
         reg.obs(pid, response_value="CMR", response_criteria="IWWM-11", response_basis="laboratory")
+
+
+def test_mzl_malt_ipi_only_for_malt_and_info(world):
+    pid = register(world, "mzl", stage_value="IE")
+    fill(world, "mzl", pid, {"mzl_subtype": "nodal", "ldh_uln": "le_uln", "hcv": "detected"})
+    card = registry.get_card(world.db, world.doc_a, pid)
+    [ix] = card["indices"]
+    assert ix["result"] is None and "MALT" in ix["needs"]
+    assert [i["title"] for i in card["module_info"]] == ["HCV+"]
+    fill(world, "mzl", pid, {"mzl_subtype": "malt", "malt_site": "stomach", "hp": "detected"}, test_date="2021-03-20")
+    card = registry.get_card(world.db, world.doc_a, pid)
+    assert card["indices"][0]["result"]["group"] == "intermediate"             # 71 год — 1; IE, ЛДГ норма — 0
+    assert {i["title"] for i in card["module_info"]} == {"H. pylori+", "HCV+"}
 
