@@ -96,7 +96,8 @@ def main() -> None:
     if done:
         print("Применены миграции:", ", ".join(done))
 
-    settings = Settings(dsn=dsn, session_secret=sec["session_secret"].encode(), secure_cookies=False)
+    settings = Settings(dsn=dsn, session_secret=sec["session_secret"].encode(), secure_cookies=False,
+                        demo_mode=os.environ.get("KALYPSO_DEMO_MODE", "1") == "1")   # пробная версия — без пароля
     db = Database(dsn)
     summary = seed_if_empty(db)
     if summary:

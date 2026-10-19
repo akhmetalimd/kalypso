@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% from "_viz.html" import filters, dist_table, tile with context %}
+{% from "_patients.html" import nosology_buttons with context %}
 {% block title %}Обзор{% endblock %}
 {% block content %}
 <div class="head">
   <h1>Обзор регистра <span class="muted">{{ d.n }} пациентов</span></h1>
-  <div class="actions">{% for n in active_nodes() %}<a class="button" href="{{ dashboard_url(n.id) }}">{{ n.name }}</a>{% endfor %}<a class="button" href="/survival">Исследователь выживаемости</a></div>
+  <div class="actions"><a class="button" href="/survival">Исследователь выживаемости</a></div>
 </div>
+{{ nosology_buttons() }}
 {{ filters('/dashboard', f, branches) }}
 <p class="muted">{{ filters_text }}.</p>
 

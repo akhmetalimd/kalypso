@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% from "_macros.html" import csrf_field with context %}
+{% from "_viz.html" import nosology_select, stage_select with context %}
+{% from "_patients.html" import patients_table with context %}
 {% block title %}Пациенты{% endblock %}
 {% block content %}
 <div class="head">
-  <h1>Пациенты <span class="muted">{{ patients|length }}</span></h1>
+  <h1>Пациенты <span class="muted">{{ pl.total }}</span></h1>
   <form method="post" action="/patients/search" class="search">
     {{ csrf_field() }}
     <input name="iin" placeholder="Найти по ИИН" inputmode="numeric" autocomplete="off" maxlength="14" required>
@@ -11,28 +13,30 @@
   </form>
 </div>
 <p class="muted">{% if p.scope('patient.read') == 'branch' %}Пациенты вашего филиала ({{ p.branch_code }}).{% else %}Все филиалы.{% endif %}
-  Поиск по ИИН — через форму (ИИН не попадает в адресную строку).</p>
-<table class="grid">
-  <thead><tr><th>ID</th>{% if p.can('patient.iin') %}<th>ИИН</th>{% endif %}<th>Филиал</th><th>Нозология</th><th>МКБ</th><th>Диагноз</th><th>Стадия</th>
-    <th>Статус</th><th>Посл. контакт</th><th>Линий</th><th>Полнота</th></tr></thead>
-  <tbody>
-  {% for r in patients %}
-  <tr>
-    <td><a href="/patients/{{ r.patient_id }}" class="mono">{{ r.patient_id|short }}</a></td>
-    {% if p.can('patient.iin') %}<td class="mono">{{ r.iin }}</td>{% endif %}
-    <td>{{ r.branch }}</td>
-    <td>{{ r.who_haem5|nosology }}</td>
-    <td>{{ r.mkb }}{% if r.dx_version > 1 %} <span class="badge" title="Диагноз пересматривался">v{{ r.dx_version }}</span>{% endif %}</td>
-    <td>{{ r.dx_date|d }}</td>
-    <td>{% if r.stage_system %}{{ r.stage_system }} {{ r.stage_value }}{% else %}—{% endif %}</td>
-    <td>{{ label('status_last_contact', r.status_last_contact) }}</td>
-    <td>{{ r.last_contact_date|d }}</td>
-    <td>{{ r.n_lines }}</td>
-    <td>{% if r.flags %}<span class="badge warn" title="{% for f in r.flags %}{{ flag(f) }}&#10;{% endfor %}">{{ r.flags|length }} пропуск.</span>{% else %}<span class="badge ok">полно</span>{% endif %}</td>
-  </tr>
-  {% else %}
-  <tr><td colspan="11" class="muted">Пациентов пока нет.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+  Поиск по ИИН — через форму (ИИН не попадает в адресную строку). Стадия — после выбора нозологии.</p>
+
+<form method="get" action="/patients" class="filters">
+  {{ nosology_select(f) }}
+  {{ stage_select(f, f.nosology) }}
+  <label>Статус <select name="status"><option value="">все</option>
+    {% for code, t in options('status_last_contact').items() %}<option value="{{ code }}"{% if f.status == code %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  {% if p.scope('patient.read') != 'branch' %}
+  <label>Филиал <select name="branch"><option value="">все</option>
+    {% for b in branches %}<option value="{{ b.branch_code }}"{% if f.branch == b.branch_code %} selected{% endif %}>{{ b.branch_code }}</option>{% endfor %}</select></label>
+  {% endif %}
+  <label>Диагноз с <input type="number" name="year_from" min="1990" max="2100" value="{{ f.year_from or '' }}" placeholder="год"></label>
+  <label>по <input type="number" name="year_to" min="1990" max="2100" value="{{ f.year_to or '' }}" placeholder="год"></label>
+  <label>Пол <select name="sex"><option value="">все</option>
+    {% for code, t in options('sex').items() %}<option value="{{ code }}"{% if f.sex == code %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  <label>Данные <select name="provenance"><option value="">все</option>
+    {% for code, t in options('provenance').items() %}<option value="{{ code }}"{% if f.provenance == code %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  <label>Полнота <select name="completeness"><option value="">все</option>
+    <option value="complete"{% if f.completeness == 'complete' %} selected{% endif %}>полно</option>
+    <option value="gaps"{% if f.completeness == 'gaps' %} selected{% endif %}>есть пропуски</option></select></label>
+  {% block extra_filters %}{% endblock %}
+  <button class="primary">Показать</button>
+  <a href="/patients">Сбросить</a>
+</form>
+
+{{ patients_table(pl, p) }}
 {% endblock %}

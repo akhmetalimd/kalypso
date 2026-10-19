@@ -61,6 +61,30 @@ def active_nodes() -> list[dict]:
     return out
 
 
+# Группы для навигации (кнопки дашбордов, выбор нозологии). Не вошедшая сюда активная нозология
+# попадает в «Прочие» — новую нозологию достаточно дописать в нужную группу.
+NOSOLOGY_GROUPS = [
+    ("Индолентные B-клеточные", ("cll_sll", "follicular", "mzl", "waldenstrom", "hcl")),
+    ("Агрессивные B-клеточные", ("dlbcl", "hgbl", "pmbcl", "burkitt", "pcnsl", "mcl")),
+    ("Лимфомы Ходжкина", ("hodgkin", "nlpbcl")),
+    ("T- и NK-клеточные", ("ptcl", "mf_ss", "tlgll")),
+]
+
+
+def nosology_groups() -> list[tuple[str, list[dict]]]:
+    nodes = {n["id"]: n for n in active_nodes()}
+    out, used = [], set()
+    for title, ids in NOSOLOGY_GROUPS:
+        items = [nodes[i] for i in ids if i in nodes]
+        used.update(ids)
+        if items:
+            out.append((title, items))
+    rest = [n for i, n in nodes.items() if i not in used]
+    if rest:
+        out.append(("Прочие", rest))
+    return out
+
+
 def profile(who_haem5: str | None) -> dict:
     """Настройки модуля нозологии из её узла дерева: системы и значения стадий, индекс,
     критерии и варианты ответа, поля модуля (module_data). Неизвестный узел -> ХЛЛ."""
@@ -433,29 +457,63 @@ def _flags_for(patient: dict, markers, lines, observations) -> dict[str, list[st
     return {"completeness": completeness}
 
 
-def list_patients(db: Database, p: Principal, limit: int = 500) -> list[dict]:
+def patient_filter_sql(f: dict) -> tuple[list[str], list]:
+    """Условия фильтров списка/когорты: нозология, филиал, пол, данные, статус, годы диагноза,
+    стадия («система:стадия»). Значения — только параметрами запроса."""
+    where, params = [], []
+    for col, key in (("p.who_haem5", "nosology"), ("p.branch", "branch"), ("p.sex", "sex"),
+                     ("p.provenance", "provenance"), ("p.status_last_contact", "status")):
+        if f.get(key):
+            where.append(f"{col} = %s")
+            params.append(f[key])
+    if f.get("year_from"):
+        where.append("extract(year FROM p.dx_date) >= %s")
+        params.append(f["year_from"])
+    if f.get("year_to"):
+        where.append("extract(year FROM p.dx_date) <= %s")
+        params.append(f["year_to"])
+    if f.get("stage") and ":" in f["stage"]:
+        system, value = f["stage"].split(":", 1)
+        where.append("p.stage_system = %s AND p.stage_value = %s")
+        params += [system, value]
+    return where, params
+
+
+def _by_patient(rows: list[dict]) -> dict:
+    out: dict = {}
+    for r in rows:
+        out.setdefault(r["patient_id"], []).append(r)
+    return out
+
+
+def list_patients(db: Database, p: Principal, limit: int | None = None, filters: dict | None = None) -> list[dict]:
+    """Пациенты в пределах прав, с флагами полноты. filters — как у когорты аналитики
+    (patient_filter_sql) и ещё completeness: complete | gaps."""
+    f = filters or {}
     cond, params = visible_patients_sql(p)
+    extra, extra_params = patient_filter_sql(f)
+    where = " AND ".join(["p.deleted_at IS NULL", cond, *extra])
     with db.tx(p.user_id) as cur:
         iin_col = "p.iin, " if p.can("patient.iin") else ""
         cur.execute(f"""SELECT {iin_col}p.patient_id, p.branch, p.sex, p.who_haem5, p.mkb, p.dx_date,
                                p.dx_version, p.status_last_contact, p.last_contact_date,
                                p.stage_system, p.stage_value
-                        FROM patient p WHERE p.deleted_at IS NULL AND {cond}
-                        ORDER BY p.entry_date DESC LIMIT %s""", [*params, limit])
+                        FROM patient p WHERE {where}
+                        ORDER BY p.entry_date DESC""" + (" LIMIT %s" if limit else ""),
+                    [*params, *extra_params, *([limit] if limit else [])])
         patients = cur.fetchall()
         ids = [r["patient_id"] for r in patients]
-        cur.execute("SELECT * FROM module_data WHERE patient_id = ANY(%s) AND deleted_at IS NULL", (ids,))
-        markers = cur.fetchall()
-        cur.execute("SELECT * FROM therapy_line WHERE patient_id = ANY(%s) AND deleted_at IS NULL", (ids,))
-        lines = cur.fetchall()
-        cur.execute("SELECT * FROM observation WHERE patient_id = ANY(%s) AND deleted_at IS NULL", (ids,))
-        obs = cur.fetchall()
+        q = lambda table: (cur.execute(f"SELECT * FROM {table} WHERE patient_id = ANY(%s) AND deleted_at IS NULL",  # noqa: E731
+                                       (ids,)), _by_patient(cur.fetchall()))[1]
+        markers, lines, obs = q("module_data"), q("therapy_line"), q("observation")
     for r in patients:
         pid = r["patient_id"]
-        r["flags"] = _flags_for(r, [m for m in markers if m["patient_id"] == pid],
-                                [l for l in lines if l["patient_id"] == pid],
-                                [o for o in obs if o["patient_id"] == pid])["completeness"]
-        r["n_lines"] = sum(1 for l in lines if l["patient_id"] == pid)
+        r["flags"] = _flags_for(r, markers.get(pid, []), lines.get(pid, []), obs.get(pid, []))["completeness"]
+        r["n_lines"] = len(lines.get(pid, []))
+    if f.get("completeness") == "complete":
+        patients = [r for r in patients if not r["flags"]]
+    elif f.get("completeness") == "gaps":
+        patients = [r for r in patients if r["flags"]]
     return patients
 
 

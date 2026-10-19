@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% from "_viz.html" import filters, dist_table, tile with context %}
+{% from "_patients.html" import patients_table with context %}
 {% block title %}{{ d.name }} — дашборд{% endblock %}
 {% block content %}
 <div class="head">
   <h1>{{ d.name }} <span class="muted">{{ d.n }} пациентов</span></h1>
   <div class="actions"><a class="button" href="/dashboard">Обзор</a><a class="button" href="/survival?nosology={{ d.nosology }}">Исследователь выживаемости</a></div>
 </div>
-{{ filters(dashboard_url(d.nosology), f, branches, nosology=False, binet=False) }}
+{{ filters(dashboard_url(d.nosology), f, branches, nosology=False, fixed=d.nosology) }}
 <p class="muted">{{ filters_text }}. Поля модуля — последний результат или код пропуска; серым — пропуски и «не внесено».
   Расчётные индексы — по данным карточки и анализам у диагноза.</p>
 
@@ -44,5 +45,9 @@
 
 <section class="card"><h2>Причины смерти</h2>
   {% if d.deaths %}{{ charts.bar_chart(d.deaths, 'Причины смерти')|safe }}{{ dist_table(d.deaths) }}{% else %}<p class="muted">Смертей не зарегистрировано.</p>{% endif %}
+</section>
+
+<section class="card"><h2>Пациенты нозологии <small>{{ pl.total }} · по тем же фильтрам</small></h2>
+  {{ patients_table(pl, p, show_nosology=False) }}
 </section>
 {% endblock %}

@@ -4,6 +4,8 @@ KALYPSO_DSN               строка подключения (логин — ч
 KALYPSO_SESSION_SECRET    секрет для CSRF-токенов, ≥ 32 байт
 KALYPSO_SECURE_COOKIES    1/0 — cookie только по HTTPS (по умолчанию 1)
 KALYPSO_SESSION_HOURS     срок сессии в часах (по умолчанию 8)
+KALYPSO_DEMO_MODE         1 — демо-режим пробной версии: вход без пароля, переключатель роли
+                          (только синтетика; по умолчанию 0 — обычный вход)
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ class Settings:
     session_secret: bytes = field(repr=False)
     secure_cookies: bool = True
     session_hours: int = 8
+    demo_mode: bool = False
 
 
 def _secret(env, name: str) -> bytes:
@@ -40,4 +43,5 @@ def load_settings(env=None) -> Settings:
         session_secret=_secret(env, "KALYPSO_SESSION_SECRET"),
         secure_cookies=env.get("KALYPSO_SECURE_COOKIES", "1") != "0",
         session_hours=int(env.get("KALYPSO_SESSION_HOURS", "8")),
+        demo_mode=env.get("KALYPSO_DEMO_MODE", "0") == "1",
     )

@@ -26,7 +26,8 @@ from kalypso.charts import DAYS_PER_MONTH, MAX_SERIES, km_ticks
 from kalypso.db import Database
 from kalypso.i18n import label
 from kalypso.rbac import Principal, visible_patients_sql
-from kalypso.registry import _marker_map, _tp53_abnormal, active_nodes, computed_indices, pod24_status
+from kalypso.registry import (_marker_map, _tp53_abnormal, active_nodes, computed_indices, patient_filter_sql,
+                              pod24_status, profile)
 
 WINDOW_DAYS = 90
 LAB_LOOKBACK_DAYS = 180
@@ -126,30 +127,28 @@ def parse_filters(q: dict) -> dict:
         except ValueError:
             return None
     nosology = q.get("nosology") or None
+    if nosology not in {n["id"] for n in active_nodes()}:
+        nosology = None
+    stage = q.get("stage") or None
+    if stage and nosology:              # стадия — только в системах выбранной нозологии
+        system, _, value = stage.partition(":")
+        if value not in profile(nosology)["stages"].get(system, []):
+            stage = None
+    elif not nosology:
+        stage = None
     return {"branch": q.get("branch") or None, "year_from": year(q.get("year_from")),
             "year_to": year(q.get("year_to")), "sex": q.get("sex") or None,
-            "binet": q.get("binet") or None, "provenance": q.get("provenance") or None,
-            "nosology": nosology if nosology in {n["id"] for n in active_nodes()} else None}
+            "provenance": q.get("provenance") or None, "nosology": nosology, "stage": stage,
+            "status": q.get("status") if q.get("status") in ("alive", "dead", "lost_to_follow_up") else None,
+            "completeness": q.get("completeness") if q.get("completeness") in ("complete", "gaps") else None}
 
 
 def load_cohort(db: Database, p: Principal, filters: dict | None = None) -> list[dict]:
     f = filters or {}
     cond, params = visible_patients_sql(p)
-    where = ["p.deleted_at IS NULL", cond]
-    for col, key in (("p.branch", "branch"), ("p.sex", "sex"), ("p.provenance", "provenance"),
-                     ("p.who_haem5", "nosology")):
-        if f.get(key):
-            where.append(f"{col} = %s")
-            params.append(f[key])
-    if f.get("binet"):
-        where.append("p.stage_system = 'Binet' AND p.stage_value = %s")
-        params.append(f["binet"])
-    if f.get("year_from"):
-        where.append("extract(year FROM p.dx_date) >= %s")
-        params.append(f["year_from"])
-    if f.get("year_to"):
-        where.append("extract(year FROM p.dx_date) <= %s")
-        params.append(f["year_to"])
+    extra, extra_params = patient_filter_sql(f)
+    where = ["p.deleted_at IS NULL", cond, *extra]
+    params = [*params, *extra_params]
     with db.tx(p.user_id) as cur:
         cur.execute(f"""SELECT p.patient_id, p.branch, p.sex, p.birth_date, p.who_haem5, p.dx_date, p.dx_date_precision,
                                p.last_contact_date, p.last_contact_precision, p.status_last_contact, p.provenance,

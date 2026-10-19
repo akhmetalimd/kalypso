@@ -3,9 +3,11 @@
 {% block content %}
 <h1>Новый пациент</h1>
 <p class="muted">Выберите нозологию: от неё зависят стадирование, прогностический индекс, критерии ответа и поля модуля.</p>
-<section class="choices">
-  {% for n in nodes %}
-  <a class="button primary" href="/patients/new?who={{ n.id }}">{{ n.name }}</a>
+<section class="nos-groups">
+  {% for title, group in nosology_groups() %}
+  <div class="nos-group"><h3>{{ title }}</h3>
+    <div class="nos-links">{% for n in group %}<a class="button primary" href="/patients/new?who={{ n.id }}">{{ n.name }}</a>{% endfor %}</div>
+  </div>
   {% endfor %}
 </section>
 {% endblock %}

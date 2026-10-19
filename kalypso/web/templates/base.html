@@ -8,7 +8,7 @@
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="/patients">KALYPSO <span>регистр ЛПЗ · пилот</span></a>
+  <a class="brand" href="/">KALYPSO <span>регистр ЛПЗ · пилот</span></a>
   {% if p %}
   <nav>
     <a href="/patients">Пациенты</a>
@@ -20,16 +20,26 @@
     {% if p.can('users.manage') %}<a href="/admin/users">Пользователи</a>{% endif %}
   </nav>
   <div class="who">
+    {% if demo_mode %}
+    <form method="post" action="/demo/role" class="inline demo-role">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ current_path }}">
+      <label>Роль <select name="login">
+        {% for u in demo_users %}<option value="{{ u.login }}"{% if u.login == p.login %} selected{% endif %}>{{ label('role', u.role) }}{% if u.branch_code %} · {{ u.branch_code }}{% endif %} ({{ u.login }})</option>{% endfor %}
+      </select></label>
+      <button class="link">Сменить</button>
+    </form>
+    {% else %}
     {{ p.display_name }} · {{ label('role', p.role) }}{% if p.branch_code %} · {{ p.branch_code }}{% endif %}
     <form method="post" action="/logout" class="inline">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="link">Выйти</button>
     </form>
+    {% endif %}
   </div>
   {% endif %}
 </header>
 <main>
-  <div class="synthetic">Пилот на синтетических данных. Реальные данные пациентов не вносить.</div>
+  <div class="synthetic">Пилот на синтетических данных. Реальные данные пациентов не вносить.{% if demo_mode %} Демо-режим: вход без пароля, роль — в шапке.{% endif %}</div>
   {% if message %}<div class="note ok">{{ message }}</div>{% endif %}
   {% if warnings %}
   <div class="note warn"><strong>Контроль качества:</strong>

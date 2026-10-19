@@ -143,3 +143,16 @@ textarea.doc-text { font-family: ui-monospace, Consolas, monospace; font-size: .
   .card { border: 0; padding: 0; }
   textarea.doc-text { border: 0; height: auto; overflow: visible; }
 }
+
+/* Главная: название и расшифровка; буквы аббревиатуры — акцентным цветом */
+.home { min-height: 55vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 32px 16px; }
+.home-title { font-size: clamp(3rem, 12vw, 7rem); letter-spacing: .12em; margin: 0 0 16px; }
+.home-decoding { font-size: clamp(1.1rem, 3.2vw, 1.9rem); line-height: 1.5; color: var(--muted); margin: 0; }
+.home-decoding .acc { color: var(--accent); font-weight: 700; }
+.demo-role select { font-size: .85rem; max-width: 260px; }
+/* Нозологии по группам WHO-HAEM5: строки с переносом, без ухода вправо */
+.nos-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px 20px; margin: 8px 0 16px; }
+.nos-group h3 { font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 6px; }
+.nos-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.nos-links .button { white-space: normal; text-align: left; }
+.pager { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin: 10px 0; }

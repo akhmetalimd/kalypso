@@ -43,7 +43,10 @@ def _check(env) -> int:
     from kalypso.ops import run_checks
 
     try:
-        problems = run_checks(load_settings(env))
+        settings = load_settings(env)
+        problems = run_checks(settings)
+        if settings.demo_mode:
+            print("ВНИМАНИЕ: демо-режим (KALYPSO_DEMO_MODE=1) — вход без пароля, только для синтетики", file=sys.stderr)
     except ConfigError as e:
         problems = [str(e)]
     for p in problems:

@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% from "_viz.html" import filters, dist_table, tile with context %}
+{% from "_patients.html" import patients_table with context %}
 {% block title %}ХЛЛ — дашборд{% endblock %}
 {% block content %}
 <div class="head">
   <h1>ХЛЛ / ЛМЛ <span class="muted">{{ d.n }} пациентов</span></h1>
   <div class="actions"><a class="button" href="/dashboard">Обзор</a><a class="button" href="/dashboard/dlbcl">ДВКЛ</a><a class="button" href="/dashboard/fl">ФЛ</a><a class="button" href="/survival?nosology=cll_sll">Исследователь выживаемости</a></div>
 </div>
-{{ filters('/dashboard/cll', f, branches, nosology=False) }}
+{{ filters('/dashboard/cll', f, branches, nosology=False, fixed='cll_sll') }}
 <p class="muted">{{ filters_text }}. Маркеры — последний результат или код пропуска; серым — пропуски и «не внесено».</p>
 
 <section class="tiles">
@@ -48,5 +49,9 @@
 
 <section class="card"><h2>Причины смерти</h2>
   {% if d.deaths %}{{ charts.bar_chart(d.deaths, 'Причины смерти')|safe }}{{ dist_table(d.deaths) }}{% else %}<p class="muted">Смертей не зарегистрировано.</p>{% endif %}
+</section>
+
+<section class="card"><h2>Пациенты нозологии <small>{{ pl.total }} · по тем же фильтрам</small></h2>
+  {{ patients_table(pl, p, show_nosology=False) }}
 </section>
 {% endblock %}

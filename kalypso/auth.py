@@ -110,6 +110,31 @@ def login(db: Database, login_name: str, password: str, *, session_hours: int,
     return token, _principal(user)
 
 
+def demo_users(db: Database) -> list[Principal]:
+    """Активные пользователи для переключателя роли демо-режима: врачи, куратор, аналитик, администратор."""
+    order = {"physician": 0, "curator": 1, "analyst": 2, "admin": 3}
+    with db.tx() as cur:
+        cur.execute("SELECT * FROM app_user WHERE is_active ORDER BY login")
+        users = [_principal(r) for r in cur.fetchall()]
+    return sorted(users, key=lambda u: (order.get(u.role, 9), u.login))
+
+
+def demo_session(db: Database, login_name: str, *, session_hours: int) -> tuple[str, Principal]:
+    """Сессия без пароля — только в демо-режиме пробной версии (KALYPSO_DEMO_MODE=1).
+    Вход пишется в login_log, как обычный; автор правок в аудите — выбранный пользователь."""
+    user = next((u for u in demo_users(db) if u.login == login_name), None)
+    if user is None:
+        raise LoginFailed("unknown_user")
+    with db.tx(user.user_id) as cur:
+        cur.execute("""INSERT INTO login_log (event, login, user_id, success, reason, user_agent)
+                       VALUES ('login', %s, %s, true, 'ok', 'demo-mode')""", (user.login, user.user_id))
+        token = secrets.token_urlsafe(32)
+        cur.execute("""INSERT INTO app_session (token_hash, user_id, expires_at, user_agent)
+                       VALUES (%s, %s, now() + %s, 'demo-mode')""",
+                    (_token_hash(token), user.user_id, timedelta(hours=session_hours)))
+    return token, user
+
+
 def principal_for_token(db: Database, token: str | None) -> Principal | None:
     if not token:
         return None

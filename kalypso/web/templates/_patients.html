@@ -1,0 +1,48 @@
+{# Таблица пациентов и постраничная навигация — для «Пациентов» и дашбордов нозологий. #}
+{% macro patients_table(pl, p, show_nosology=True) %}
+<table class="grid">
+  <thead><tr><th>ID</th>{% if p.can('patient.iin') %}<th>ИИН</th>{% endif %}<th>Филиал</th>{% if show_nosology %}<th>Нозология</th>{% endif %}<th>МКБ</th><th>Диагноз</th><th>Стадия</th>
+    <th>Статус</th><th>Посл. контакт</th><th>Линий</th><th>Полнота</th></tr></thead>
+  <tbody>
+  {% for r in pl.rows %}
+  <tr>
+    <td><a href="/patients/{{ r.patient_id }}" class="mono">{{ r.patient_id|short }}</a></td>
+    {% if p.can('patient.iin') %}<td class="mono">{{ r.iin }}</td>{% endif %}
+    <td>{{ r.branch }}</td>
+    {% if show_nosology %}<td>{{ r.who_haem5|nosology }}</td>{% endif %}
+    <td>{{ r.mkb }}{% if r.dx_version > 1 %} <span class="badge" title="Диагноз пересматривался">v{{ r.dx_version }}</span>{% endif %}</td>
+    <td>{{ r.dx_date|d }}</td>
+    <td>{% if r.stage_system %}{{ r.stage_system }} {{ r.stage_value }}{% else %}—{% endif %}</td>
+    <td>{{ label('status_last_contact', r.status_last_contact) }}</td>
+    <td>{{ r.last_contact_date|d }}</td>
+    <td>{{ r.n_lines }}</td>
+    <td>{% if r.flags %}<span class="badge warn" title="{% for f in r.flags %}{{ flag(f) }}&#10;{% endfor %}">{{ r.flags|length }} пропуск.</span>{% else %}<span class="badge ok">полно</span>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="11" class="muted">Пациентов по этим условиям нет.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ pager(pl) }}
+{% endmacro %}
+
+{% macro pager(pl) %}
+{% if pl.pages > 1 %}
+<nav class="pager">
+  {% for n in range(1, pl.pages + 1) %}
+  {% if n == pl.page %}<strong>{{ n }}</strong>{% else %}<a href="?{{ pl.query }}{{ '&' if pl.query else '' }}page={{ n }}">{{ n }}</a>{% endif %}
+  {% endfor %}
+  <span class="muted">· всего {{ pl.total }}</span>
+</nav>
+{% endif %}
+{% endmacro %}
+
+{% macro nosology_buttons() %}
+<section class="nos-groups">
+  {% for title, nodes in nosology_groups() %}
+  <div class="nos-group"><h3>{{ title }}</h3>
+    <div class="nos-links">{% for n in nodes %}<a class="button" href="{{ dashboard_url(n.id) }}">{{ n.name }}</a>{% endfor %}</div>
+  </div>
+  {% endfor %}
+</section>
+{% endmacro %}

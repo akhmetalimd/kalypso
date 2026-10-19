@@ -32,6 +32,13 @@ class LoginRequired(Exception):
     pass
 
 
+class DemoEnter(Exception):
+    """Демо-режим: сессии нет — входим демо-пользователем и возвращаемся на ту же страницу."""
+    def __init__(self, path: str):
+        super().__init__(path)
+        self.path = path
+
+
 class PasswordChangeRequired(Exception):
     pass
 
@@ -69,7 +76,8 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
                        lab_units=core.LAB_UNITS, core_fields=registry.core_fields,
                        active_nodes=registry.active_nodes, missing_codes=registry.MISSING,
                        conditional_fields=registry.CONDITIONAL_FIELDS,
-                       profile=registry.profile, indexes=core.INDEXES, dashboard_url=dashboard_url)
+                       profile=registry.profile, indexes=core.INDEXES, dashboard_url=dashboard_url,
+                       nosology_groups=registry.nosology_groups)
     env.filters.update(d=_fmt_date, short=_short,
                        nosology=lambda node_id: (core.find_node(core.NOSOLOGY_TREE, node_id or "") or {}).get("name", node_id))
 
@@ -87,6 +95,8 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     def current(request: Request, allow_pw_change: bool = False) -> Principal:
         p = auth.principal_for_token(db, request.cookies.get(COOKIE))
         if p is None:
+            if settings.demo_mode:
+                raise DemoEnter(request.url.path if request.method == "GET" else "/")
             raise LoginRequired()
         if p.must_change_password and not allow_pw_change:
             raise PasswordChangeRequired()
@@ -101,6 +111,8 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     def render(request: Request, name: str, p: Principal | None, status_code=200, **ctx) -> HTMLResponse:
         token = request.cookies.get(COOKIE)
         ctx.update(p=p, csrf=auth.csrf_token(settings.session_secret, token) if token else "",
+                   demo_mode=settings.demo_mode, demo_users=auth.demo_users(db) if settings.demo_mode and p else [],
+                   current_path=request.url.path,
                    message=i18n.msg(request.query_params.get("m")),
                    warnings=[w for w in request.query_params.get("w", "").split(",") if w])
         return templates.TemplateResponse(request, name, ctx, status_code=status_code)
@@ -116,6 +128,44 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     @app.exception_handler(LoginRequired)
     async def _login_required(request, exc):
         return RedirectResponse("/login", status_code=303)
+
+    @app.exception_handler(DemoEnter)
+    async def _demo_enter(request, exc):
+        return RedirectResponse("/demo/enter?" + urlencode({"next": exc.path}), status_code=303)
+
+    def _demo_cookie(resp, token: str):
+        resp.set_cookie(COOKIE, token, httponly=True, samesite="lax", secure=settings.secure_cookies,
+                        max_age=settings.session_hours * 3600)
+        return resp
+
+    def _safe_next(path: str | None) -> str:
+        return path if path and path.startswith("/") and not path.startswith("//") else "/"
+
+    @app.get("/demo/enter")
+    def demo_enter(request: Request, next: str = "/"):
+        """Демо-режим: вход первым врачом без пароля (затем роль меняется в шапке)."""
+        if not settings.demo_mode:
+            raise NotFound()
+        users = auth.demo_users(db)
+        if not users:
+            return render(request, "error.html", None, 503, title="Нет пользователей",
+                          text="Демо-режим: в БД нет активных пользователей.")
+        token, _ = auth.demo_session(db, users[0].login, session_hours=settings.session_hours)
+        return _demo_cookie(RedirectResponse(_safe_next(next), status_code=303), token)
+
+    @app.post("/demo/role")
+    async def demo_role(request: Request):
+        """Демо-режим: сменить пользователя (роль). Прежняя сессия закрывается."""
+        if not settings.demo_mode:
+            raise NotFound()
+        p = current(request)
+        form = await form_of(request)
+        try:
+            token, _ = auth.demo_session(db, form.get("login", ""), session_hours=settings.session_hours)
+        except auth.LoginFailed:
+            raise NotFound() from None
+        auth.logout(db, request.cookies[COOKIE], p)
+        return _demo_cookie(RedirectResponse(_safe_next(form.get("next")), status_code=303), token)
 
     @app.exception_handler(PasswordChangeRequired)
     async def _pw_required(request, exc):
@@ -151,6 +201,8 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
 
     @app.get("/login", response_class=HTMLResponse)
     def login_page(request: Request):
+        if settings.demo_mode:
+            return RedirectResponse("/", status_code=303)
         return _login_page(request)
 
     @app.post("/login")
@@ -168,7 +220,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             text = ("Слишком много неудачных попыток. Попробуйте через 15 минут."
                     if e.reason == "locked" else "Неверный логин или пароль.")
             return _login_page(request, 401, [text], form.get("login", ""))
-        resp = RedirectResponse("/password" if p.must_change_password else "/patients", status_code=303)
+        resp = RedirectResponse("/password" if p.must_change_password else "/", status_code=303)
         resp.set_cookie(COOKIE, token, httponly=True, samesite="lax", secure=settings.secure_cookies,
                         max_age=settings.session_hours * 3600)
         resp.delete_cookie(LOGIN_COOKIE, path="/login")
@@ -215,14 +267,32 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             return Response("db unavailable", status_code=503, media_type="text/plain")
         return Response("ok", media_type="text/plain")
 
-    @app.get("/")
-    def root():
-        return RedirectResponse("/patients", status_code=303)
+    @app.get("/", response_class=HTMLResponse)
+    def home(request: Request):
+        """Главная: название платформы и расшифровка аббревиатуры."""
+        return render(request, "home.html", current(request))
+
+    PAGE = 100
+
+    def _patient_page(request: Request, p, f: dict) -> dict:
+        """Список пациентов по фильтрам, постранично; query — фильтры для ссылок страниц."""
+        rows = registry.list_patients(db, p, filters=f)
+        try:
+            page = max(1, int(request.query_params.get("page") or 1))
+        except ValueError:
+            page = 1
+        pages = max(1, -(-len(rows) // PAGE))
+        page = min(page, pages)
+        query = urlencode([(k, v) for k, v in request.query_params.multi_items() if k != "page"])
+        return {"rows": rows[(page - 1) * PAGE: page * PAGE], "total": len(rows), "page": page,
+                "pages": pages, "query": query}
 
     @app.get("/patients", response_class=HTMLResponse)
     def patients(request: Request):
         p = current(request)
-        return render(request, "patients.html", p, patients=registry.list_patients(db, p))
+        f = analytics.parse_filters(dict(request.query_params))
+        return render(request, "patients.html", p, f=f, pl=_patient_page(request, p, f),
+                      branches=admin.list_branches(db, p))
 
     @app.post("/patients/search")
     async def patients_search(request: Request):
@@ -231,8 +301,9 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         try:
             pid = registry.find_by_iin(db, p, form.get("iin", ""))
         except ValidationError as e:
-            return render(request, "patients.html", p, 422, errors=e.errors,
-                          patients=registry.list_patients(db, p))
+            f = analytics.parse_filters({})
+            return render(request, "patients.html", p, 422, errors=e.errors, f=f, pl=_patient_page(request, p, f),
+                          branches=admin.list_branches(db, p))
         if pid is None:
             return back("/patients", "not_found_iin")
         return back(f"/patients/{pid}")
@@ -375,8 +446,10 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             parts.append(f"диагноз {f['year_from'] or '…'}–{f['year_to'] or '…'}")
         if f["sex"]:
             parts.append(i18n.label("sex", f["sex"]).lower())
-        if f["binet"]:
-            parts.append(f"Binet {f['binet']}")
+        if f.get("stage"):
+            parts.append("стадия " + f["stage"].replace(":", " "))
+        if f.get("status"):
+            parts.append(i18n.label("status_last_contact", f["status"]).lower())
         if f["provenance"]:
             parts.append(i18n.label("provenance", f["provenance"]).lower())
         return ", ".join(parts)
@@ -392,17 +465,19 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
     @app.get("/dashboard/cll", response_class=HTMLResponse)
     def dashboard_cll(request: Request):
         p = current(request)
-        f = analytics.parse_filters(dict(request.query_params))
+        f = analytics.parse_filters({**request.query_params, "nosology": "cll_sll"})
         d = analytics.cll_dashboard(db, p, f)
         return render(request, "dashboard_cll.html", p, d=d, f=f, branches=admin.list_branches(db, p),
+                      pl=_patient_page(request, p, f),
                       charts=charts, filters_text=_filters_text(f), response_groups=analytics.RESPONSE_GROUPS["cll_sll"])
 
     @app.get("/dashboard/dlbcl", response_class=HTMLResponse)
     def dashboard_dlbcl(request: Request):
         p = current(request)
-        f = {**analytics.parse_filters(dict(request.query_params)), "binet": None}
+        f = analytics.parse_filters({**request.query_params, "nosology": "dlbcl"})
         d = analytics.dlbcl_dashboard(db, p, f)
         return render(request, "dashboard_dlbcl.html", p, d=d, f=f, branches=admin.list_branches(db, p),
+                      pl=_patient_page(request, p, f),
                       charts=charts, filters_text=_filters_text(f), response_groups=analytics.RESPONSE_GROUPS["dlbcl"])
 
     @app.get("/dashboard/m/{nosology}", response_class=HTMLResponse)
@@ -412,18 +487,20 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             return RedirectResponse(SPECIAL_DASHBOARDS[nosology], status_code=303)
         if nosology not in {n["id"] for n in registry.active_nodes()}:
             raise NotFound()
-        f = {**analytics.parse_filters(dict(request.query_params)), "binet": None}
+        f = analytics.parse_filters({**request.query_params, "nosology": nosology})
         d = analytics.module_dashboard(db, p, nosology, f)
         return render(request, "dashboard_module.html", p, d=d, f=f, branches=admin.list_branches(db, p),
+                      pl=_patient_page(request, p, f),
                       charts=charts, filters_text=_filters_text({**f, "nosology": nosology}),
                       response_groups=analytics.response_groups(nosology))
 
     @app.get("/dashboard/fl", response_class=HTMLResponse)
     def dashboard_fl(request: Request):
         p = current(request)
-        f = {**analytics.parse_filters(dict(request.query_params)), "binet": None}
+        f = analytics.parse_filters({**request.query_params, "nosology": "follicular"})
         d = analytics.fl_dashboard(db, p, f)
         return render(request, "dashboard_fl.html", p, d=d, f=f, branches=admin.list_branches(db, p),
+                      pl=_patient_page(request, p, f),
                       charts=charts, filters_text=_filters_text(f),
                       response_groups=analytics.RESPONSE_GROUPS["follicular"])
 

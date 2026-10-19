@@ -427,7 +427,7 @@ def test_tlgll_indication_and_nr_response(world):
     pid = register(world, "tlgll")
     fill(world, "tlgll", pid)
     [info] = registry.get_card(world.db, world.doc_a, pid)["module_info"]
-    assert info["title"] == "Показание к лечению"
+    assert info["title"] == "Тяжёлая цитопения"
     lid = registry.add_line(world.db, world.doc_a, pid, {**R, "regimen": "Метотрексат", "start_date": "2021-03-15",
                                                          "end_date": "2021-09-15"}).record_id
     registry.add_observation(world.db, world.doc_a, pid, {**R, "obs_date": "2021-10-01", "line_id": str(lid),

@@ -289,36 +289,36 @@ def _mcl_info(pt, mm, lines, observations, markers):
     if not risks:
         return []
     return [{"title": "Высокий биологический риск", "warn": True,
-             "text": ", ".join(risks) + " — учитывайте при выборе терапии (плохой ответ на иммунохимиотерапию)"}]
+             "text": ", ".join(risks)}]
 
 
 def _mzl_info(pt, mm, lines, observations, markers):
     info = []
     if mm.get("mzl_subtype") == "malt" and mm.get("malt_site") == "stomach" and mm.get("hp") == "detected":
         info.append({"title": "H. pylori+", "warn": False,
-                     "text": "желудочная MALT с H. pylori — эрадикация как первый этап, контроль эндоскопически"})
+                     "text": "желудочная MALT, H. pylori выявлен"})
     if mm.get("hcv") == "detected":
-        info.append({"title": "HCV+", "warn": False, "text": "рассмотрите противовирусную терапию HCV"})
+        info.append({"title": "HCV+", "warn": False, "text": "HCV выявлен"})
     return info
 
 
 def _hgbl_info(pt, mm, lines, observations, markers):
     info = []
     if mm.get("cns_involvement") == "yes":
-        info.append({"title": "Поражение ЦНС", "warn": True, "text": "на диагнозе — режим с проникновением в ЦНС"})
+        info.append({"title": "Поражение ЦНС", "warn": True, "text": "на диагнозе"})
     cns = next(i for i in _hgbl(pt, mm, [], _age(pt["birth_date"], pt["dx_date"])) if i["name"] == "CNS-IPI")
     if cns["result"] and cns["result"]["group"] == "high":
         info.append({"title": "Высокий риск рецидива в ЦНС", "warn": True,
-                     "text": f"CNS-IPI {cns['result']['score']} — рассмотрите профилактику ЦНС"})
+                     "text": f"CNS-IPI {cns['result']['score']} — высокий риск"})
     return info
 
 
 def _burkitt_info(pt, mm, lines, observations, markers):
     info = []
     if mm.get("hiv") == "detected":
-        info.append({"title": "ВИЧ+", "warn": True, "text": "ВИЧ-ассоциированная ЛБ — АРВТ вместе с химиотерапией"})
+        info.append({"title": "ВИЧ+", "warn": True, "text": "ВИЧ-ассоциированная лимфома Бёркитта"})
     if mm.get("cns_involvement") == "yes":
-        info.append({"title": "Поражение ЦНС", "warn": True, "text": "режим с высокими дозами метотрексата и цитарабина"})
+        info.append({"title": "Поражение ЦНС", "warn": True, "text": "на диагнозе"})
     return info
 
 
@@ -326,17 +326,17 @@ def _nlpbcl_info(pt, mm, lines, observations, markers):
     info = []
     if mm.get("nlp_pattern") == "variant":
         info.append({"title": "Вариантный тип роста (C–F)", "warn": True,
-                     "text": "выше риск рецидива и трансформации — тактика как при распространённой стадии"})
+                     "text": "неблагоприятный прогностический фактор (рецидив, трансформация)"})
     tr = [m for m in markers if m["field_key"] == "transformation" and m["value"] == "yes"]
     if tr:
-        info.append({"title": "Трансформация в ДВКЛ", "warn": True, "text": "лечение как ДВКЛ; исходы анализируйте отдельно"})
+        info.append({"title": "Трансформация в ДВКЛ", "warn": True, "text": "да — исходы после неё анализируйте отдельно"})
     return info
 
 
 def _mf_info(pt, mm, lines, observations, markers):
     info = []
     if mm.get("lct") == "yes":
-        info.append({"title": "Крупноклеточная трансформация", "warn": True, "text": "неблагоприятный прогноз — системная терапия"})
+        info.append({"title": "Крупноклеточная трансформация", "warn": True, "text": "неблагоприятный прогностический фактор"})
     if mm.get("b_cat") == "B2":
         info.append({"title": "B2 (≥ 1000 клеток Сезари/мкл)", "warn": False, "text": "соответствует синдрому Сезари при эритродермии"})
     return info
@@ -344,8 +344,8 @@ def _mf_info(pt, mm, lines, observations, markers):
 
 def _tlgll_info(pt, mm, lines, observations, markers):
     if mm.get("neutropenia") == "yes" or mm.get("anemia_tx") == "yes":
-        return [{"title": "Показание к лечению", "warn": True,
-                 "text": "тяжёлая нейтропения или трансфузионно-зависимая анемия — иммуносупрессивная терапия"}]
+        return [{"title": "Тяжёлая цитопения", "warn": True,
+                 "text": "тяжёлая нейтропения или трансфузионно-зависимая анемия"}]
     return []
 
 
