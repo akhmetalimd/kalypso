@@ -199,6 +199,10 @@ def _pcnsl(pt, mm, labs, age):
     ]
 
 
+def _nlpbcl(pt, mm, labs, age):
+    return [ix for ix in _hodgkin(pt, mm, labs, age) if ix["name"] == "GHSG"]   # индекса карточки нет
+
+
 # нозология -> (функция расчёта, названия индексов в порядке вывода; первый — индекс карточки)
 CALCULATORS = {
     "cll_sll": (_cll, ("CLL-IPI",)),
@@ -213,6 +217,7 @@ CALCULATORS = {
     "pmbcl": (_pmbcl, ("aaIPI",)),
     "burkitt": (_burkitt, ("BL-IPI",)),
     "pcnsl": (_pcnsl, ("IELSG", "MSKCC")),
+    "nlpbcl": (_nlpbcl, ("GHSG",)),
 }
 
 
@@ -301,7 +306,18 @@ def _burkitt_info(pt, mm, lines, observations, markers):
     return info
 
 
-INFO = {"follicular": _fl_info, "mcl": _mcl_info, "mzl": _mzl_info, "hgbl": _hgbl_info, "burkitt": _burkitt_info}
+def _nlpbcl_info(pt, mm, lines, observations, markers):
+    info = []
+    if mm.get("nlp_pattern") == "variant":
+        info.append({"title": "Вариантный тип роста (C–F)", "warn": True,
+                     "text": "выше риск рецидива и трансформации — тактика как при распространённой стадии"})
+    tr = [m for m in markers if m["field_key"] == "transformation" and m["value"] == "yes"]
+    if tr:
+        info.append({"title": "Трансформация в ДВКЛ", "warn": True, "text": "лечение как ДВКЛ; исходы анализируйте отдельно"})
+    return info
+
+
+INFO = {"nlpbcl": _nlpbcl_info, "follicular": _fl_info, "mcl": _mcl_info, "mzl": _mzl_info, "hgbl": _hgbl_info, "burkitt": _burkitt_info}
 
 
 def module_info(pt: dict, mm: dict[str, str], lines: list[dict], observations: list[dict],

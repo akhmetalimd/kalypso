@@ -522,4 +522,28 @@ SPECS = {
         "histology": lambda rng, f: ("Стереотаксическая биопсия: периваскулярная инфильтрация крупными атипичными B-клетками. "
                                      "ИГХ: CD20+, MUM1+, BCL6+, CD10-. Ki-67 80–90 %. Заключение: первичная ДВКЛ ЦНС."),
     },
+    "nlpbcl": {
+        "age": (40, 15, 18, 80), "male": 0.75, "watch": 0.1,
+        "stage": {"I": 40, "IE": 3, "II": 30, "IIE": 2, "III": 15, "IV": 10},
+        "ecog": {0: 70, 1: 25, 2: 5},
+        "b_symptoms": {"no": 85, "yes": 12, "unknown": 3},
+        "fields": lambda rng, ctx: {
+            "nlp_pattern": _maybe(rng, "variant" if rng.random() < 0.3 else "typical", 0.1),
+            "bulky_med": "yes" if rng.random() < 0.05 else "no",
+            "esr_raised": _maybe(rng, "yes" if rng.random() < 0.2 else "no", 0.1),
+            "nodal_areas_hl": "ge_3" if rng.random() < (0.6 if ctx["adv"] else 0.25) else "lt_3",
+            "extranodal_hl": "yes" if ctx["stage"] in ("IE", "IIE") else "no",
+            "transformation": "yes" if rng.random() < 0.05 else None,
+        },
+        "labs": lambda rng, ctx, f: [("8302-2", round(rng.uniform(115, 160)), "g/L"), ("2532-0", rng.randint(140, 260), "U/L")],
+        "first": lambda rng, ctx, f: pick(rng, {("R-CHOP", "ритуксимаб, CHOP", 6): 45, ("R-ABVD", "ритуксимаб, ABVD", 6): 30,
+                                                 ("Ритуксимаб (монотерапия)", "ритуксимаб", 4): 25}) if ctx["adv"]
+        else pick(rng, {("Лучевая терапия", "ЛТ 30 Гр на зону поражения", None): 70,
+                        ("Ритуксимаб (монотерапия)", "ритуксимаб", 4): 30}),
+        "later": [("R-CHOP", "ритуксимаб, CHOP", 6), ("BR", "бендамустин, ритуксимаб", 6), ("R-CVP", "ритуксимаб, CVP", 6)],
+        "p_complete": lambda risk: 0.9 - 0.2 * risk, "p_relapse": lambda risk: 0.2 + 0.2 * risk,
+        "relapse_months": (12, 96), "partial_progress": 0.5, "partial_months": (12, 48), "death_progressive": 0.2,
+        "histology": lambda rng, f: ("Биопсия лимфоузла: нодулярная пролиферация, LP-клетки («попкорн») на фоне малых "
+                                     "B-лимфоцитов. ИГХ: CD20+, CD45+, PAX5+, OCT2+, CD15-, CD30-. Заключение: NLPBCL."),
+    },
 }

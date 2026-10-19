@@ -292,10 +292,10 @@
         },
         {
           "id": "cutaneous_tnk",
-          "name": "Кожные T-клеточные лимфомы и T-LGLL",
+          "name": "Другие кожные T-клеточные лимфомы (pcALCL, лимфоматоидный папулёз…)",
           "status": "coming_soon",
           "module": "cutaneous_tnk",
-          "codes": { "icd_o_3_2": "9700/3", "mkb10": "C84.0" },
+          "codes": { "icd_o_3_2": "9718/3", "mkb10": "C86.6" },
           "staging": [],
           "index": null,
           "response_criteria": "кожные шкалы",
@@ -306,13 +306,24 @@
     {
       "id": "nlpbcl",
       "name": "Нодулярная B-клеточная лимфома с лимфоидным преобладанием (NLPBCL)",
-      "status": "coming_soon",
+      "status": "active",
       "module": "nlpbcl",
       "codes": { "icd_o_3_2": "9659/3", "mkb10": "C81.0" },
       "staging": ["Lugano"],
+      "stage_values": { "Lugano": ["I", "IE", "II", "IIE", "III", "IV"] },
       "index": null,
       "response_criteria": "Lugano 2014",
-      "markers": []
+      "markers": [],
+      "regimens": ["Наблюдение после удаления узла", "Лучевая терапия", "Ритуксимаб (монотерапия)", "R-CHOP", "R-ABVD",
+                   "R-CVP", "BR"],
+      "core_fields": [
+        { "key": "nlp_pattern",    "label_ru": "Тип роста (Fan)",                                      "values": ["typical", "variant"] },
+        { "key": "bulky_med",      "label_ru": "Массивное поражение средостения (> 1/3 или ≥ 10 см)", "values": ["yes", "no"] },
+        { "key": "esr_raised",     "label_ru": "Повышенная СОЭ (GHSG: > 50 мм/ч без B, > 30 с B)",   "values": ["yes", "no"] },
+        { "key": "nodal_areas_hl", "label_ru": "Зоны поражения лимфоузлов (GHSG: ≥ 3)",              "values": ["lt_3", "ge_3"] },
+        { "key": "extranodal_hl",  "label_ru": "Экстранодальное поражение (E)",                      "values": ["yes", "no"] },
+        { "key": "transformation", "label_ru": "Трансформация в ДВКЛ (дата — дата биопсии)",          "values": ["yes", "no"], "optional": true }
+      ]
     },
     {
       "id": "hodgkin",

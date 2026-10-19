@@ -108,6 +108,17 @@ CASES = {
         "stored": "5", "bad_score": "6", "db": ("IELSG", 6, "high", "index_ielsg"),
         "optional": ["ocular", "csf_cytology"],
     },
+    # Индекса карточки нет. Стадия II без факторов риска — GHSG «ранние благоприятные».
+    "nlpbcl": {
+        "form": {"birth_date": "1985-02-01", "stage_system": "Lugano", "stage_value": "II", "ecog": "0",
+                 "b_symptoms": "no"},
+        "fields": {"nlp_pattern": "typical", "bulky_med": "no", "esr_raised": "no", "nodal_areas_hl": "lt_3",
+                   "extranodal_hl": "no"},
+        "labs": [],
+        "expected": {"GHSG": (0, "early_favorable")},
+        "stored": None, "bad_score": None, "db": None,
+        "optional": ["transformation"],
+    },
 }
 NOSOLOGIES = list(CASES)
 
@@ -342,4 +353,13 @@ def test_db_ipcg_response(reg):
     reg.con.commit()
     with rejected(reg.con, "response_ipcg"):
         reg.obs(pid, response_value="VGPR", response_criteria="IPCG", response_basis="mri")
+
+
+def test_nlpbcl_no_stored_index_and_variant_panel(world):
+    pid = register(world, "nlpbcl")
+    card = registry.get_card(world.db, world.doc_a, pid)
+    assert "empty_index_score" not in card["flags"]["completeness"] and card["patient"]["index_name"] is None
+    fill(world, "nlpbcl", pid, {**CASES["nlpbcl"]["fields"], "nlp_pattern": "variant"})
+    [info] = registry.get_card(world.db, world.doc_a, pid)["module_info"]
+    assert info["title"].startswith("Вариантный")
 

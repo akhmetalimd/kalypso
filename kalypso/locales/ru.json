@@ -155,7 +155,9 @@
       "myc_bcl2": "DLBCL/HGBL-MYC/BCL2",
       "hgbl_nos": "HGBL, NOS",
       "ge_70": "≥ 70",
-      "lt_70": "< 70"
+      "lt_70": "< 70",
+      "typical": "Типичный (A/B)",
+      "variant": "Вариантный (C–F)"
     },
     "role": {
       "physician": "Лечащий врач",
