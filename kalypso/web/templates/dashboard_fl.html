@@ -37,17 +37,22 @@
   <section class="card"><h2>POD24</h2>
     {{ charts.bar_chart(d.pod24, 'POD24', d.n)|safe }}{{ dist_table(d.pod24, d.n) }}
     <small>Прогрессия ≤ 24 мес. от начала 1-й линии иммунохимиотерапии. Кривые — <a href="/survival?endpoint=OS&amp;grouping=pod24">анализ от ориентира</a>.</small></section>
+
+  <section class="card"><h2>Число линий терапии</h2>
+    {{ charts.bar_chart(d.lines_per, 'Линии', d.n)|safe }}{{ dist_table(d.lines_per, d.n) }}</section>
+  <section class="card"><h2>Режимы 1-й линии</h2>
+    {% if d.regimen1 %}{{ charts.bar_chart(d.regimen1, 'Режимы 1-й линии')|safe }}{{ dist_table(d.regimen1) }}{% else %}<p class="muted">Нет данных.</p>{% endif %}</section>
+</div>
+<details class="more"><summary>Ещё: признаки модуля</summary>
+<div class="two">
   {% for key, title in [('grade_icc', 'Грейд (ICC)'), ('gelf', 'Критерии GELF'), ('nodal_areas', 'Зоны поражения лимфоузлов'),
                         ('largest_node', 'Наибольший лимфоузел'), ('bm_involvement', 'Поражение костного мозга'),
                         ('ldh_uln', 'ЛДГ относительно ВГН'), ('b2m_uln', 'β2-микроглобулин относительно ВГН')] %}
   <section class="card"><h2>{{ title }}</h2>
     {{ charts.bar_chart(d.markers[key], title, d.n)|safe }}{{ dist_table(d.markers[key], d.n) }}</section>
   {% endfor %}
-  <section class="card"><h2>Число линий терапии</h2>
-    {{ charts.bar_chart(d.lines_per, 'Линии', d.n)|safe }}{{ dist_table(d.lines_per, d.n) }}</section>
-  <section class="card"><h2>Режимы 1-й линии</h2>
-    {% if d.regimen1 %}{{ charts.bar_chart(d.regimen1, 'Режимы 1-й линии')|safe }}{{ dist_table(d.regimen1) }}{% else %}<p class="muted">Нет данных.</p>{% endif %}</section>
 </div>
+</details>
 
 <section class="card"><h2>Ответ по линиям (Lugano 2014, последняя оценка)</h2>
   {% if d.responses %}

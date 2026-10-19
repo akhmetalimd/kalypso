@@ -151,3 +151,30 @@ def test_header_card_summary_and_index_help(demo, world):
     card = c.get(f"/patients/{pid}").text
     assert 'class="summary"' in card and 'class="toc"' in card and 'href="#s-inv"' in card and 'id="s-inv"' in card
     assert 'class="info" title="TP53 — 4' in card and 'class="to-top"' in card
+
+
+# --- список пациентов: сортировка, плашки фильтров, короткие нозологии; «Ещё» в дашбордах ---
+def test_patient_list_sort_chips_and_short_names(demo, world):
+    world.register(dx_date="2019-05-01")
+    world.register(dx_date="2022-05-01")
+    c = enter(demo)
+    asc = c.get("/patients?sort=dx").text
+    desc = c.get("/patients?sort=-dx").text
+    dates = lambda page: re.findall(r"<td>(\d\d\.\d\d\.\d{4})</td>\s*<td>", page)  # noqa: E731
+    assert dates(asc)[0] == "01.05.2019" and dates(desc)[0] == "01.05.2022"
+    assert 'aria-sort="ascending"' in asc and "Диагноз ▲" in asc and "sort=-dx" in asc
+    filtered = c.get("/patients?nosology=cll_sll&stage=Binet:A&sort=dx").text
+    chips = re.findall(r'<a class="chip" href="([^"]+)"[^>]*>([^<]+)<', filtered)
+    assert [t.strip() for _, t in chips] == ["ХЛЛ / ЛМЛ", "стадия Binet A"]
+    assert chips[0][0] == "/patients"                     # без нозологии — и без её стадии
+    assert '<span class="nos-tag">ХЛЛ/ЛМЛ</span>' in c.get("/patients").text
+    assert '<details class="filters-box" open>' in filtered
+
+
+def test_dashboards_hide_details_under_more(demo, world):
+    world.register()
+    c = enter(demo)
+    assert '<details class="more"><summary>Ещё: маркеры и иерархия FISH</summary>' in c.get("/dashboard/cll").text
+    assert "Ещё: поля модуля" in c.get("/dashboard/m/mcl").text
+    dl = c.get("/dashboard/dlbcl").text
+    assert dl.count("<section") == dl.count("</section>")

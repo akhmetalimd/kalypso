@@ -30,6 +30,17 @@
     {{ charts.bar_chart(d.r_ipi, 'R-IPI', d.n)|safe }}{{ dist_table(d.r_ipi, d.n) }}</section>
   <section class="card"><h2>NCCN-IPI (расчёт)</h2>
     {{ charts.bar_chart(d.nccn_ipi, 'NCCN-IPI', d.n)|safe }}{{ dist_table(d.nccn_ipi, d.n) }}</section>
+
+  <section class="card"><h2>Deauville после 1-й линии</h2>
+    {{ charts.bar_chart(d.eot_deauville, 'Deauville после 1-й линии', d.cr1[1])|safe }}{{ dist_table(d.eot_deauville, d.cr1[1]) }}
+    <small>Первая ПЭТ-КТ с баллом Deauville после окончания 1-й линии; среди получавших 1-ю линию. Кривые — <a href="/survival?endpoint=PFS&amp;grouping=deauville_eot1">анализ от ориентира</a>.</small></section>
+  <section class="card"><h2>Число линий терапии</h2>
+    {{ charts.bar_chart(d.lines_per, 'Линии', d.n)|safe }}{{ dist_table(d.lines_per, d.n) }}</section>
+  <section class="card"><h2>Режимы 1-й линии</h2>
+    {% if d.regimen1 %}{{ charts.bar_chart(d.regimen1, 'Режимы 1-й линии')|safe }}{{ dist_table(d.regimen1) }}{% else %}<p class="muted">Нет данных.</p>{% endif %}</section>
+</div>
+<details class="more"><summary>Ещё: маркеры и признаки модуля</summary>
+<div class="two">
   {% for key, title in [('coo_hans', 'Клеточное происхождение (Hans)'), ('ldh_uln', 'ЛДГ относительно ВГН'),
                         ('extranodal_n', 'Экстранодальные очаги'), ('bulky', 'Bulky-очаг'),
                         ('myc_r', 'Перестройка MYC'), ('bcl2_r', 'Перестройка BCL2'), ('bcl6_r', 'Перестройка BCL6')] %}
@@ -39,14 +50,8 @@
   <section class="card"><h2>MYC / BCL2 (double-hit)</h2>
     {{ charts.bar_chart(d.myc_bcl2, 'MYC / BCL2', d.n)|safe }}{{ dist_table(d.myc_bcl2, d.n) }}
     <small>MYC + BCL2 — по WHO-HAEM5 это DLBCL/HGBL-MYC/BCL2: в карточке такого пациента — предупреждение проверить диагноз.</small></section>
-  <section class="card"><h2>Deauville после 1-й линии</h2>
-    {{ charts.bar_chart(d.eot_deauville, 'Deauville после 1-й линии', d.cr1[1])|safe }}{{ dist_table(d.eot_deauville, d.cr1[1]) }}
-    <small>Первая ПЭТ-КТ с баллом Deauville после окончания 1-й линии; среди получавших 1-ю линию. Кривые — <a href="/survival?endpoint=PFS&amp;grouping=deauville_eot1">анализ от ориентира</a>.</small></section>
-  <section class="card"><h2>Число линий терапии</h2>
-    {{ charts.bar_chart(d.lines_per, 'Линии', d.n)|safe }}{{ dist_table(d.lines_per, d.n) }}</section>
-  <section class="card"><h2>Режимы 1-й линии</h2>
-    {% if d.regimen1 %}{{ charts.bar_chart(d.regimen1, 'Режимы 1-й линии')|safe }}{{ dist_table(d.regimen1) }}{% else %}<p class="muted">Нет данных.</p>{% endif %}</section>
 </div>
+</details>
 
 <section class="card"><h2>Ответ по линиям (Lugano 2014, последняя оценка)</h2>
   {% if d.responses %}

@@ -1,15 +1,16 @@
 {# Таблица пациентов и постраничная навигация — для «Пациентов» и дашбордов нозологий. #}
 {% macro patients_table(pl, p, show_nosology=True) %}
+{% if pl.chips %}<div class="chips" aria-label="Активные фильтры">{% for text, url in pl.chips %}<a class="chip" href="{{ url }}" title="Убрать фильтр">{{ text }} <span aria-hidden="true">×</span></a>{% endfor %}<a class="chip clear" href="?">сбросить все</a></div>{% endif %}
 <table class="grid">
-  <thead><tr><th>ID</th>{% if p.can('patient.iin') %}<th>ИИН</th>{% endif %}<th>Филиал</th>{% if show_nosology %}<th>Нозология</th>{% endif %}<th>МКБ</th><th>Диагноз</th><th>Стадия</th>
-    <th>Статус</th><th>Посл. контакт</th><th>Линий</th><th>Полнота</th></tr></thead>
+  <thead><tr><th>ID</th>{% if p.can('patient.iin') %}<th>ИИН</th>{% endif %}{{ th(pl, 'branch', 'Филиал') }}{% if show_nosology %}{{ th(pl, 'nosology', 'Нозология') }}{% endif %}<th>МКБ</th>{{ th(pl, 'dx', 'Диагноз') }}{{ th(pl, 'stage', 'Стадия') }}
+    {{ th(pl, 'status', 'Статус') }}{{ th(pl, 'contact', 'Посл. контакт') }}{{ th(pl, 'lines', 'Линий') }}{{ th(pl, 'flags', 'Полнота') }}</tr></thead>
   <tbody>
   {% for r in pl.rows %}
   <tr>
     <td><a href="/patients/{{ r.patient_id }}" class="mono">{{ r.patient_id|short }}</a></td>
     {% if p.can('patient.iin') %}<td class="mono">{{ r.iin }}</td>{% endif %}
     <td title="{{ r.branch }}">{{ branch_names.get(r.branch, r.branch) }}</td>
-    {% if show_nosology %}<td>{{ r.who_haem5|nosology }}</td>{% endif %}
+    {% if show_nosology %}<td title="{{ r.who_haem5|nosology }}"><span class="nos-tag">{{ r.who_haem5|nosology_short }}</span></td>{% endif %}
     <td>{{ r.mkb }}{% if r.dx_version > 1 %} <span class="badge" title="Диагноз пересматривался">v{{ r.dx_version }}</span>{% endif %}</td>
     <td>{{ r.dx_date|d }}</td>
     <td>{% if r.stage_system %}{{ r.stage_system }} {{ r.stage_value }}{% else %}—{% endif %}</td>
@@ -24,6 +25,11 @@
   </tbody>
 </table>
 {{ pager(pl) }}
+{% endmacro %}
+
+{% macro th(pl, key, text) %}
+{% set dir = '' if pl.sort == '-' ~ key else ('-' if pl.sort == key else '') %}
+<th aria-sort="{{ 'ascending' if pl.sort == key else ('descending' if pl.sort == '-' ~ key else 'none') }}"><a class="sort" href="?{{ pl.query_nosort }}{{ '&' if pl.query_nosort else '' }}sort={{ dir }}{{ key }}">{{ text }}{% if pl.sort == key %} ▲{% elif pl.sort == '-' ~ key %} ▼{% endif %}</a></th>
 {% endmacro %}
 
 {% macro pager(pl) %}

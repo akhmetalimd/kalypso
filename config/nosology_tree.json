@@ -10,6 +10,7 @@
         {
           "id": "cll_sll",
           "name": "ХЛЛ / ЛМЛ",
+          "short": "ХЛЛ/ЛМЛ",
           "status": "active",
           "module": "cll",
           "codes": { "icd_o_3_2": "9823/3", "mkb10": "C91.1" },
@@ -35,6 +36,7 @@
         {
           "id": "dlbcl",
           "name": "ДВКЛ (DLBCL, NOS)",
+          "short": "ДВКЛ",
           "status": "active",
           "module": "dlbcl",
           "codes": { "icd_o_3_2": "9680/3", "mkb10": "C83.3" },
@@ -63,6 +65,7 @@
         {
           "id": "hgbl",
           "name": "B-клеточные лимфомы высокой степени злокачественности (HGBL)",
+          "short": "HGBL",
           "status": "active",
           "module": "hgbl",
           "codes": { "icd_o_3_2": "9680/3", "mkb10": "C83.3" },
@@ -88,6 +91,7 @@
         {
           "id": "pmbcl",
           "name": "Первичная медиастинальная B-клеточная лимфома (ПМБКЛ)",
+          "short": "ПМБКЛ",
           "status": "active",
           "module": "pmbcl",
           "codes": { "icd_o_3_2": "9679/3", "mkb10": "C85.2" },
@@ -108,6 +112,7 @@
         {
           "id": "burkitt",
           "name": "Лимфома Бёркитта (ЛБ)",
+          "short": "ЛБ",
           "status": "active",
           "module": "burkitt",
           "codes": { "icd_o_3_2": "9687/3", "mkb10": "C83.7" },
@@ -128,6 +133,7 @@
         {
           "id": "pcnsl",
           "name": "Первичная лимфома ЦНС (ПЛЦНС)",
+          "short": "ПЛЦНС",
           "status": "active",
           "module": "pcnsl",
           "codes": { "icd_o_3_2": "9680/3", "mkb10": "C83.3" },
@@ -151,6 +157,7 @@
         {
           "id": "follicular",
           "name": "Фолликулярная лимфома (ФЛ)",
+          "short": "ФЛ",
           "status": "active",
           "module": "follicular",
           "codes": { "icd_o_3_2": "9690/3", "mkb10": "C82" },
@@ -185,6 +192,7 @@
         {
           "id": "mzl",
           "name": "Лимфомы маргинальной зоны (ЛМЗ)",
+          "short": "ЛМЗ",
           "status": "active",
           "module": "mzl",
           "codes": { "icd_o_3_2": "9699/3", "mkb10": "C88.4" },
@@ -210,6 +218,7 @@
         {
           "id": "hcl",
           "name": "Волосатоклеточный лейкоз (ВКЛ)",
+          "short": "ВКЛ",
           "status": "active",
           "module": "hcl",
           "codes": { "icd_o_3_2": "9940/3", "mkb10": "C91.4" },
@@ -230,6 +239,7 @@
         {
           "id": "mcl",
           "name": "Мантийноклеточная лимфома (МКЛ)",
+          "short": "МКЛ",
           "status": "active",
           "module": "mcl",
           "codes": { "icd_o_3_2": "9673/3", "mkb10": "C83.1" },
@@ -254,6 +264,7 @@
         {
           "id": "waldenstrom",
           "name": "Макроглобулинемия Вальденстрёма (МВ)",
+          "short": "МВ",
           "status": "active",
           "module": "waldenstrom",
           "codes": { "icd_o_3_2": "9761/3", "mkb10": "C88.0" },
@@ -280,6 +291,7 @@
         {
           "id": "ptcl",
           "name": "Периферические T-клеточные лимфомы (ПТКЛ)",
+          "short": "ПТКЛ",
           "status": "active",
           "module": "ptcl",
           "codes": { "icd_o_3_2": "9702/3", "mkb10": "C84.4" },
@@ -309,6 +321,7 @@
         {
           "id": "tlgll",
           "name": "T-клеточный лейкоз из больших гранулярных лимфоцитов (T-LGLL)",
+          "short": "T-LGLL",
           "status": "active",
           "module": "tlgll",
           "codes": { "icd_o_3_2": "9831/3", "mkb10": "C91.7" },
@@ -329,6 +342,7 @@
         {
           "id": "mf_ss",
           "name": "Грибовидный микоз / синдром Сезари (ГМ/СС)",
+          "short": "ГМ/СС",
           "status": "active",
           "module": "mf_ss",
           "codes": { "icd_o_3_2": "9700/3", "mkb10": "C84.0" },
@@ -367,6 +381,7 @@
     {
       "id": "nlpbcl",
       "name": "Нодулярная B-клеточная лимфома с лимфоидным преобладанием (NLPBCL)",
+      "short": "NLPBCL",
       "status": "active",
       "module": "nlpbcl",
       "codes": { "icd_o_3_2": "9659/3", "mkb10": "C81.0" },
@@ -389,6 +404,7 @@
     {
       "id": "hodgkin",
       "name": "Классическая лимфома Ходжкина (кЛХ)",
+      "short": "кЛХ",
       "status": "active",
       "module": "hodgkin",
       "codes": { "icd_o_3_2": "9650/3", "mkb10": "C81" },

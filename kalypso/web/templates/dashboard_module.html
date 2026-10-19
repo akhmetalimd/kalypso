@@ -23,7 +23,7 @@
 </section>
 
 <div class="two">
-  {% for title, items in d.stages + d.indices + d.markers %}
+  {% for title, items in d.stages + d.indices %}
   <section class="card"><h2>{{ title }}</h2>
     {{ charts.bar_chart(items, title, d.n)|safe }}{{ dist_table(items, d.n) }}</section>
   {% endfor %}
@@ -32,6 +32,16 @@
   <section class="card"><h2>Режимы 1-й линии</h2>
     {% if d.regimen1 %}{{ charts.bar_chart(d.regimen1, 'Режимы 1-й линии')|safe }}{{ dist_table(d.regimen1) }}{% else %}<p class="muted">Нет данных.</p>{% endif %}</section>
 </div>
+{% if d.markers %}
+<details class="more"><summary>Ещё: поля модуля ({{ d.markers|length }})</summary>
+<div class="two">
+  {% for title, items in d.markers %}
+  <section class="card"><h2>{{ title }}</h2>
+    {{ charts.bar_chart(items, title, d.n)|safe }}{{ dist_table(items, d.n) }}</section>
+  {% endfor %}
+</div>
+</details>
+{% endif %}
 
 <section class="card"><h2>Ответ по линиям ({{ d.criteria }}, последняя оценка)</h2>
   {% if d.responses %}

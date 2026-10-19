@@ -541,7 +541,23 @@ def list_patients(db: Database, p: Principal, limit: int | None = None, filters:
         patients = [r for r in patients if not r["flags"]]
     elif f.get("completeness") == "gaps":
         patients = [r for r in patients if r["flags"]]
+    key = (f.get("sort") or "").lstrip("-")
+    if key in SORT_KEYS:
+        patients.sort(key=SORT_KEYS[key], reverse=(f.get("sort") or "").startswith("-"))
     return patients
+
+
+_MIN = date.min
+SORT_KEYS = {   # колонка списка -> ключ сортировки (пустые значения — в конце по возрастанию)
+    "branch": lambda r: r["branch"] or "",
+    "nosology": lambda r: r["who_haem5"] or "",
+    "dx": lambda r: r["dx_date"] or _MIN,
+    "stage": lambda r: (r["stage_system"] or "~", r["stage_value"] or ""),
+    "status": lambda r: r["status_last_contact"] or "",
+    "contact": lambda r: r["last_contact_date"] or _MIN,
+    "lines": lambda r: r["n_lines"],
+    "flags": lambda r: len(r["flags"]),
+}
 
 
 def get_card(db: Database, p: Principal, pid) -> dict:

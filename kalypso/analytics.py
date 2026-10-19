@@ -141,7 +141,9 @@ def parse_filters(q: dict) -> dict:
             "provenance": q.get("provenance") or None, "nosology": nosology, "stage": stage,
             "status": q.get("status") if q.get("status") in ("alive", "dead", "lost_to_follow_up") else None,
             "completeness": q.get("completeness") if q.get("completeness") in ("complete", "gaps") else None,
-            "has": q.get("has") if q.get("has") in ("flow", "genetics", "virology", "autoimmune") else None}
+            "has": q.get("has") if q.get("has") in ("flow", "genetics", "virology", "autoimmune") else None,
+            "sort": q.get("sort") if (q.get("sort") or "").lstrip("-") in
+            ("branch", "nosology", "dx", "stage", "status", "contact", "lines", "flags") else None}
 
 
 def load_cohort(db: Database, p: Principal, filters: dict | None = None) -> list[dict]:

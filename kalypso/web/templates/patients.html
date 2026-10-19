@@ -15,21 +15,22 @@
 <p class="muted">{% if p.scope('patient.read') == 'branch' %}Пациенты вашего филиала ({{ p.branch_code }}).{% else %}Все филиалы.{% endif %}
   Поиск по ИИН — через форму (ИИН не попадает в адресную строку). Стадия — после выбора нозологии.</p>
 
+<details class="filters-box"{% if pl.chips %} open{% endif %}>
+<summary>Фильтры{% if pl.chips %} · {{ pl.chips|length }}{% endif %}</summary>
 <form method="get" action="/patients" class="filters">
+  {% if pl.sort %}<input type="hidden" name="sort" value="{{ pl.sort }}">{% endif %}
   {{ nosology_select(f) }}
   {{ stage_select(f, f.nosology) }}
   <label>Статус <select name="status"><option value="">все</option>
     {% for code, t in options('status_last_contact').items() %}<option value="{{ code }}"{% if f.status == code %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
   {% if p.scope('patient.read') != 'branch' %}
   <label>Филиал <select name="branch"><option value="">все</option>
-    {% for b in branches %}<option value="{{ b.branch_code }}"{% if f.branch == b.branch_code %} selected{% endif %}>{{ b.branch_code }}</option>{% endfor %}</select></label>
+    {% for b in branches %}<option value="{{ b.branch_code }}"{% if f.branch == b.branch_code %} selected{% endif %}>{{ b.name_ru }}</option>{% endfor %}</select></label>
   {% endif %}
   <label>Диагноз с <input type="number" name="year_from" min="1990" max="2100" value="{{ f.year_from or '' }}" placeholder="год"></label>
   <label>по <input type="number" name="year_to" min="1990" max="2100" value="{{ f.year_to or '' }}" placeholder="год"></label>
   <label>Пол <select name="sex"><option value="">все</option>
     {% for code, t in options('sex').items() %}<option value="{{ code }}"{% if f.sex == code %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
-  <label>Данные <select name="provenance"><option value="">все</option>
-    {% for code, t in options('provenance').items() %}<option value="{{ code }}"{% if f.provenance == code %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
   <label>Полнота <select name="completeness"><option value="">все</option>
     <option value="complete"{% if f.completeness == 'complete' %} selected{% endif %}>полно</option>
     <option value="gaps"{% if f.completeness == 'gaps' %} selected{% endif %}>есть пропуски</option></select></label>
@@ -38,6 +39,7 @@
   <button class="primary">Показать</button>
   <a href="/patients">Сбросить</a>
 </form>
+</details>
 
 {{ patients_table(pl, p) }}
 {% endblock %}

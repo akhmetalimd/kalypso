@@ -22,9 +22,9 @@
 <form method="get" action="{{ action }}" class="filters">
   {% if nosology %}{{ nosology_select(f) }}{% endif %}
   {{ stage_select(f, fixed or f.nosology) }}
-  {% set bopts = {} %}{% for b in branches %}{% set _ = bopts.update({b.branch_code: b.branch_code}) %}{% endfor %}
+  {% set bopts = {} %}{% for b in branches %}{% set _ = bopts.update({b.branch_code: b.name_ru}) %}{% endfor %}
   <label>Филиал <select name="branch"><option value="">все доступные</option>
-    {% for code in bopts %}<option value="{{ code }}"{% if f.branch == code %} selected{% endif %}>{{ code }}</option>{% endfor %}</select></label>
+    {% for code, name in bopts.items() %}<option value="{{ code }}"{% if f.branch == code %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
   <label>Диагноз с <input type="number" name="year_from" min="1990" max="2100" value="{{ f.year_from or '' }}" placeholder="год"></label>
   <label>по <input type="number" name="year_to" min="1990" max="2100" value="{{ f.year_to or '' }}" placeholder="год"></label>
   <label>Пол <select name="sex"><option value="">все</option>

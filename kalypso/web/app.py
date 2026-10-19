@@ -80,6 +80,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
                        nosology_groups=registry.nosology_groups, inv=investigations,
                        index_help=indices.index_help)
     env.filters.update(d=_fmt_date, short=_short,
+                       nosology_short=lambda node_id: (core.find_node(core.NOSOLOGY_TREE, node_id or "") or {}).get("short", node_id),
                        nosology=lambda node_id: (core.find_node(core.NOSOLOGY_TREE, node_id or "") or {}).get("name", node_id))
 
     # --- инфраструктура -----------------------------------------------------
@@ -291,9 +292,31 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             page = 1
         pages = max(1, -(-len(rows) // PAGE))
         page = min(page, pages)
-        query = urlencode([(k, v) for k, v in request.query_params.multi_items() if k != "page"])
+        items = [(k, v) for k, v in request.query_params.multi_items() if v and k != "page"]
+        query = urlencode(items)
         return {"rows": rows[(page - 1) * PAGE: page * PAGE], "total": len(rows), "page": page,
-                "pages": pages, "query": query}
+                "pages": pages, "query": query, "sort": f.get("sort"),
+                "query_nosort": urlencode([(k, v) for k, v in items if k != "sort"]),
+                "chips": _chips(request, f)}
+
+    def _chips(request: Request, f: dict) -> list[tuple[str, str]]:
+        """Активные фильтры «плашками»: (подпись, ссылка без этого фильтра)."""
+        names = _branch_names()
+        labels = {
+            "nosology": lambda v: registry.profile(v)["name"], "stage": lambda v: "стадия " + v.replace(":", " "),
+            "status": lambda v: i18n.label("status_last_contact", v), "branch": lambda v: names.get(v, v),
+            "year_from": lambda v: f"диагноз с {v}", "year_to": lambda v: f"диагноз по {v}",
+            "sex": lambda v: i18n.label("sex", v), "provenance": lambda v: i18n.label("provenance", v),
+            "completeness": lambda v: {"complete": "полно", "gaps": "есть пропуски"}[v],
+            "has": lambda v: "есть: " + investigations.kind_label(v),
+        }
+        items = [(k, v) for k, v in request.query_params.multi_items() if v and k not in ("page", "sort")]
+        chips = []
+        for k, v in items:
+            if k in labels and f.get(k) not in (None, ""):
+                rest = [(k2, v2) for k2, v2 in items if k2 != k and not (k == "nosology" and k2 == "stage")]
+                chips.append((labels[k](str(f[k])), request.url.path + ("?" + urlencode(rest) if rest else "")))
+        return chips
 
     @app.get("/patients", response_class=HTMLResponse)
     def patients(request: Request):
