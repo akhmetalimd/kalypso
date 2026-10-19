@@ -1,7 +1,7 @@
 """Формулы индексов нозологий на общей основе (registry_core), без БД."""
 import pytest
 
-from registry_core import (aa_ipi, bl_ipi, cns_ipi, ielsg, mskcc_pcnsl, ghsg_group, index_group, index_groups, ips, ipss_wm, malt_ipi, mipi_c, pink, pit,
+from registry_core import (aa_ipi, bl_ipi, clipi, cns_ipi, iscl_stage, ielsg, mskcc_pcnsl, ghsg_group, index_group, index_groups, ips, ipss_wm, malt_ipi, mipi_c, pink, pit,
                            ripss_wm, smipi)
 
 
@@ -173,4 +173,23 @@ def test_ielsg(args, score, group):
 def test_mskcc(age, kps, group):
     assert mskcc_pcnsl(age, kps)["group"] == group
     assert mskcc_pcnsl(60, None) is None
+
+
+# --- ГМ/СС: стадия по TNMB, CLIPi --------------------------------------------------
+@pytest.mark.parametrize("tnmb, stage", [
+    (("T1a", "N0", "M0", "B0"), "IA"), (("T2b", "N0", "M0", "B1"), "IB"), (("T1b", "N1", "M0", "B0"), "IIA"),
+    (("T3", "N2", "M0", "B0"), "IIB"), (("T4", "N0", "M0", "B0"), "IIIA"), (("T4", "N1", "M0", "B1"), "IIIB"),
+    (("T4", "N0", "M0", "B2"), "IVA1"), (("T2a", "N3", "M0", "B0"), "IVA2"), (("T1a", "N0", "M1", "B0"), "IVB"),
+    (("T1a", "Nx", "M0", "B0"), None),
+])
+def test_iscl_stage(tnmb, stage):
+    assert iscl_stage(*tnmb) == stage
+
+
+def test_clipi_early_and_late():
+    early = clipi("IA", True, 65, "T1b", "N0", "M0", "B0", False)
+    assert (early["score"], early["group"]) == (3, "high")              # мужчина, > 60, бляшки
+    late = clipi("IVA1", False, 50, "T4", "N1", "M0", "B2", None)
+    assert (late["score"], late["group"]) == (1, "low")                 # только B2
+    assert clipi("IB", True, 65, None, "N0", "M0", "B0", False) is None
 

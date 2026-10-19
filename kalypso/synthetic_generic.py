@@ -335,6 +335,33 @@ def _hgbl_fields(rng, ctx):
         "cns_involvement": "yes" if rng.random() < 0.08 else "no",
     }
 
+_MF_TNMB = {   # стадия -> варианты T, N, M, B (согласованные с ISCL/EORTC)
+    "IA": (("T1a", "T1b"), ("N0",), ("M0",), ("B0",)), "IB": (("T2a", "T2b"), ("N0",), ("M0",), ("B0",)),
+    "IIA": (("T1b", "T2b"), ("N1", "N2"), ("M0",), ("B0",)), "IIB": (("T3",), ("N0", "N1"), ("M0",), ("B0",)),
+    "IIIA": (("T4",), ("N0",), ("M0",), ("B0",)), "IIIB": (("T4",), ("N0", "N1"), ("M0",), ("B1",)),
+    "IVA1": (("T4", "T3"), ("N0", "N1"), ("M0",), ("B2",)), "IVA2": (("T3", "T4"), ("N3",), ("M0",), ("B0", "B1")),
+    "IVB": (("T3", "T4"), ("N1", "N2"), ("M1",), ("B0", "B2")),
+}
+
+
+def _mf_fields(rng, ctx):
+    t, n, m, b = (rng.choice(opts) for opts in _MF_TNMB[ctx["stage"]])
+    return {"t_cat": t, "n_cat": n, "m_cat": m, "b_cat": b,
+            "lct": "yes" if rng.random() < (0.25 if ctx["stage"] >= "IIB" else 0.03) else "no",
+            "folliculotropic": "yes" if rng.random() < 0.15 else "no"}
+
+
+def _mf_first(rng, ctx, f):
+    if ctx["stage"] in ("IA", "IB", "IIA"):
+        return pick(rng, {("Топические кортикостероиды", "клобетазол", None): 35, ("ПУВА-терапия", "ПУВА", None): 35,
+                          ("UVB-311 нм", "узкополосная UVB", None): 30})
+    if f["b_cat"] == "B2":
+        return pick(rng, {("Экстракорпоральный фотоферез", "ЭКФ", None): 40, ("Могамулизумаб", "могамулизумаб", None): 40,
+                          ("Бексаротен", "бексаротен", None): 20})
+    return pick(rng, {("Бексаротен", "бексаротен", None): 25, ("Интерферон-α", "интерферон-α", None): 20,
+                      ("Брентуксимаб ведотин", "брентуксимаб ведотин", 8): 20, ("Могамулизумаб", "могамулизумаб", None): 15,
+                      ("Тотальное облучение кожи электронами (TSEBT)", "TSEBT", None): 20})
+
 SPECS = {
     "mcl": {
         "age": (67, 9, 38, 90), "male": 0.75, "watch": 0.08,
@@ -568,5 +595,21 @@ SPECS = {
         "relapse_months": (36, 120), "partial_progress": 0.6, "partial_months": (24, 72), "death_progressive": 0.15,
         "histology": lambda rng, f: ("Трепанобиопсия: интерстициальная инфильтрация клетками с «яичницей-глазуньей», ретикулиновый "
                                      "фиброз. Иммунофенотип: CD19+, CD11c+, CD25+, CD103+, CD123+, аннексин A1+. Заключение: ВКЛ."),
+    },
+    "mf_ss": {
+        "age": (60, 13, 25, 90), "male": 0.6, "watch": 0.05,
+        "stage": {"IA": 25, "IB": 30, "IIA": 8, "IIB": 12, "IIIA": 5, "IIIB": 3, "IVA1": 9, "IVA2": 5, "IVB": 3},
+        "ecog": {0: 60, 1: 30, 2: 8, 3: 2},
+        "fields": _mf_fields, "first": _mf_first,
+        "labs": lambda rng, ctx, f: [("6690-2", round(rng.uniform(5, 30) if f["b_cat"] == "B2" else rng.uniform(4, 10), 1), "10*9/L"),
+                                     ("2532-0", rng.randint(150, 400), "U/L")],
+        "later": [("Метотрексат (низкие дозы)", "метотрексат 25 мг/нед", None), ("Могамулизумаб", "могамулизумаб", None),
+                  ("Брентуксимаб ведотин", "брентуксимаб ведотин", 8), ("Гемцитабин", "гемцитабин", 6),
+                  ("Локальная ЛТ", "ЛТ на очаги", None)],
+        "duration": (3, 9),
+        "p_complete": lambda risk: 0.45, "p_relapse": lambda risk: 0.65,
+        "relapse_months": (6, 48), "partial_progress": 0.6, "partial_months": (6, 36), "death_progressive": 0.25,
+        "histology": lambda rng, f: ("Биопсия кожи: эпидермотропный инфильтрат из атипичных лимфоцитов с церебриформными ядрами, "
+                                     "микроабсцессы Потрие. ИГХ: CD3+, CD4+, CD7-, CD8-. Заключение: грибовидный микоз."),
     },
 }

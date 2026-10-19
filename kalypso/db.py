@@ -58,6 +58,8 @@ _CONSTRAINT_MESSAGES = {
     "patient_index_ielsg": "IELSG: балл 0–5 и группа риска",
     "observation_response_ipcg": "Недопустимое значение ответа для IPCG",
     "observation_response_hcl": "Недопустимое значение ответа для критериев ВКЛ",
+    "observation_response_iscl": "Недопустимое значение ответа для ISCL 2011",
+    "patient_stage_iscl": "Стадия ISCL/EORTC: IA, IB, IIA, IIB, IIIA, IIIB, IVA1, IVA2 или IVB",
     "observation_response_iwwm": "Недопустимое значение ответа для IWWM-11",
     "patient_index_name": "Неизвестный прогностический индекс",
     "observation_lugano_basis": "Lugano 2014: по ПЭТ-КТ — метаболический ответ (CMR/PMR/NMR/PMD), иначе — CR/PR/SD/PD",

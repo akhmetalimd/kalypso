@@ -203,6 +203,13 @@ def _nlpbcl(pt, mm, labs, age):
     return [ix for ix in _hodgkin(pt, mm, labs, age) if ix["name"] == "GHSG"]   # индекса карточки нет
 
 
+def _mf(pt, mm, labs, age):
+    stage = pt["stage_value"] if pt["stage_system"] == "ISCL/EORTC" else None
+    return [_ix("CLIPi", core.clipi(stage, {"M": True, "F": False}.get(pt.get("sex")), age, mm.get("t_cat"),
+                                    mm.get("n_cat"), mm.get("m_cat"), mm.get("b_cat"), _yes_no(mm.get("folliculotropic"))),
+                "стадия ISCL/EORTC, пол, возраст, категории TNMB, фолликулотропный вариант")]
+
+
 # нозология -> (функция расчёта, названия индексов в порядке вывода; первый — индекс карточки)
 CALCULATORS = {
     "cll_sll": (_cll, ("CLL-IPI",)),
@@ -219,6 +226,7 @@ CALCULATORS = {
     "pcnsl": (_pcnsl, ("IELSG", "MSKCC")),
     "nlpbcl": (_nlpbcl, ("GHSG",)),
     "hcl": (lambda pt, mm, labs, age: [], ()),                  # прогностического индекса нет
+    "mf_ss": (_mf, ("CLIPi",)),
 }
 
 
@@ -246,6 +254,10 @@ def module_quality(pt: dict, mm: dict[str, str]) -> list[str]:
         return ["burkitt_no_myc"]
     if pt["who_haem5"] == "hcl" and mm.get("hcl_variant") == "yes":
         return ["hcl_variant"]
+    if pt["who_haem5"] == "mf_ss" and pt["stage_system"] == "ISCL/EORTC":
+        by_tnmb = core.iscl_stage(mm.get("t_cat"), mm.get("n_cat"), mm.get("m_cat"), mm.get("b_cat"))
+        if by_tnmb and by_tnmb != pt["stage_value"]:
+            return ["mf_stage_tnmb_mismatch"]
     return []
 
 
@@ -320,7 +332,16 @@ def _nlpbcl_info(pt, mm, lines, observations, markers):
     return info
 
 
-INFO = {"nlpbcl": _nlpbcl_info, "follicular": _fl_info, "mcl": _mcl_info, "mzl": _mzl_info, "hgbl": _hgbl_info, "burkitt": _burkitt_info}
+def _mf_info(pt, mm, lines, observations, markers):
+    info = []
+    if mm.get("lct") == "yes":
+        info.append({"title": "Крупноклеточная трансформация", "warn": True, "text": "неблагоприятный прогноз — системная терапия"})
+    if mm.get("b_cat") == "B2":
+        info.append({"title": "B2 (≥ 1000 клеток Сезари/мкл)", "warn": False, "text": "соответствует синдрому Сезари при эритродермии"})
+    return info
+
+
+INFO = {"mf_ss": _mf_info, "nlpbcl": _nlpbcl_info, "follicular": _fl_info, "mcl": _mcl_info, "mzl": _mzl_info, "hgbl": _hgbl_info, "burkitt": _burkitt_info}
 
 
 def module_info(pt: dict, mm: dict[str, str], lines: list[dict], observations: list[dict],

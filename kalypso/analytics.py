@@ -460,7 +460,8 @@ RESPONSE_GROUPS["follicular"] = RESPONSE_GROUPS["dlbcl"]    # тоже Lugano 20
 RESPONSE_GROUPS_BY_CRITERIA = {"iwCLL 2018": RESPONSE_GROUPS["cll_sll"], "Lugano 2014": RESPONSE_GROUPS["dlbcl"],
                                "IWWM-11": [("CR", "CR / VGPR"), ("PR", "PR"), ("MR", "MR"), ("SD", "SD"), ("PD", "PD")],
                                "IPCG": [("CR", "CR / CRu"), ("PR", "PR"), ("SD", "SD"), ("PD", "PD")],
-                               "HCL 2017": [("CR", "CR"), ("PR", "PR"), ("SD", "SD"), ("PD", "PD")]}
+                               "HCL 2017": [("CR", "CR"), ("PR", "PR"), ("SD", "SD"), ("PD", "PD")],
+                               "ISCL 2011": [("CR", "CR"), ("PR", "PR"), ("SD", "SD"), ("PD", "PD")]}
 
 
 def response_groups(nosology: str) -> list:

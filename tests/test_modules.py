@@ -128,6 +128,15 @@ CASES = {
         "stored": None, "bad_score": None, "db": None,
         "optional": ["splenomegaly"],
     },
+    # Стадия IB (T2b N0 M0 B0), мужчина 71 год, бляшки, фолликулотропный: CLIPi 4 (высокий), ранняя стадия.
+    "mf_ss": {
+        "form": {"birth_date": "1950-02-01", "stage_system": "ISCL/EORTC", "stage_value": "IB", "ecog": "0"},
+        "fields": {"t_cat": "T2b", "n_cat": "N0", "m_cat": "M0", "b_cat": "B0", "lct": "no", "folliculotropic": "yes"},
+        "labs": [],
+        "expected": {"CLIPi": (4, "high")},
+        "stored": None, "bad_score": None, "db": None,
+        "optional": [],
+    },
 }
 NOSOLOGIES = list(CASES)
 
@@ -385,4 +394,22 @@ def test_hcl_variant_flag_and_response(world):
                                                                 "response_value": "CR", "response_basis": "morphology"}).record_id
     assert registry.get_record(world.db, world.doc_a, pid, "observation", oid)["response_criteria"] == "HCL 2017"
     assert analytics.response_groups("hcl")[0] == ("CR", "CR")
+
+
+def test_mf_staging_and_tnmb_check(world):
+    with pytest.raises(ValidationError, match="Стадия по ISCL/EORTC"):
+        register(world, "mf_ss", stage_value="IV")
+    pid = register(world, "mf_ss", stage_value="IA")
+    fill(world, "mf_ss", pid)                                       # TNMB даёт IB
+    card = registry.get_card(world.db, world.doc_a, pid)
+    assert "mf_stage_tnmb_mismatch" in card["flags"]["quality"]
+    fill(world, "mf_ss", pid, {"b_cat": "B2", "lct": "yes"}, test_date="2021-03-20")
+    titles = {i["title"] for i in registry.get_card(world.db, world.doc_a, pid)["module_info"]}
+    assert titles == {"Крупноклеточная трансформация", "B2 (≥ 1000 клеток Сезари/мкл)"}
+
+
+def test_db_iscl_stage(reg):
+    with rejected(reg.con, "stage_iscl"):
+        reg.patient("990000000904", who_haem5="mf_ss", icd_o_3_2="9700/3", mkb="C84.0",
+                    stage_system="ISCL/EORTC", stage_value="IIC")
 

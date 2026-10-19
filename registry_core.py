@@ -491,6 +491,7 @@ INDEXES = {
     "BL-IPI": {"max": 4, "groups": ((0, "low"), (1, "intermediate"), (4, "high"))},
     "IELSG": {"max": 5, "groups": ((1, "low"), (3, "intermediate"), (5, "high"))},
     "MSKCC": {"max": 2, "groups": ((0, "low"), (1, "intermediate"), (2, "high"))},
+    "CLIPi": {"max": 5, "groups": ((1, "low"), (2, "intermediate"), (5, "high"))},
 }
 LDH_CATEGORIES = ("le_uln", "uln_1_3", "gt_3_uln")   # ЛДГ: ≤ ВГН, > 1–3 × ВГН, > 3 × ВГН
 RESPONSES = {
@@ -499,6 +500,7 @@ RESPONSES = {
     "IWWM-11": ("CR", "VGPR", "PR", "MR", "SD", "PD"),
     "IPCG": ("CR", "CRu", "PR", "SD", "PD"),
     "HCL 2017": ("CR", "PR", "SD", "PD"),          # консенсус по ВКЛ (Grever, 2017): кровь и костный мозг
+    "ISCL 2011": ("CR", "PR", "SD", "PD"),         # глобальный ответ при ГМ/СС (Olsen, 2011)
 }
 LUGANO_METABOLIC = ("CMR", "PMR", "NMR", "PMD")      # ответ по ПЭТ-КТ (Deauville обязателен)
 
@@ -938,6 +940,54 @@ def mskcc_pcnsl(age: Optional[float], kps_ge70: Optional[bool]) -> Optional[dict
     return {"score": score, "group": index_group("MSKCC", score), "components": {"class": score + 1}}
 
 
+# ---------------------------------------------------------------------------
+# 16. Грибовидный микоз / синдром Сезари: стадия ISCL/EORTC по TNMB, CLIPi
+# ---------------------------------------------------------------------------
+ISCL_STAGES = ("IA", "IB", "IIA", "IIB", "IIIA", "IIIB", "IVA1", "IVA2", "IVB")
+
+
+def iscl_stage(t: Optional[str], n: Optional[str], m: Optional[str], b: Optional[str]) -> Optional[str]:
+    """Стадия ISCL/EORTC (Olsen, 2007) по категориям TNMB; None — категории неполны или Nx."""
+    if not all((t, n, m, b)) or n == "Nx":
+        return None
+    t1, nn, bb = t[:2], int(n[1]), int(b[1])
+    if m == "M1":
+        return "IVB"
+    if nn == 3:
+        return "IVA2"
+    if bb == 2:
+        return "IVA1"
+    if t1 == "T4":
+        return "IIIB" if bb == 1 else "IIIA"
+    if t1 == "T3":
+        return "IIB"
+    if nn in (1, 2):
+        return "IIA"
+    return "IA" if t1 == "T1" else "IB"
+
+
+def clipi(stage: Optional[str], male: Optional[bool], age: Optional[float], t: Optional[str], n: Optional[str],
+          m: Optional[str], b: Optional[str], folliculotropic: Optional[bool]) -> Optional[dict]:
+    """CLIPi (Benton, 2013), по 1 баллу. Ранние стадии (IA–IIA): мужской пол, возраст > 60, бляшки
+    (T1b/T2b), фолликулотропный вариант, N1/Nx. Поздние (IIB–IVB): мужской пол, возраст > 60,
+    B1/B2, N2/N3, висцеральное поражение. 0–1 низкий, 2 промежуточный, 3–5 высокий."""
+    if stage not in ISCL_STAGES or male is None or age is None:
+        return None
+    early = ISCL_STAGES.index(stage) <= ISCL_STAGES.index("IIA")
+    if early:
+        if t is None or n is None or folliculotropic is None:
+            return None
+        parts = {"male": int(male), "age": int(age > 60), "plaque": int(t in ("T1b", "T2b")),
+                 "follicular": int(folliculotropic), "N1/Nx": int(n in ("N1", "Nx"))}
+    else:
+        if b is None or n is None or m is None:
+            return None
+        parts = {"male": int(male), "age": int(age > 60), "B1/B2": int(b in ("B1", "B2")),
+                 "N2/N3": int(n in ("N2", "N3")), "visceral": int(m == "M1")}
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("CLIPi", score), "components": parts}
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -984,6 +1034,7 @@ if __name__ == "__main__":
     assert aa_ipi(2, True, "uln_1_3")["group"] == "high"
     assert bl_ipi(45, 2, "gt_3_uln", True)["score"] == 4 and bl_ipi(45, 0, "uln_1_3", False)["score"] == 1
     assert ielsg(65, 2, "uln_1_3", True, True)["group"] == "high" and mskcc_pcnsl(40, None)["group"] == "low"
+    assert iscl_stage("T2b", "N0", "M0", "B0") == "IB" and iscl_stage("T4", "N3", "M0", "B1") == "IVA2"
     try:
         kaplan_meier([-1], [1])
         raise AssertionError("отрицательное время должно отвергаться")
