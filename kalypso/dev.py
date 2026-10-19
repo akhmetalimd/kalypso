@@ -73,7 +73,8 @@ def seed_if_empty(db: Database) -> dict | None:
     for part in summary.values():
         part.pop("iins")  # синтетические ИИН в консоль не печатаем
     with db.tx(curator.user_id) as cur:     # dev-БД, созданная до раздела исследований
-        cur.execute("SELECT count(*) AS n FROM investigation")
+        # вирусные записи могли появиться переносом полей модулей (миграция 0018) — их не считаем
+        cur.execute("SELECT count(*) AS n FROM investigation WHERE kind <> 'virology'")
         no_inv = cur.fetchone()["n"] == 0
     if no_inv:
         from kalypso import synthetic_inv
