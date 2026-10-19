@@ -165,10 +165,12 @@ def groups(res):
 
 
 def test_dlbcl_grouping_narrows_cohort(world, mixed):
+    # IPI в карточке — у ДВКЛ и ПТКЛ: без фильтра когорта ограничена ими (здесь только ДВКЛ), ХЛЛ не входит.
     res = analytics.explore(world.db, world.curator, "OS", grouping="ipi")
-    assert res["nosology"] == "dlbcl" and res["n_cohort"] == 2
+    assert res["nosology"] is None and res["n_cohort"] == 2
     assert groups(res) == {"Высокий": (1, 1), "Низкий": (1, 0)}
-    assert any("сужена" in n for n in res["notes"])
+    only = analytics.explore(world.db, world.curator, "OS", grouping="r_ipi")   # только у ДВКЛ — сужает
+    assert only["nosology"] == "dlbcl" and any("сужена" in n for n in only["notes"])
     mixed_res = analytics.explore(world.db, world.curator, "OS")
     assert mixed_res["n_cohort"] == 3 and any("несколько нозологий" in n for n in mixed_res["notes"])
     assert analytics.explore(world.db, world.curator, "OS", grouping="IGHV")["nosology"] == "cll_sll"
