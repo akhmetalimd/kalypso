@@ -470,4 +470,31 @@ SPECS = {
                                      "ИГХ: CD20+, CD23+, CD30 слабо+, PD-L1+, MAL+. "
                                      "Заключение: первичная медиастинальная B-клеточная лимфома."),
     },
+    "burkitt": {
+        "age": (33, 16, 18, 80), "male": 0.75, "watch": 0.0,
+        "stage": {"I": 8, "IE": 7, "II": 10, "IIE": 10, "III": 10, "IV": 55},
+        "ecog": {0: 25, 1: 35, 2: 25, 3: 12, 4: 3},
+        "fields": lambda rng, ctx: {
+            "myc_ig": _maybe(rng, "detected" if rng.random() < 0.95 else "not_detected", 0.06),
+            "ldh_uln": _maybe(rng, pick(rng, {"le_uln": 15, "uln_1_3": 45, "gt_3_uln": 40})),
+            "cns_involvement": "yes" if rng.random() < 0.12 else "no",
+            "bm_involvement": "yes" if ctx["stage"] == "IV" and rng.random() < 0.45 else "no",
+            "hiv": _maybe(rng, "detected" if rng.random() < 0.2 else "not_detected", 0.08),
+            "ebv": "detected" if rng.random() < 0.3 else None,
+        },
+        "labs": lambda rng, ctx, f: [("2532-0", rng.randint(*{"le_uln": (140, 245), "uln_1_3": (260, 740),
+                                                              "gt_3_uln": (760, 3000)}.get(f["ldh_uln"], (300, 900))), "U/L"),
+                                     ("3084-1", rng.randint(250, 600), "umol/L")],
+        "first": lambda rng, ctx, f: (("DA-EPOCH-R", "дозоадаптированный EPOCH, ритуксимаб", 6) if ctx["age"] >= 60 else pick(rng, {
+            ("R-CODOX-M / R-IVAC", "R-CODOX-M, R-IVAC", 4): 45, ("DA-EPOCH-R", "дозоадаптированный EPOCH, ритуксимаб", 6): 30,
+            ("R-hyper-CVAD / R-MA", "hyper-CVAD, метотрексат, цитарабин, ритуксимаб", 8): 15,
+            ("GMALL-B-ALL/NHL", "протокол GMALL", 6): 10})),
+        "duration": (3, 5),
+        "later": [("R-ICE", "ритуксимаб, ифосфамид, карбоплатин, этопозид", 3), ("ВДХТ + аутоТГСК", "ВДХТ (BEAM), аутоТГСК", 1),
+                  ("CAR-T", "CAR-T (в исследовании)", 1)],
+        "p_complete": lambda risk: 0.88 - 0.4 * risk, "p_relapse": lambda risk: 0.08 + 0.2 * risk,
+        "relapse_months": (2, 12), "death_progressive": 0.85,
+        "histology": lambda rng, f: ("Биопсия: монотонная пролиферация средних клеток, «звёздное небо». ИГХ: CD20+, CD10+, "
+                                     "BCL6+, BCL2-, TdT-. Ki-67 > 95 %. Заключение: лимфома Бёркитта."),
+    },
 }

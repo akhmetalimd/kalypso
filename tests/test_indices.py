@@ -1,7 +1,7 @@
 """Формулы индексов нозологий на общей основе (registry_core), без БД."""
 import pytest
 
-from registry_core import (aa_ipi, cns_ipi, ghsg_group, index_group, index_groups, ips, ipss_wm, malt_ipi, mipi_c, pink, pit,
+from registry_core import (aa_ipi, bl_ipi, cns_ipi, ghsg_group, index_group, index_groups, ips, ipss_wm, malt_ipi, mipi_c, pink, pit,
                            ripss_wm, smipi)
 
 
@@ -147,4 +147,14 @@ def test_cns_ipi(args, score, group):
 def test_aa_ipi(args, group):
     assert aa_ipi(*args)["group"] == group
     assert aa_ipi(None, True, "le_uln") is None
+
+
+# --- Бёркитт: BL-IPI -------------------------------------------------------------
+@pytest.mark.parametrize("args, score, group", [
+    ((39, 1, "uln_1_3", False), 0, "low"), ((40, 1, "uln_1_3", False), 1, "intermediate"),
+    ((40, 1, "gt_3_uln", False), 2, "high"), ((40, 2, "gt_3_uln", True), 4, "high"),
+])
+def test_bl_ipi(args, score, group):
+    r = bl_ipi(*args)
+    assert (r["score"], r["group"]) == (score, group)
 

@@ -185,6 +185,11 @@ def _pmbcl(pt, mm, labs, age):
                 "стадия Lugano, ЛДГ, ECOG", stored=True)]
 
 
+def _burkitt(pt, mm, labs, age):
+    return [_ix("BL-IPI", core.bl_ipi(age, pt["ecog"], _ldh(mm.get("ldh_uln")), _yes_no(mm.get("cns_involvement"))),
+                "возраст, ECOG, ЛДГ (> 3 × ВГН), поражение ЦНС", stored=True)]
+
+
 # нозология -> (функция расчёта, названия индексов в порядке вывода; первый — индекс карточки)
 CALCULATORS = {
     "cll_sll": (_cll, ("CLL-IPI",)),
@@ -197,6 +202,7 @@ CALCULATORS = {
     "ptcl": (_ptcl, ("IPI", "PIT", "PINK")),
     "hgbl": (_hgbl, ("IPI", "CNS-IPI")),
     "pmbcl": (_pmbcl, ("aaIPI",)),
+    "burkitt": (_burkitt, ("BL-IPI",)),
 }
 
 
@@ -220,6 +226,8 @@ def module_quality(pt: dict, mm: dict[str, str]) -> list[str]:
     if pt["who_haem5"] == "hgbl" and mm.get("hgbl_subtype") == "myc_bcl2" and not (
             mm.get("myc_r") == "detected" and mm.get("bcl2_r") == "detected"):
         return ["hgbl_myc_bcl2_unconfirmed"]
+    if pt["who_haem5"] == "burkitt" and mm.get("myc_ig") == "not_detected":
+        return ["burkitt_no_myc"]
     return []
 
 
@@ -274,7 +282,16 @@ def _hgbl_info(pt, mm, lines, observations, markers):
     return info
 
 
-INFO = {"follicular": _fl_info, "mcl": _mcl_info, "mzl": _mzl_info, "hgbl": _hgbl_info}
+def _burkitt_info(pt, mm, lines, observations, markers):
+    info = []
+    if mm.get("hiv") == "detected":
+        info.append({"title": "ВИЧ+", "warn": True, "text": "ВИЧ-ассоциированная ЛБ — АРВТ вместе с химиотерапией"})
+    if mm.get("cns_involvement") == "yes":
+        info.append({"title": "Поражение ЦНС", "warn": True, "text": "режим с высокими дозами метотрексата и цитарабина"})
+    return info
+
+
+INFO = {"follicular": _fl_info, "mcl": _mcl_info, "mzl": _mzl_info, "hgbl": _hgbl_info, "burkitt": _burkitt_info}
 
 
 def module_info(pt: dict, mm: dict[str, str], lines: list[dict], observations: list[dict],

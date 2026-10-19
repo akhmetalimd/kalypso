@@ -216,7 +216,8 @@
     "missing_response_line_any": "Нет оценки ответа по завершённой линии",
     "dlbcl_myc_bcl2": "Перестройки MYC и BCL2: по WHO-HAEM5 это DLBCL/HGBL-MYC/BCL2 — проверьте диагноз (в регистре — нозология HGBL)",
     "fl_grade_3b": "Грейд 3B: по ICC — FL 3B, по WHO-HAEM5 ближе к ДВКЛ — проверьте диагноз",
-    "hgbl_myc_bcl2_unconfirmed": "Подтип DLBCL/HGBL-MYC/BCL2 без подтверждённых по FISH перестроек MYC и BCL2"
+    "hgbl_myc_bcl2_unconfirmed": "Подтип DLBCL/HGBL-MYC/BCL2 без подтверждённых по FISH перестроек MYC и BCL2",
+    "burkitt_no_myc": "Без перестройки IG-MYC диагноз лимфомы Бёркитта сомнителен (HGBL или ЛБ-подобная лимфома с аберрацией 11q) — проверьте диагноз"
   },
   "msg": {
     "created": "Пациент внесён в регистр",

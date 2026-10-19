@@ -88,6 +88,16 @@ CASES = {
         "stored": "3", "bad_score": "4", "db": ("aaIPI", 4, "high", "index_aa_ipi"),
         "optional": ["svc_syndrome"],
     },
+    # 31 год, ECOG 2, ЛДГ > 3 × ВГН, ЦНС: BL-IPI 3 (высокий; возраст < 40 — 0).
+    "burkitt": {
+        "form": {"birth_date": "1990-02-01", "stage_system": "Lugano", "stage_value": "IV", "ecog": "2"},
+        "fields": {"myc_ig": "detected", "ldh_uln": "gt_3_uln", "cns_involvement": "yes", "bm_involvement": "yes",
+                   "hiv": "not_detected"},
+        "labs": [],
+        "expected": {"BL-IPI": (3, "high")},
+        "stored": "3", "bad_score": "5", "db": ("BL-IPI", 5, "high", "index_bl_ipi"),
+        "optional": ["ebv"],
+    },
 }
 NOSOLOGIES = list(CASES)
 
@@ -292,4 +302,12 @@ def test_hgbl_subtype_check_and_cns_panels(world):
     fill(world, "hgbl", pid, {"myc_r": "detected"}, test_date="2021-03-20")
     card = registry.get_card(world.db, world.doc_a, pid)
     assert "hgbl_myc_bcl2_unconfirmed" not in card["flags"]["quality"]
+
+
+def test_burkitt_myc_check_and_hiv_panel(world):
+    pid = register(world, "burkitt")
+    fill(world, "burkitt", pid, {**CASES["burkitt"]["fields"], "myc_ig": "not_detected", "hiv": "detected"})
+    card = registry.get_card(world.db, world.doc_a, pid)
+    assert "burkitt_no_myc" in card["flags"]["quality"]
+    assert {i["title"] for i in card["module_info"]} == {"ВИЧ+", "Поражение ЦНС"}
 

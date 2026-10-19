@@ -488,6 +488,7 @@ INDEXES = {
     "PINK": {"max": 4, "groups": ((0, "low"), (1, "intermediate"), (4, "high"))},
     "CNS-IPI": {"max": 6, "groups": ((1, "low"), (3, "intermediate"), (6, "high"))},
     "aaIPI": {"max": 3, "groups": ((0, "low"), (1, "low_intermediate"), (2, "high_intermediate"), (3, "high"))},
+    "BL-IPI": {"max": 4, "groups": ((0, "low"), (1, "intermediate"), (4, "high"))},
 }
 LDH_CATEGORIES = ("le_uln", "uln_1_3", "gt_3_uln")   # ЛДГ: ≤ ВГН, > 1–3 × ВГН, > 3 × ВГН
 RESPONSES = {
@@ -884,6 +885,21 @@ def aa_ipi(ecog: Optional[int], advanced: Optional[bool], ldh: Optional[str]) ->
     return {"score": score, "group": index_group("aaIPI", score), "components": parts}
 
 
+def bl_ipi(age: Optional[float], ecog: Optional[int], ldh: Optional[str], cns: Optional[bool]) -> Optional[dict]:
+    """BL-IPI (Olszewski, 2021), по 1 баллу: возраст ≥ 40, ECOG ≥ 2, ЛДГ > 3 × ВГН, поражение ЦНС.
+    0 низкий, 1 промежуточный, ≥ 2 высокий."""
+    parts = {
+        "age": None if age is None else int(age >= 40),
+        "ECOG": None if ecog is None else int(ecog >= 2),
+        "LDH": None if ldh not in LDH_CATEGORIES else int(ldh == "gt_3_uln"),
+        "CNS": None if cns is None else int(cns),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("BL-IPI", score), "components": parts}
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -928,6 +944,7 @@ if __name__ == "__main__":
     assert pit(65, 2, "uln_1_3", True)["group"] == "high" and pink(50, False, False, False)["group"] == "low"
     assert cns_ipi(70, 2, True, "uln_1_3", True, True)["score"] == 6
     assert aa_ipi(2, True, "uln_1_3")["group"] == "high"
+    assert bl_ipi(45, 2, "gt_3_uln", True)["score"] == 4 and bl_ipi(45, 0, "uln_1_3", False)["score"] == 1
     try:
         kaplan_meier([-1], [1])
         raise AssertionError("отрицательное время должно отвергаться")

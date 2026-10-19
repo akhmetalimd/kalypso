@@ -106,6 +106,28 @@
           ]
         },
         {
+          "id": "burkitt",
+          "name": "Лимфома Бёркитта (ЛБ)",
+          "status": "active",
+          "module": "burkitt",
+          "codes": { "icd_o_3_2": "9687/3", "mkb10": "C83.7" },
+          "staging": ["Lugano"],
+          "stage_values": { "Lugano": ["I", "IE", "II", "IIE", "III", "IV"] },
+          "index": "BL-IPI",
+          "response_criteria": "Lugano 2014",
+          "markers": ["IG-MYC"],
+          "regimens": ["R-CODOX-M / R-IVAC", "DA-EPOCH-R", "R-hyper-CVAD / R-MA", "GMALL-B-ALL/NHL", "Профилактика ЦНС: интратекально",
+                       "R-ICE", "ВДХТ + аутоТГСК", "CAR-T"],
+          "core_fields": [
+            { "key": "myc_ig",          "label_ru": "Перестройка IG-MYC, FISH",   "values": ["detected", "not_detected"] },
+            { "key": "ldh_uln",         "label_ru": "ЛДГ относительно ВГН лаборатории", "values": ["le_uln", "uln_1_3", "gt_3_uln"] },
+            { "key": "cns_involvement", "label_ru": "Поражение ЦНС на диагнозе",  "values": ["yes", "no"] },
+            { "key": "bm_involvement",  "label_ru": "Поражение костного мозга",   "values": ["yes", "no"] },
+            { "key": "hiv",             "label_ru": "ВИЧ",                         "values": ["detected", "not_detected"] },
+            { "key": "ebv",             "label_ru": "EBV в опухоли (EBER)",        "values": ["detected", "not_detected"], "optional": true }
+          ]
+        },
+        {
           "id": "follicular",
           "name": "Фолликулярная лимфома (ФЛ)",
           "status": "active",
