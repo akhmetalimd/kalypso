@@ -17,6 +17,8 @@ import registry_core as core
 LOINC_B2M = "1952-1"
 LOINC_HB = "8302-2"
 LOINC_WBC = "6690-2"
+LOINC_LYMPH = "731-0"
+LOINC_ALBUMIN = "1751-7"
 
 
 # ---------------------------------------------------------------------------
@@ -119,12 +121,28 @@ def _mcl(pt, mm, labs, age):
     ]
 
 
+def _hodgkin(pt, mm, labs, age):
+    t0 = pt["dx_date"]
+    stage = pt["stage_value"] if pt["stage_system"] in ("Lugano", "Ann Arbor") else None
+    ips = core.ips(_lab_near(labs, LOINC_ALBUMIN, t0), _lab_near(labs, LOINC_HB, t0),
+                   {"M": True, "F": False}.get(pt.get("sex")), age, None if stage is None else stage == "IV",
+                   _lab_near(labs, LOINC_WBC, t0), _lab_near(labs, LOINC_LYMPH, t0))
+    ghsg = core.ghsg_group(stage, _yes_no(pt.get("b_symptoms")), _yes_no(mm.get("bulky_med")),
+                           _yes_no(mm.get("extranodal_hl")), _yes_no(mm.get("esr_raised")),
+                           _gt(mm.get("nodal_areas_hl"), "ge_3", "lt_3"))
+    return [
+        _ix("IPS", ips, "альбумин, Hb, лейкоциты, лимфоциты (анализы на диагнозе), пол, возраст, стадия", stored=True),
+        _ix("GHSG", ghsg, "стадия, B-симптомы, средостение, экстранодальное поражение, СОЭ, число зон"),
+    ]
+
+
 # нозология -> (функция расчёта, названия индексов в порядке вывода; первый — индекс карточки)
 CALCULATORS = {
     "cll_sll": (_cll, ("CLL-IPI",)),
     "dlbcl": (_dlbcl, ("IPI", "R-IPI", "NCCN-IPI")),
     "follicular": (_fl, ("FLIPI", "FLIPI-2", "PRIMA-PI")),
     "mcl": (_mcl, ("sMIPI", "MIPI-c")),
+    "hodgkin": (_hodgkin, ("IPS", "GHSG")),
 }
 
 

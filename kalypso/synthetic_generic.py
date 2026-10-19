@@ -100,6 +100,11 @@ def one_patient(db: Database, doc: Principal, rng: random.Random, nosology: str,
             break
         timeline.append(("line", {"regimen": name, "drug": drugs, "cycles": cycles, "start_date": _d(start),
                                   "end_date": _d(end), "stop_reason": "завершён план"}))
+        pet2 = start + _months(rng, 1.8, 2.5)
+        if i == 0 and spec.get("interim_pet") and pet2 < end and rng.random() < 0.8:   # ПЭТ-2 во время линии
+            ds = rng.choice([1, 2, 3, 3]) if rng.random() < p_complete else rng.choice([4, 4, 5])
+            timeline.append(("response", {"obs_date": _d(pet2), "line_no": 1, "deauville": ds,
+                                          "pet_ct_report": f"Промежуточная ПЭТ-КТ (ПЭТ-2): Deauville {ds}."}))
         r_date = end + _months(rng, 0.7, 2)
         if r_date > REFERENCE_DATE:
             break
@@ -215,6 +220,38 @@ def _mcl_first(rng, ctx, fields):
                       ("Ибрутиниб + ритуксимаб", "ибрутиниб, ритуксимаб", None): 10})
 
 
+def _hl_fields(rng, ctx):
+    adv = ctx["adv"]
+    return {
+        "hl_subtype": _maybe(rng, pick(rng, {"ns": 70, "mc": 20, "lr": 6, "ld": 4}), 0.06),
+        "bulky_med": "yes" if rng.random() < (0.35 if adv else 0.25) else "no",
+        "esr_raised": _maybe(rng, "yes" if rng.random() < (0.55 if adv else 0.35) else "no", 0.08),
+        "nodal_areas_hl": "ge_3" if rng.random() < (0.7 if adv else 0.4) else "lt_3",
+        "extranodal_hl": "yes" if ctx["stage"] in ("IE", "IIE") or (adv and rng.random() < 0.3) else "no",
+    }
+
+
+def _hl_labs(rng, ctx, fields):
+    adv = ctx["adv"]
+    wbc = round(rng.uniform(15, 22) if rng.random() < (0.2 if adv else 0.05) else rng.uniform(4.5, 14), 1)
+    lymph = round(rng.uniform(0.3, 0.59) if rng.random() < (0.25 if adv else 0.08) else rng.uniform(0.8, 3.0), 2)
+    return [("1751-7", round(rng.uniform(30, 39.5) if rng.random() < (0.4 if adv else 0.1) else rng.uniform(40, 48), 1), "g/L"),
+            ("8302-2", round(rng.uniform(90, 104) if rng.random() < (0.25 if adv else 0.05) else rng.uniform(106, 155)), "g/L"),
+            ("6690-2", wbc, "10*9/L"), ("731-0", lymph, "10*9/L")]
+
+
+def _hl_first(rng, ctx, fields):
+    if ctx["adv"]:
+        return pick(rng, {("BrECADD", "брентуксимаб, этопозид, циклофосфамид, доксорубицин, дакарбазин, дексаметазон", 6): 30,
+                          ("BEACOPP-esc", "блеомицин, этопозид, доксорубицин, циклофосфамид, винкристин, прокарбазин, преднизолон", 6): 25,
+                          ("ABVD", "доксорубицин, блеомицин, винбластин, дакарбазин", 6): 25,
+                          ("A-AVD", "брентуксимаб, доксорубицин, винбластин, дакарбазин", 6): 20})
+    unfav = any(fields.get(k) == "yes" for k in ("bulky_med", "esr_raised", "extranodal_hl")) or fields["nodal_areas_hl"] == "ge_3"
+    if unfav:
+        return pick(rng, {("ABVD + ЛТ", "ABVD ×4, ЛТ 30 Гр", 4): 60, ("BEACOPP-esc ×2 + ABVD ×2", "BEACOPP-esc, ABVD, ЛТ", 4): 40})
+    return ("ABVD + ЛТ", "ABVD ×2, ЛТ 20 Гр", 2)
+
+
 SPECS = {
     "mcl": {
         "age": (67, 9, 38, 90), "male": 0.75, "watch": 0.08,
@@ -230,5 +267,21 @@ SPECS = {
                                      f"с неправильными ядрами. ИГХ: CD20+, CD5+, cyclin D1+, SOX11+, CD23-. Ki-67 "
                                      f"{rng.randint(31, 70) if f.get('ki67') == 'ge_30' else rng.randint(5, 29)}%. "
                                      "Заключение: мантийноклеточная лимфома."),
+    },
+    "hodgkin": {
+        "age": (34, 15, 18, 80), "male": 0.55, "watch": 0.0, "interim_pet": True,
+        "stage": {"I": 6, "IE": 2, "II": 36, "IIE": 6, "III": 22, "IV": 28},
+        "ecog": {0: 60, 1: 30, 2: 8, 3: 2},
+        "b_symptoms": {"no": 60, "yes": 37, "unknown": 3},
+        "fields": _hl_fields, "labs": _hl_labs, "first": _hl_first,
+        "later": [("ICE + аутоТГСК", "ифосфамид, карбоплатин, этопозид, ВДХТ, аутоТГСК", 2),
+                  ("DHAP + аутоТГСК", "дексаметазон, цитарабин, цисплатин, ВДХТ, аутоТГСК", 2),
+                  ("Брентуксимаб ведотин", "брентуксимаб ведотин", 16), ("Ниволумаб", "ниволумаб", 12),
+                  ("Пембролизумаб", "пембролизумаб", 12)],
+        "p_complete": lambda risk: 0.92 - 0.25 * risk, "p_relapse": lambda risk: 0.08 + 0.2 * risk,
+        "relapse_months": (6, 48), "death_progressive": 0.3,
+        "histology": lambda rng, f: ("Биопсия лимфоузла: клетки Ходжкина и Рид–Штернберга на фоне реактивного "
+                                     "микроокружения. ИГХ: CD30+, CD15+, PAX5 слабо+, CD20-, CD45-. "
+                                     "Заключение: классическая лимфома Ходжкина."),
     },
 }

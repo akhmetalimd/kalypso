@@ -477,6 +477,8 @@ INDEXES = {
     "PRIMA-PI": {"max": 2, "groups": ((0, "low"), (1, "intermediate"), (2, "high"))},
     "sMIPI": {"max": 11, "groups": ((3, "low"), (5, "intermediate"), (11, "high"))},
     "MIPI-c": {"max": 3, "groups": ((0, "low"), (1, "low_intermediate"), (2, "high_intermediate"), (3, "high"))},
+    "IPS": {"max": 7, "groups": ((1, "low"), (3, "intermediate"), (7, "high"))},
+    "GHSG": {"max": 2, "groups": ((0, "early_favorable"), (1, "early_unfavorable"), (2, "advanced"))},
 }
 LDH_CATEGORIES = ("le_uln", "uln_1_3", "gt_3_uln")   # ЛДГ: ≤ ВГН, > 1–3 × ВГН, > 3 × ВГН
 RESPONSES = {
@@ -692,6 +694,60 @@ def mipi_c(mipi_group: Optional[str], ki67_ge30: Optional[bool]) -> Optional[dic
             "components": {"MIPI": order[mipi_group], "Ki67": int(ki67_ge30)}}
 
 
+# ---------------------------------------------------------------------------
+# 10. Классическая лимфома Ходжкина: группа GHSG, IPS
+# ---------------------------------------------------------------------------
+def ghsg_group(stage: Optional[str], b_symptoms: Optional[bool], bulky_mediastinum: Optional[bool],
+               extranodal: Optional[bool], esr_raised: Optional[bool], ge3_areas: Optional[bool]) -> Optional[dict]:
+    """Группа GHSG (стадия по Ann Arbor/Lugano + факторы риска: a — массивное средостение,
+    b — экстранодальное поражение, c — повышенная СОЭ, d — ≥ 3 зон лимфоузлов).
+    III–IV — распространённые; IIB с a или b — распространённые; I–II с любым фактором —
+    ранние неблагоприятные; без факторов — ранние благоприятные. Балл: 0 / 1 / 2."""
+    if not stage:
+        return None
+    roman = stage.rstrip("E")
+    extranodal = True if stage.endswith("E") else extranodal
+    parts = {"bulky": bulky_mediastinum, "E": extranodal, "ESR": esr_raised, "areas": ge3_areas}
+
+    def result(score):
+        return {"score": score, "group": index_group("GHSG", score),
+                "components": {k: int(v) for k, v in parts.items() if v is not None}}
+    if roman in ("III", "IV"):
+        return result(2)
+    if any(v is None for v in parts.values()):
+        return None
+    if roman == "II" and (bulky_mediastinum or extranodal):
+        if b_symptoms is None:
+            return None
+        if b_symptoms:
+            return result(2)
+    return result(1 if any(parts.values()) else 0)
+
+
+def ips(albumin_g_l: Optional[float], hb_g_l: Optional[float], male: Optional[bool], age: Optional[float],
+        stage_iv: Optional[bool], wbc_10e9_l: Optional[float], lymph_10e9_l: Optional[float]) -> Optional[dict]:
+    """IPS (Hasenclever, 1998), по 1 баллу: альбумин < 40 г/л, Hb < 105 г/л, мужской пол, возраст ≥ 45,
+    стадия IV, лейкоциты ≥ 15 ×10⁹/л, лимфоциты < 0,6 ×10⁹/л или < 8 % лейкоцитов.
+    Группы: 0–1 низкий, 2–3 промежуточный, 4–7 высокий."""
+    if lymph_10e9_l is None or wbc_10e9_l is None:
+        lymphopenia = None
+    else:
+        lymphopenia = lymph_10e9_l < 0.6 or (wbc_10e9_l > 0 and lymph_10e9_l / wbc_10e9_l * 100 < 8)
+    parts = {
+        "albumin": None if albumin_g_l is None else int(albumin_g_l < 40),
+        "Hb": None if hb_g_l is None else int(hb_g_l < 105),
+        "male": None if male is None else int(male),
+        "age": None if age is None else int(age >= 45),
+        "stage": None if stage_iv is None else int(stage_iv),
+        "WBC": None if wbc_10e9_l is None else int(wbc_10e9_l >= 15),
+        "lymph": None if lymphopenia is None else int(lymphopenia),
+    }
+    if any(v is None for v in parts.values()):
+        return None
+    score = sum(parts.values())
+    return {"score": score, "group": index_group("IPS", score), "components": parts}
+
+
 if __name__ == "__main__":
     # Быстрый самотест
     assert canonicalize_lab("8302-2", 14, "g/dL").value_canonical == 140.0
@@ -729,6 +785,8 @@ if __name__ == "__main__":
     assert check_response("Lugano 2014", "CMR", "pet_ct", 4) == ["deauville_mismatch"]
     assert flipi(65, True, 110, "uln_1_3", True)["group"] == "high" and prima_pi(3.5, False)["group"] == "high"
     assert smipi(72, 2, "ge_150", 16)["score"] == 11 and mipi_c("high", True)["group"] == "high"
+    assert ghsg_group("IV", None, None, None, None, None)["group"] == "advanced"
+    assert ips(35, 100, True, 50, True, 16, 0.5)["score"] == 7
     try:
         kaplan_meier([-1], [1])
         raise AssertionError("отрицательное время должно отвергаться")

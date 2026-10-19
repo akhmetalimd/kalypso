@@ -54,5 +54,10 @@
     "name": "Мочевая кислота",
     "canonical_unit": "umol/L",
     "conversions": { "umol/L": 1.0, "mg/dL": 59.48 }
+  },
+  "1751-7": {
+    "name": "Альбумин",
+    "canonical_unit": "g/L",
+    "conversions": { "g/L": 1.0, "g/dL": 10.0 }
   }
 }

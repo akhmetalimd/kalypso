@@ -8,6 +8,7 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
+from markupsafe import escape
 
 from conftest import TEST_PASSWORD, rejected
 from kalypso import analytics, registry, synthetic
@@ -27,6 +28,17 @@ CASES = {
         "expected": {"sMIPI": (9, "high"), "MIPI-c": (3, "high")},
         "stored": "9", "bad_score": "12", "db": ("sMIPI", 12, "high", "index_smipi"),
         "optional": ["leukemic_nn", "ccnd1_neg"],
+    },
+    # 31 год, мужчина, стадия IV; альбумин 35, Hb 100, лейкоциты 16, лимфоциты 0,5: IPS 1+1+1+0+1+1+1 = 6;
+    # стадия IV — GHSG «распространённые» (2) независимо от факторов.
+    "hodgkin": {
+        "form": {"birth_date": "1990-02-01", "stage_system": "Lugano", "stage_value": "IV", "ecog": "0"},
+        "fields": {"hl_subtype": "ns", "bulky_med": "yes", "esr_raised": "yes", "nodal_areas_hl": "ge_3",
+                   "extranodal_hl": "no"},
+        "labs": [("1751-7", "35", "g/L"), ("8302-2", "100", "g/L"), ("6690-2", "16", "10*9/L"), ("731-0", "0.5", "10*9/L")],
+        "expected": {"IPS": (6, "high"), "GHSG": (2, "advanced")},
+        "stored": "6", "bad_score": "8", "db": ("IPS", 9, "high", "index_ips"),
+        "optional": [],
     },
 }
 NOSOLOGIES = list(CASES)
@@ -126,7 +138,7 @@ def test_web_pages(app, world, nos):
     assert node["name"] in page and (node["index"] in page if node.get("index") else True)
     card = c.get(f"/patients/{pid}").text
     assert all(name in card for name in CASES[nos]["expected"])
-    assert all(f["label_ru"] in card for f in node["core_fields"])
+    assert all(str(escape(f["label_ru"])) in card for f in node["core_fields"])
     assert node["regimens"][0] in card
     for url in (f"/dashboard/m/{nos}", "/dashboard", f"/survival?nosology={nos}&grouping={analytics.GROUPING_SETS[nos][0]}"):
         r = c.get(url)
@@ -142,3 +154,20 @@ def test_mcl_high_risk_panel(world):
     fill(world, "mcl", pid, {"tp53_mcl": "detected", "blastoid": "yes"})
     [info] = registry.get_card(world.db, world.doc_a, pid)["module_info"]
     assert info["warn"] and "TP53" in info["text"] and "бластоидный" in info["text"]
+
+
+def test_hodgkin_early_stage_ghsg_and_pet2_landmark(world):
+    pid = register(world, "hodgkin", stage_value="II", b_symptoms="no", last_contact_date="2024-06-01")
+    fill(world, "hodgkin", pid, {"hl_subtype": "ns", "bulky_med": "no", "esr_raised": "no",
+                                 "nodal_areas_hl": "lt_3", "extranodal_hl": "no"})
+    ghsg = next(i for i in registry.get_card(world.db, world.doc_a, pid)["indices"] if i["name"] == "GHSG")
+    assert ghsg["result"]["group"] == "early_favorable"
+    lid = registry.add_line(world.db, world.doc_a, pid, {**R, "regimen": "ABVD + ЛТ", "start_date": "2021-03-15",
+                                                         "end_date": "2021-07-15"}).record_id
+    registry.add_observation(world.db, world.doc_a, pid, {**R, "obs_date": "2021-05-10", "line_id": str(lid),
+                                                          "pet_ct_report": "ПЭТ-2: Deauville 2", "deauville": "2"})
+    res = analytics.explore(world.db, world.curator, "PFS", grouping="deauville_pet2")
+    assert res["nosology"] == "hodgkin" and {g["label"] for g in res["groups"]} == {"ПЭТ-2: Deauville 1–3"}
+    row = res["rows"][0]
+    assert str(row["start"]) == "2021-05-10"                                  # отсчёт от ПЭТ-2
+

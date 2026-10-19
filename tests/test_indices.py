@@ -1,7 +1,7 @@
 """Формулы индексов нозологий на общей основе (registry_core), без БД."""
 import pytest
 
-from registry_core import mipi_c, smipi
+from registry_core import ghsg_group, ips, mipi_c, smipi
 
 
 # --- MCL ---------------------------------------------------------------------
@@ -33,3 +33,36 @@ def test_smipi_needs_all(missing):
 def test_mipi_c(group, ki67, expected):
     assert mipi_c(group, ki67)["group"] == expected
     assert mipi_c(group, None) is None and mipi_c(None, True) is None
+
+
+# --- лимфома Ходжкина ------------------------------------------------------------
+@pytest.mark.parametrize("args, group", [
+    (("I", False, False, False, False, False), "early_favorable"),
+    (("II", False, False, False, True, False), "early_unfavorable"),       # только СОЭ
+    (("IE", False, False, None, False, False), "early_unfavorable"),       # E из стадии
+    (("II", True, True, False, False, False), "advanced"),                 # IIB + массивное средостение
+    (("II", False, True, False, False, False), "early_unfavorable"),       # IIA + массивное средостение
+    (("II", True, False, False, True, True), "early_unfavorable"),         # IIB + СОЭ, ≥ 3 зон (c, d)
+    (("III", None, None, None, None, None), "advanced"),
+])
+def test_ghsg(args, group):
+    assert ghsg_group(*args)["group"] == group
+
+
+def test_ghsg_needs_data():
+    assert ghsg_group("II", None, True, False, False, False) is None      # IIA или IIB — неизвестно
+    assert ghsg_group("I", False, None, False, False, False) is None
+    assert ghsg_group(None, False, False, False, False, False) is None
+
+
+@pytest.mark.parametrize("args, score, group", [
+    ((45, 140, False, 30, False, 7, 2.0), 0, "low"),
+    ((39, 140, True, 50, False, 7, 2.0), 3, "intermediate"),              # альбумин, пол, возраст
+    ((39, 104, True, 50, True, 15, 0.59), 7, "high"),
+    ((45, 140, False, 30, False, 20, 1.5), 2, "intermediate"),            # лейкоциты ≥ 15, лимфоциты 7,5 % < 8 %
+])
+def test_ips(args, score, group):
+    r = ips(*args)
+    assert (r["score"], r["group"]) == (score, group)
+    assert ips(None, 140, False, 30, False, 7, 2.0) is None
+

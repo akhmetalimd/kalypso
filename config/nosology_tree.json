@@ -167,14 +167,31 @@
     },
     {
       "id": "hodgkin",
-      "name": "Лимфома Ходжкина",
-      "status": "coming_soon",
+      "name": "Классическая лимфома Ходжкина (кЛХ)",
+      "status": "active",
       "module": "hodgkin",
       "codes": { "icd_o_3_2": "9650/3", "mkb10": "C81" },
+      "alt_codes": [
+        { "icd_o_3_2": "9663/3", "mkb10": "C81", "_comment": "нодулярный склероз" },
+        { "icd_o_3_2": "9652/3", "mkb10": "C81", "_comment": "смешанно-клеточный" },
+        { "icd_o_3_2": "9651/3", "mkb10": "C81", "_comment": "богатый лимфоцитами" },
+        { "icd_o_3_2": "9653/3", "mkb10": "C81", "_comment": "лимфоидное истощение" }
+      ],
       "staging": ["Lugano"],
+      "stage_values": { "Lugano": ["I", "IE", "II", "IIE", "III", "IV"] },
       "index": "IPS",
-      "response_criteria": "Lugano 2014 + Deauville",
-      "markers": []
+      "response_criteria": "Lugano 2014",
+      "markers": [],
+      "regimens": ["ABVD", "AVD", "ABVD + ЛТ", "BEACOPP-esc", "BEACOPP-esc ×2 + ABVD ×2", "BrECADD", "A-AVD",
+                   "Лучевая терапия", "ICE + аутоТГСК", "DHAP + аутоТГСК", "Брентуксимаб ведотин",
+                   "Ниволумаб", "Пембролизумаб", "Брентуксимаб + бендамустин"],
+      "core_fields": [
+        { "key": "hl_subtype",     "label_ru": "Гистологический подтип кЛХ",                        "values": ["ns", "mc", "lr", "ld"] },
+        { "key": "bulky_med",      "label_ru": "Массивное поражение средостения (> 1/3 или ≥ 10 см)", "values": ["yes", "no"] },
+        { "key": "esr_raised",     "label_ru": "Повышенная СОЭ (GHSG: > 50 мм/ч без B, > 30 с B)",   "values": ["yes", "no"] },
+        { "key": "nodal_areas_hl", "label_ru": "Зоны поражения лимфоузлов (GHSG: ≥ 3)",              "values": ["lt_3", "ge_3"] },
+        { "key": "extranodal_hl",  "label_ru": "Экстранодальное поражение (E)",                      "values": ["yes", "no"] }
+      ]
     }
   ]
 }

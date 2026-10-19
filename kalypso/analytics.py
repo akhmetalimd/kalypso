@@ -57,7 +57,10 @@ GROUPINGS = {
     "grade_icc": "Грейд ФЛ (ICC)",
     "gelf": "Критерии GELF",
     "pod24": "POD24 (анализ от ориентира — 24 мес. от начала 1-й линии)",
+    "deauville_pet2": "Deauville промежуточной ПЭТ-КТ (ПЭТ-2, анализ от ориентира)",
 }
+# Особые группировки нозологий на общей основе (добавляются к автоматическим).
+EXTRA_GROUPINGS = {"hodgkin": ("deauville_pet2",)}
 # Группировки по нозологиям: выбор такой группировки сужает когорту до её нозологии.
 GROUPING_SETS = {
     None: ("none", "sex", "branch", "line1_regimen", "lab"),
@@ -97,7 +100,7 @@ def _auto_groupings() -> None:
         for f in node.get("core_fields", []):
             GROUPINGS.setdefault(f["key"], f["label_ru"])
             codes.append(f["key"])
-        GROUPING_SETS[nos] = tuple(dict.fromkeys(codes))
+        GROUPING_SETS[nos] = tuple(dict.fromkeys(codes + list(EXTRA_GROUPINGS.get(nos, ()))))
 
 
 _auto_groupings()
@@ -108,7 +111,7 @@ for _nos, _gs in GROUPING_SETS.items():
             GROUPING_NOSOLOGIES[_g].add(_nos)
 # Без окна «на старте»: признак карточки или ориентир.
 NOT_BASELINE = {"none", "sex", "branch", "binet", "lugano", "line1_regimen", "deauville_eot1", "pod24",
-                *STORED_INDEX}
+                "deauville_pet2", *STORED_INDEX}
 DOHNER_LABELS = {"del17p": "del(17p)", "del11q": "del(11q)", "tri12": "+12", "normal": "нормальный",
                  "del13q_sole": "del(13q) одна", "unknown": UNDEFINED}
 
@@ -150,7 +153,7 @@ def load_cohort(db: Database, p: Principal, filters: dict | None = None) -> list
     with db.tx(p.user_id) as cur:
         cur.execute(f"""SELECT p.patient_id, p.branch, p.sex, p.birth_date, p.who_haem5, p.dx_date, p.dx_date_precision,
                                p.last_contact_date, p.last_contact_precision, p.status_last_contact, p.provenance,
-                               p.ecog, p.stage_system, p.stage_value, p.index_name, p.index_score, p.index_group,
+                               p.ecog, p.b_symptoms, p.stage_system, p.stage_value, p.index_name, p.index_score, p.index_group,
                                p.entry_date, p.created_by
                         FROM patient p WHERE {' AND '.join(where)}""", params)
         patients = {r["patient_id"]: {**r, "lines": [], "observations": [], "markers": [], "labs": []}
@@ -200,6 +203,23 @@ def _deauville_landmark(pt: dict) -> tuple[date, str] | None:
     return None if pet is None else (pet[0], "Deauville 1–3" if pet[1] <= 3 else "Deauville 4–5")
 
 
+def interim_pet(pt: dict, line_no: int = 1) -> tuple[date, int] | None:
+    """Первая ПЭТ-КТ с баллом Deauville во время линии N — после старта и до окончания (ПЭТ-2)."""
+    line = next((l for l in pt["lines"] if l["line_no"] == line_no), None)
+    if line is None or not line["start_date"]:
+        return None
+    start = core.impute_date(line["start_date"], line["start_precision"])
+    end = core.impute_date(line["end_date"], line["end_precision"]) if line["end_date"] else None
+    pets = sorted((core.impute_date(o["obs_date"], o["obs_precision"]), o["deauville"]) for o in pt["observations"]
+                  if o["line_id"] == line["line_id"] and o["deauville"] is not None)
+    return next(((d, ds) for d, ds in pets if d > start and (end is None or d < end)), None)
+
+
+def _pet2_landmark(pt: dict) -> tuple[date, str] | None:
+    pet = interim_pet(pt)
+    return None if pet is None else (pet[0], "ПЭТ-2: Deauville 1–3" if pet[1] <= 3 else "ПЭТ-2: Deauville 4–5")
+
+
 def _pod24_landmark(pt: dict) -> tuple[date, str] | None:
     p = pod24_status(pt, pt["lines"], pt["observations"])
     if p["status"] not in ("pod24", "no_pod24"):
@@ -211,6 +231,8 @@ def _pod24_landmark(pt: dict) -> tuple[date, str] | None:
 LANDMARKS = {
     "deauville_eot1": (_deauville_landmark,
                        "отсчёт — от первой ПЭТ-КТ с баллом Deauville после окончания 1-й линии"),
+    "deauville_pet2": (_pet2_landmark,
+                       "отсчёт — от промежуточной ПЭТ-КТ (ПЭТ-2) во время 1-й линии"),
     "pod24": (_pod24_landmark,
               "отсчёт — через 24 мес. от начала 1-й линии иммунохимиотерапии (статус POD24 к этому сроку известен)"),
 }
