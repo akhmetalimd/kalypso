@@ -2,29 +2,50 @@
 {% from "_viz.html" import filters with context %}
 {% block title %}Исследователь выживаемости{% endblock %}
 {% block content %}
-<h1>Исследователь выживаемости</h1>
+<h1>Исследователь выживаемости · {{ profile(r.nosology).name }}</h1>
 <p class="muted">Каплан–Майер с 95 % ДИ (Гринвуд, log-log). <strong>p-value, log-rank и регрессия Кокса здесь не считаются</strong> —
-  сравнение групп требует поправки на факторы риска и выполняется на выгрузке. Это ассоциации, не причинность.</p>
+  сравнение групп требует поправки на факторы риска и выполняется на выгрузке. Это ассоциации, не причинность.
+  <a href="/survival">Другая нозология</a></p>
 
-{% call filters('/survival', f, branches) %}
+{% call filters('/survival', f, branches, nosology_required=True) %}
   <label>Конечная точка <select name="endpoint">
     {% for code, text in endpoints.items() %}<option value="{{ code }}" title="{{ text }}"{% if r.endpoint == code %} selected{% endif %}>{{ code }}</option>{% endfor %}</select></label>
-  <label>Линия (для PFS/mPFS/EFS/TTNT) <input type="number" name="line_no" min="1" max="5" value="{{ r.line_no }}"></label>
+  <label>Линия N <input type="number" name="line_no" min="1" max="5" value="{{ r.line_no }}">
+    <small>Для PFS/mPFS/EFS/TTNT и сравнения режимов.</small></label>
   <label>Группировка <select name="grouping">
-    {% for nos, codes in grouping_sets.items() %}<optgroup label="{{ profile(nos).name if nos else 'Общие' }}">
+    {% for title, codes in grouping_menu %}{% if codes %}<optgroup label="{{ title }}">
       {% for code in codes %}<option value="{{ code }}"{% if r.grouping == code %} selected{% endif %}>{{ groupings[code] }}</option>{% endfor %}
-    </optgroup>{% endfor %}</select>
-    <small>Группировка нозологии сужает когорту до неё.</small></label>
+    </optgroup>{% endif %}{% endfor %}</select>
+    <small>Только применимые к нозологии.</small></label>
   <label>Показатель (для порога) <select name="lab"><option value="">—</option>
-    {% for code, spec in lab_units.items() if not code.startswith('_') %}<option value="{{ code }}"{% if r.lab_loinc == code %} selected{% endif %}>{{ spec.name }}, {{ spec.canonical_unit }}</option>{% endfor %}</select></label>
+    {% for code in r.labs_available %}{% set spec = lab_units[code] %}<option value="{{ code }}"{% if r.lab_loinc == code %} selected{% endif %}>{{ spec.name }}, {{ spec.canonical_unit }}</option>{% endfor %}</select>
+    <small>{% if r.labs_available %}Только внесённые у пациентов нозологии.{% else %}У пациентов нозологии анализы не вносились.{% endif %}</small></label>
   <label>Порог <input name="threshold" inputmode="decimal" value="{{ q.get('threshold', '') }}" placeholder="из литературы">
     <small>Не подбирайте порог по этим данным.</small></label>
+  <label>Подгруппа <select name="sub_by"><option value="">вся когорта</option>
+    {% for code in subgroup_options %}<option value="{{ code }}"{% if r.subgroup and r.subgroup.by == code %} selected{% endif %}>{{ groupings[code] }}</option>{% endfor %}</select>
+    <small>{% if r.subgroup %}Сравнение — внутри выбранного значения.{% else %}Выберите признак и нажмите «Показать» — появятся значения.{% endif %}</small></label>
+  {% if r.subgroup %}
+  <label>Значение подгруппы <select name="sub_val"><option value="">все значения</option>
+    {% for v, n in r.subgroup['values'] %}<option value="{{ v }}"{% if r.subgroup.value == v %} selected{% endif %}>{{ v }} (n={{ n }})</option>{% endfor %}</select></label>
+  {% endif %}
 {% endcall %}
 
 <section class="card">
-  <h2>{{ r.endpoint }}{% if r.endpoint in line_endpoints %} от старта {{ r.line_no }}-й линии{% endif %} · {{ grouping_label }}</h2>
+  <h2>{{ r.endpoint }}{% if r.endpoint in line_endpoints or r.regimen_mode %} от старта {{ r.line_no }}-й линии{% endif %} · {{ grouping_label }}{% if r.subgroup and r.subgroup.value %} · подгруппа: {{ r.subgroup.label }} — {{ r.subgroup.value }}{% endif %}</h2>
   <p class="muted">{{ endpoints[r.endpoint] }}. Когорта: {{ r.n_cohort }}; в анализе {{ r.groups|sum(attribute='n') }}{% if r.not_applicable %}, неприменимо {{ r.not_applicable }} (нет нужной линии){% endif %}{% if r.excluded %}, исключено {{ r.excluded|length }}{% endif %}.
     {% if r.baseline_grouping %}Признак берётся на момент начала отсчёта (окно {{ r.window_days }} дней), позже измеренное — «не определено на старте».{% endif %}</p>
+  {% if r.regimen_mode %}
+  <div class="note warn"><strong>Сравнение режимов — только описательное.</strong> Отсчёт — от начала {{ r.line_no }}-й линии
+    (и для OS). Режим выбирали с учётом возраста, ECOG, стадии, индекса и сопутствующих болезней, поэтому группы напрямую
+    несопоставимы (смещение по показаниям). Сравнивайте внутри подгруппы (поле «Подгруппа», фильтр стадии), а
+    скорректированное сравнение (регрессия Кокса, взвешивание по склонности) делайте на выгрузке CSV. p-value здесь не считаются.</div>
+  {% if r.grouping == 'regimen_class' and regimen_classes %}
+  <details class="more"><summary>Классы режимов (справочник нозологии)</summary>
+    <ul>{% for name, regs in regimen_classes.items() %}<li><strong>{{ name }}</strong>: {{ regs|join(', ') }}</li>{% endfor %}
+      <li><strong>другое</strong>: режим не из справочника</li></ul></details>
+  {% endif %}
+  {% endif %}
   {% if r.landmark %}<div class="note">Анализ от ориентира: {{ r.landmark.text }} (если ориентир позже начала отсчёта).
     Без ориентира — {{ r.landmark.missing }}; событие или цензура до него — {{ r.landmark.dropped }}: в анализ не входят.</div>{% endif %}
   {% for n in r.notes %}<div class="note warn">{{ n }}</div>{% endfor %}

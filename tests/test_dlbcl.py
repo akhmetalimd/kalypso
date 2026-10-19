@@ -254,7 +254,7 @@ def test_web_new_patient_flow(app, world):
 
 
 @pytest.mark.parametrize("url", ["/dashboard", "/dashboard/dlbcl", "/survival?grouping=nccn_ipi",
-                                 "/survival?endpoint=PFS&grouping=deauville_eot1", "/survival?nosology=dlbcl"])
+                                 "/survival?nosology=dlbcl&endpoint=PFS&grouping=deauville_eot1", "/survival?nosology=dlbcl"])
 def test_web_dlbcl_pages(app, world, mixed, url):
     page = login(app, "curator").get(url)
     assert page.status_code == 200, url

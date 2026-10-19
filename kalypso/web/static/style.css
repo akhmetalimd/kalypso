@@ -4,13 +4,22 @@
   --warn: #8a5a00; --warn-bg: #fff4dc; --err: #a2271c; --err-bg: #fdebea; --badge: #eef1f5;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #12151b; --surface: #1b2029; --text: #e6e9ef; --muted: #98a2b3; --line: #2c3340;
     --accent: #6ea8ff; --accent-ink: #0b1220; --ok: #6fd3a0; --ok-bg: #16332a;
     --warn: #f2c46d; --warn-bg: #3a2e14; --err: #ff8a80; --err-bg: #3b1d1b; --badge: #262d38;
-  }
 }
+}
+:root[data-theme="dark"] {
+    --bg: #12151b; --surface: #1b2029; --text: #e6e9ef; --muted: #98a2b3; --line: #2c3340;
+    --accent: #6ea8ff; --accent-ink: #0b1220; --ok: #6fd3a0; --ok-bg: #16332a;
+    --warn: #f2c46d; --warn-bg: #3a2e14; --err: #ff8a80; --err-bg: #3b1d1b; --badge: #262d38;
+}
+:root { color-scheme: light dark; }
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 a { color: var(--accent); }
@@ -102,11 +111,16 @@ details > summary { cursor: pointer; color: var(--accent); margin: 10px 0; }
   --viz-grid: #e1e0d9; --viz-axis: #c3c2b7; --viz-muted-fill: #b9b8b1;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
     --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
     --viz-grid: #2c2c2a; --viz-axis: #383835; --viz-muted-fill: #5c5c58;
-  }
+}
+}
+:root[data-theme="dark"] {
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
+    --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
+    --viz-grid: #2c2c2a; --viz-axis: #383835; --viz-muted-fill: #5c5c58;
 }
 svg.viz { width: 100%; height: auto; display: block; margin: 4px 0 8px; }
 svg.viz .viz-text { fill: var(--text); }
@@ -163,20 +177,94 @@ textarea.doc-text { font-family: ui-monospace, Consolas, monospace; font-size: .
 nav a.active { color: var(--text); font-weight: 600; border-bottom: 2px solid var(--accent); }
 nav .nav-new { margin-left: 8px; padding: 4px 12px; }
 /* Карточка: сводка, оглавление, «Наверх», подсказка индекса */
-.summary { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 8px 0 12px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.summary { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 8px 0 12px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .summary div { min-width: 120px; } .summary dt { font-size: .75rem; color: var(--muted); } .summary dd { margin: 0; font-weight: 600; }
 .toc { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 8px 0; margin-bottom: 8px; background: var(--bg); border-bottom: 1px solid var(--line); font-size: .9rem; }
 section[id^="s-"] { scroll-margin-top: 56px; }
-.to-top { position: fixed; right: 18px; bottom: 18px; padding: 6px 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); font-size: .85rem; text-decoration: none; }
+.to-top { position: fixed; right: 18px; bottom: 18px; padding: 6px 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); font-size: .85rem; text-decoration: none; }
 .info { cursor: help; color: var(--muted); font-size: .85em; }
 /* Список пациентов: плашки фильтров, сортировка, короткие нозологии */
 .filters-box { margin: 8px 0; } .filters-box > summary { cursor: pointer; color: var(--accent); margin-bottom: 6px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-.chip { padding: 2px 10px; border: 1px solid var(--line); border-radius: 14px; font-size: .85rem; text-decoration: none; background: var(--card); }
+.chip { padding: 2px 10px; border: 1px solid var(--line); border-radius: 14px; font-size: .85rem; text-decoration: none; background: var(--surface); }
 .chip.clear { border-style: dashed; color: var(--muted); }
 a.sort { color: inherit; text-decoration: none; } a.sort:hover { text-decoration: underline; }
-.nos-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); font-size: .85rem; white-space: nowrap; }
+.nos-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); font-size: .85rem; white-space: nowrap; }
 /* Дашборды: подробные графики — в «Ещё» */
 details.more { margin: 12px 0; } details.more > summary { cursor: pointer; color: var(--accent); padding: 6px 0; }
 /* Узкие экраны: таблицы прокручиваются внутри карточки */
 table.grid { display: block; max-width: 100%; overflow-x: auto; }
+/* Переключатель темы (появляется, только если работает JS) */
+.top button.theme-toggle { font-size: .9rem; white-space: nowrap; text-decoration: none; }
+
+/* Главная: фоновая картинка — кривая выживаемости и «клетки», рисуется кодом (SVG) */
+.home { position: relative; overflow: hidden; }
+.home > :not(.home-art) { position: relative; z-index: 1; }
+.home-art { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.home-art .axis { stroke: var(--line); stroke-width: 2; fill: none; }
+.home-art .km { fill: none; stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
+.home-art .km.a { stroke: var(--accent); opacity: .38; }
+.home-art .km.b { stroke: var(--series-2); opacity: .28; }
+.home-art .ci { fill: var(--accent); opacity: .07; }
+.home-art .cens { stroke: var(--accent); stroke-width: 3; opacity: .45; }
+.home-art .cell-body { fill: var(--accent); fill-opacity: .07; stroke: var(--accent); stroke-opacity: .28; stroke-width: 2; }
+.home-art .cell-nuc { fill: var(--accent); fill-opacity: .2; }
+.home-art .alt .cell-body { fill: var(--series-3); stroke: var(--series-3); }
+.home-art .alt .cell-nuc { fill: var(--series-3); }
+.home-sub { color: var(--muted); margin: 18px 0 0; font-size: .95rem; }
+
+/* Анимации: только сдержанные и только если пользователь не просил меньше движения */
+@keyframes k-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes k-fade { from { opacity: 0; } }
+@keyframes k-draw { to { stroke-dashoffset: 0; } }
+@keyframes k-grow-x { from { transform: scaleX(0); } to { transform: none; } }
+@keyframes k-grow-y { from { transform: scaleY(0); } to { transform: none; } }
+@keyframes k-drift-a { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(14px, -18px); } }
+@keyframes k-drift-b { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-16px, 12px); } }
+@keyframes k-title { from { opacity: 0; letter-spacing: .32em; } to { opacity: 1; letter-spacing: .12em; } }
+@keyframes k-letter { from { color: var(--muted); opacity: .35; } to { color: var(--accent); opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .card, .tile, .summary, .note, .nos-group { animation: k-rise .35s ease-out both; }
+  .tiles .tile:nth-child(2), .nos-group:nth-child(2) { animation-delay: .04s; }
+  .tiles .tile:nth-child(3), .nos-group:nth-child(3) { animation-delay: .08s; }
+  .tiles .tile:nth-child(4), .nos-group:nth-child(4) { animation-delay: .12s; }
+  .tiles .tile:nth-child(n+5), .nos-group:nth-child(n+5) { animation-delay: .16s; }
+  details[open] > :not(summary) { animation: k-fade .25s ease-out; }
+  button, .button, .chip, .tile, nav a { transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s; }
+  .tile:hover { box-shadow: 0 2px 10px rgb(0 0 0 / .08); }
+  .nos-links .button:hover, .chip:hover { border-color: var(--accent); }
+  html { scroll-behavior: smooth; }
+  /* Графики «прорисовываются», когда попадают в поле зрения (класс .in ставит kalypso.js) */
+  .js svg.viz path.line[pathLength] { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .js svg.viz.in path.line[pathLength] { animation: k-draw 1.2s ease-out forwards; }
+  .js svg.viz:not(.in) .band, .js svg.viz:not(.in) .tick, .js svg.viz:not(.in) rect.seg { opacity: 0; }
+  .js svg.viz.in .band, .js svg.viz.in .tick { animation: k-fade .5s .9s both; }
+  .js svg.viz.in rect.seg { animation: k-fade .5s ease-out both; }
+  .js svg.viz path.bar { transform-box: fill-box; transform-origin: left center; }
+  .js svg.viz path.bar.col { transform-origin: center bottom; }
+  .js svg.viz:not(.in) path.bar { transform: scaleX(0); }
+  .js svg.viz:not(.in) path.bar.col { transform: scaleY(0); }
+  .js svg.viz.in path.bar { animation: k-grow-x .6s ease-out both; }
+  .js svg.viz.in path.bar.col { animation-name: k-grow-y; }
+  /* Главная */
+  .home-title { animation: k-title .9s ease-out both; }
+  .home-decoding .acc { animation: k-letter .45s ease-out both; }
+  .home-decoding .acc:nth-of-type(1) { animation-delay: .5s; } .home-decoding .acc:nth-of-type(2) { animation-delay: .68s; }
+  .home-decoding .acc:nth-of-type(3) { animation-delay: .86s; } .home-decoding .acc:nth-of-type(4) { animation-delay: 1.04s; }
+  .home-decoding .acc:nth-of-type(5) { animation-delay: 1.22s; } .home-decoding .acc:nth-of-type(6) { animation-delay: 1.4s; }
+  .home-decoding .acc:nth-of-type(7) { animation-delay: 1.58s; }
+  .home-art .km { stroke-dasharray: 1; stroke-dashoffset: 1; animation: k-draw 2.6s .2s ease-in-out forwards; }
+  .home-art .km.b { animation-delay: .7s; }
+  .home-art .ci, .home-art .cens { animation: k-fade 1s 2.2s both; }
+  .home-art .drift { animation: k-drift-a 18s ease-in-out infinite; }
+  .home-art .drift.b { animation-name: k-drift-b; animation-duration: 22s; }
+  .home-art .drift.slow { animation-duration: 27s; }
+  .home-art .drift.d1 { animation-delay: -4s; } .home-art .drift.d2 { animation-delay: -9s; } .home-art .drift.d3 { animation-delay: -13s; }
+}
+@media print {
+  .js svg.viz path.line[pathLength] { stroke-dasharray: none !important; animation: none !important; }
+  .js svg.viz .tick, .js svg.viz rect.seg { opacity: 1 !important; animation: none !important; }
+  .js svg.viz .band { opacity: .12 !important; animation: none !important; }
+  .js svg.viz path.bar { transform: none !important; animation: none !important; }
+  .theme-toggle, .to-top { display: none; }
+}

@@ -16,7 +16,7 @@
   {{ tile('CR / CMR после 1-й линии', d.cr1[0], d.cr1[1], 'последняя оценка по линии') }}
   <div class="tile"><div class="label">Медиана общей выживаемости</div>
     <div class="value">{{ d.os_median_months if d.os_median_months is not none else 'не достигнута' }}{% if d.os_median_months is not none %} мес.{% endif %}</div>
-    <div class="sub">OS, n={{ d.os_n }} · <a href="/survival?endpoint=OS&amp;grouping=ipi">кривые по IPI</a></div></div>
+    <div class="sub">OS, n={{ d.os_n }} · <a href="/survival?nosology=dlbcl&amp;endpoint=OS&amp;grouping=ipi">кривые по IPI</a></div></div>
 </section>
 
 <div class="two">
@@ -33,7 +33,7 @@
 
   <section class="card"><h2>Deauville после 1-й линии</h2>
     {{ charts.bar_chart(d.eot_deauville, 'Deauville после 1-й линии', d.cr1[1])|safe }}{{ dist_table(d.eot_deauville, d.cr1[1]) }}
-    <small>Первая ПЭТ-КТ с баллом Deauville после окончания 1-й линии; среди получавших 1-ю линию. Кривые — <a href="/survival?endpoint=PFS&amp;grouping=deauville_eot1">анализ от ориентира</a>.</small></section>
+    <small>Первая ПЭТ-КТ с баллом Deauville после окончания 1-й линии; среди получавших 1-ю линию. Кривые — <a href="/survival?nosology=dlbcl&amp;endpoint=PFS&amp;grouping=deauville_eot1">анализ от ориентира</a>.</small></section>
   <section class="card"><h2>Число линий терапии</h2>
     {{ charts.bar_chart(d.lines_per, 'Линии', d.n)|safe }}{{ dist_table(d.lines_per, d.n) }}</section>
   <section class="card"><h2>Режимы 1-й линии</h2>

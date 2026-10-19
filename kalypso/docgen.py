@@ -113,15 +113,23 @@ def epicrisis_text(s: dict) -> str:
 
 def cohort_abstract(result: dict, filters_text: str, grouping_label: str) -> str:
     ep = result["endpoint"]
-    line = f" (от старта {result['line_no']}-й линии)" if ep in core.LINE_ENDPOINTS else ""
+    line = (f" (от старта {result['line_no']}-й линии)" if ep in core.LINE_ENDPOINTS or result.get("regimen_mode")
+            else "")
+    sub = result.get("subgroup") or {}
+    sub_text = f" Подгруппа: {sub['label'].lower()} — {sub['value']}." if sub.get("value") else ""
+    if result.get("regimen_mode"):
+        basis = (f"Группирующий признак — {grouping_label.lower()} (описательное сравнение: режим выбирался "
+                 f"по показаниям, возможно смещение)")
+    else:
+        basis = (f"Группирующий признак — {grouping_label.lower()}, значение на момент начала отсчёта "
+                 f"(окно {result['window_days']} дней)")
     parts = [
         "Тезисы (черновик). " + DRAFT_NOTE,
         f"Методы. Когорта регистра KALYPSO: {result['n_cohort']} пациентов ({filters_text}). "
         f"Конечная точка — {ep}{line}: {core.ENDPOINTS[ep].split(': ', 1)[-1]}. Оценка Каплана–Майера, "
         f"95 % ДИ — по Гринвуду (log-log), ДИ медианы — по пересечению границ с 50 %. "
-        f"Неточные даты заменялись серединой периода. Группирующий признак — {grouping_label.lower()}, "
-        f"значение на момент начала отсчёта (окно {result['window_days']} дней); сравнительная статистика "
-        f"(log-rank, регрессия Кокса) не выполнялась.",
+        f"Неточные даты заменялись серединой периода. {basis}; сравнительная статистика "
+        f"(log-rank, регрессия Кокса) не выполнялась.{sub_text}",
     ]
     res = []
     for g in result["groups"]:

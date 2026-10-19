@@ -12,7 +12,7 @@ from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -78,7 +78,8 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
                        conditional_fields=registry.CONDITIONAL_FIELDS,
                        profile=registry.profile, indexes=core.INDEXES, dashboard_url=dashboard_url,
                        nosology_groups=registry.nosology_groups, inv=investigations,
-                       index_help=indices.index_help)
+                       index_help=indices.index_help,
+                       stage_map=lambda: {n["id"]: n.get("stage_values", {}) for n in registry.active_nodes()})
     env.filters.update(d=_fmt_date, short=_short,
                        nosology_short=lambda node_id: (core.find_node(core.NOSOLOGY_TREE, node_id or "") or {}).get("short", node_id),
                        nosology=lambda node_id: (core.find_node(core.NOSOLOGY_TREE, node_id or "") or {}).get("name", node_id))
@@ -552,26 +553,41 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         except ValueError:
             threshold = None
         loinc = q.get("lab") if q.get("lab") in core.LAB_UNITS and not q.get("lab", "_").startswith("_") else None
-        res = analytics.explore(db, p, q.get("endpoint") or "OS", line_no, q.get("grouping") or "none",
-                                f, loinc, threshold)
+        grouping = q.get("grouping") or "none"
+        if not f["nosology"]:                    # нозология обязательна; группировка одной нозологии — её
+            noses = analytics.GROUPING_NOSOLOGIES.get(grouping, set())
+            if len(noses) != 1:
+                return None, f, q
+            f = {**f, "nosology": next(iter(noses))}
+        res = analytics.explore(db, p, q.get("endpoint") or "OS", line_no, grouping, f, loinc, threshold,
+                                q.get("sub_by") or None, q.get("sub_val") or None)
         return res, f, q
 
     @app.get("/survival", response_class=HTMLResponse)
     def survival(request: Request):
         p = current(request)
+        p.require("patient.read")
         res, f, q = _explore(request, p)
-        grouping_label = analytics.GROUPINGS[res["grouping"]]
-        f = {**f, "nosology": res["nosology"]}   # группировка могла сузить когорту до своей нозологии
-        abstract = docgen.cohort_abstract(res, _filters_text(f), grouping_label) if res["groups"] else ""
+        if res is None:                          # сначала — нозология: выживаемость разных ЛПЗ несопоставима
+            rest = urlencode({k: v for k, v in q.items() if k not in ("nosology", "stage", "page") and v})
+            noses = analytics.GROUPING_NOSOLOGIES.get(q.get("grouping") or "", set())
+            return render(request, "survival_choose.html", p, rest=rest, only=noses)
+        grouping_label = analytics.grouping_label(res["grouping"], res["line_no"])
+        f = {**f, "nosology": res["nosology"]}
+        abstract = (docgen.cohort_abstract(res, _filters_text(f), grouping_label) if res["groups"] else "")
         return render(request, "survival.html", p, r=res, f=f, q=q, branches=admin.list_branches(db, p),
                       charts=charts, endpoints=core.ENDPOINTS, line_endpoints=core.LINE_ENDPOINTS,
-                      groupings=analytics.GROUPINGS, grouping_sets=analytics.GROUPING_SETS,
+                      groupings=analytics.GROUPINGS, grouping_menu=analytics.grouping_menu(res["nosology"]),
+                      subgroup_options=analytics.subgroup_options(res["nosology"]),
+                      regimen_classes=(core.find_node(core.NOSOLOGY_TREE, res["nosology"]) or {}).get("regimen_classes"),
                       abstract=abstract, grouping_label=grouping_label, csv_query=str(request.query_params))
 
     @app.get("/survival.csv")
     def survival_csv(request: Request):
         p = current(request)
         res, _, _ = _explore(request, p)
+        if res is None:
+            return PlainTextResponse("Выберите нозологию: выживаемость разных заболеваний не смешивается", status_code=400)
         return Response("﻿" + analytics.explore_csv(res), media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": 'attachment; filename="kalypso_survival.csv"'})
 

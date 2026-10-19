@@ -11,7 +11,10 @@
   начала отсчёта; иначе «не определено на старте» (защита от immortal time bias);
 - признак, который появляется позже старта (Deauville после 1-й линии, POD24 при ФЛ), — только
   анализом от ориентира (landmark): отсчёт от ориентира, события и цензура до него — вне анализа;
-- нозологии не смешиваются: нозолого-специфичная группировка сужает когорту до своей нозологии.
+- нозологии не смешиваются: нозолого-специфичная группировка сужает когорту до своей нозологии;
+- сравнение режимов («Режим линии N», класс режима) — отсчёт от начала линии N (и для OS);
+  ретроспективное сравнение подвержено смещению по показаниям: только описательно, внутри
+  подгруппы, без p-value; скорректированное сравнение — на выгрузке.
 """
 from __future__ import annotations
 
@@ -40,8 +43,12 @@ GROUPINGS = {
     "dohner": "Иерархия FISH (Döhner)",
     "binet": "Стадия Binet",
     "cll_ipi": "Группа CLL-IPI (в карточке)",
-    "line1_regimen": "Режим 1-й линии",
+    "line1_regimen": "Режим 1-й линии",          # прежние ссылки: = «Режим линии N» при N = 1
+    "regimen": "Режим линии N",
+    "regimen_class": "Класс режима линии N",
     "sex": "Пол",
+    "age65": "Возраст на начало отсчёта (≤ 65 / > 65 лет)",
+    "ecog": "ECOG при диагнозе (0–1 / ≥ 2)",
     "branch": "Филиал",
     "lab": "Лабораторный показатель (порог)",
     "ipi": "Группа IPI (в карточке)",
@@ -64,7 +71,7 @@ GROUPINGS = {
 EXTRA_GROUPINGS = {"hodgkin": ("deauville_pet2",), "pmbcl": ("deauville_eot1",)}
 # Группировки по нозологиям: выбор такой группировки сужает когорту до её нозологии.
 GROUPING_SETS = {
-    None: ("none", "sex", "branch", "line1_regimen", "lab"),
+    None: ("none", "sex", "age65", "ecog", "branch", "regimen", "regimen_class", "lab"),
     "cll_sll": ("IGHV", "TP53", "del17p", "dohner", "binet", "cll_ipi"),
     "dlbcl": ("ipi", "r_ipi", "nccn_ipi", "coo_hans", "myc_bcl2", "lugano", "bulky", "deauville_eot1"),
     "follicular": ("flipi", "flipi2", "prima_pi", "grade_icc", "lugano", "gelf", "pod24"),
@@ -112,7 +119,49 @@ for _nos, _gs in GROUPING_SETS.items():
             GROUPING_NOSOLOGIES[_g].add(_nos)
 # Без окна «на старте»: признак карточки или ориентир.
 NOT_BASELINE = {"none", "sex", "branch", "binet", "lugano", "line1_regimen", "deauville_eot1", "pod24",
-                "deauville_pet2", *STORED_INDEX}
+                "deauville_pet2", "regimen", "regimen_class", "age65", "ecog", *STORED_INDEX}
+# Сравнение режимов: отсчёт от начала линии N; TTFT (до первой терапии) по режиму не сравнивается.
+REGIMEN_GROUPINGS = ("regimen", "regimen_class")
+OTHER_CLASS = "другое"
+NO_REGIMEN = "режим не указан"
+COMMON = ("none", "sex", "age65", "ecog", "branch", "lab")
+
+
+def grouping_label(code: str, line_no: int = 1) -> str:
+    text = GROUPINGS.get(code, code)
+    return text.replace("линии N", f"{line_no}-й линии") if code in REGIMEN_GROUPINGS else text
+
+
+def grouping_menu(nosology: str) -> list[tuple[str, list[str]]]:
+    """Группировки «Исследователя» для нозологии: общие, терапия, свои нозологии."""
+    return [("Общие", list(COMMON)), ("Терапия (сравнение режимов)", list(REGIMEN_GROUPINGS)),
+            (profile(nosology)["name"], [c for c in GROUPING_SETS.get(nosology, ()) if c not in COMMON])]
+
+
+def subgroup_options(nosology: str | None) -> list[str]:
+    """Чем можно сузить сравнение (подгруппа): признаки на старте и карточки — без ориентиров,
+    порога анализа и самих режимов."""
+    own = [c for c in GROUPING_SETS.get(nosology, ()) if c not in LANDMARKS] if nosology else []
+    return ["sex", "age65", "ecog", "branch", *own]
+
+
+def _norm_regimen(s: str | None) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip()).casefold()
+
+
+def regimen_class(nosology: str | None, regimen: str | None) -> str:
+    """Класс режима по справочнику узла нозологии (regimen_classes); не из справочника — «другое»."""
+    if not _norm_regimen(regimen):
+        return NO_REGIMEN
+    classes = (core.find_node(core.NOSOLOGY_TREE, nosology or "") or {}).get("regimen_classes", {})
+    for name, regimens in classes.items():
+        if _norm_regimen(regimen) in {_norm_regimen(r) for r in regimens}:
+            return name
+    return OTHER_CLASS
+
+
+def _line(pt: dict, line_no: int) -> dict | None:
+    return next((l for l in pt["lines"] if l["line_no"] == line_no), None)
 DOHNER_LABELS = {"del17p": "del(17p)", "del11q": "del(11q)", "tri12": "+12", "normal": "нормальный",
                  "del13q_sole": "del(13q) одна", "unknown": UNDEFINED}
 
@@ -260,11 +309,26 @@ def _myc_bcl2(mm: dict[str, str]) -> str:
     return UNDEFINED
 
 
-def _group(pt: dict, grouping: str, t0: date, lab_loinc: str | None, threshold: float | None) -> str:
+def _group(pt: dict, grouping: str, t0: date, lab_loinc: str | None, threshold: float | None,
+           line_no: int = 1) -> str:
     if grouping == "none":
         return "Вся когорта"
     if grouping == "sex":
         return label("sex", pt["sex"])
+    if grouping == "age65":
+        if not pt.get("birth_date"):
+            return "нет даты рождения"
+        age = (t0 - core.impute_date(pt["birth_date"], pt.get("birth_date_precision"))).days / 365.25
+        return "> 65 лет" if age > 65 else "≤ 65 лет"
+    if grouping == "ecog":
+        return "нет ECOG" if pt.get("ecog") is None else ("ECOG ≥ 2" if pt["ecog"] >= 2 else "ECOG 0–1")
+    if grouping in REGIMEN_GROUPINGS:
+        line = _line(pt, line_no)
+        if line is None:
+            return f"без {line_no}-й линии"
+        if grouping == "regimen_class":
+            return regimen_class(pt["who_haem5"], line["regimen"])
+        return (line["regimen"] or "").strip() or NO_REGIMEN
     if grouping == "branch":
         return pt["branch"]
     if grouping == "binet":
@@ -277,9 +341,6 @@ def _group(pt: dict, grouping: str, t0: date, lab_loinc: str | None, threshold: 
     if grouping == "lugano":
         adv = core.advanced_stage(pt["stage_system"], pt["stage_value"])
         return "нет стадии Lugano" if adv is None else ("III–IV" if adv else "I–II")
-    if grouping == "line1_regimen":
-        line1 = next((l for l in pt["lines"] if l["line_no"] == 1), None)
-        return line1["regimen"] if line1 else "без 1-й линии"
     if grouping == "lab":
         v = baseline_lab(pt["labs"], lab_loinc, t0) if lab_loinc else None
         if v is None or threshold is None:
@@ -305,14 +366,21 @@ def _group(pt: dict, grouping: str, t0: date, lab_loinc: str | None, threshold: 
 # «Исследователь выживаемости»
 # ---------------------------------------------------------------------------
 def explore(db: Database, p: Principal, endpoint: str = "OS", line_no: int = 1, grouping: str = "none",
-            filters: dict | None = None, lab_loinc: str | None = None, threshold: float | None = None) -> dict:
+            filters: dict | None = None, lab_loinc: str | None = None, threshold: float | None = None,
+            sub_by: str | None = None, sub_val: str | None = None) -> dict:
     p.require("patient.read")
     if endpoint not in core.ENDPOINTS:
         endpoint = "OS"
     if grouping not in GROUPINGS:
         grouping = "none"
+    if grouping == "line1_regimen":           # прежняя группировка — режим 1-й линии от её начала
+        grouping, line_no = "regimen", 1
     filters = dict(filters or parse_filters({}))
     notes = []
+    regimen_mode = grouping in REGIMEN_GROUPINGS
+    if regimen_mode and endpoint == "TTFT":
+        notes.append("TTFT — время до первой терапии: по режиму лечения не сравнивается; выберите OS, PFS, EFS или TTNT")
+        grouping, regimen_mode = "none", False
     noses = GROUPING_NOSOLOGIES.get(grouping, set())
     if noses and filters.get("nosology") and filters["nosology"] not in noses:
         grouping = "none"                     # группировка чужой нозологии — не применяем
@@ -322,6 +390,9 @@ def explore(db: Database, p: Principal, endpoint: str = "OS", line_no: int = 1, 
     cohort = load_cohort(db, p, filters)
     if len(noses) > 1 and not filters.get("nosology"):
         cohort = [pt for pt in cohort if pt["who_haem5"] in noses]   # группировка есть у нескольких нозологий
+    if sub_by not in subgroup_options(filters.get("nosology")) or sub_by == grouping:
+        sub_by, sub_val = None, None
+    sub_counts: Counter = Counter()
     if not filters.get("nosology") and len({pt["who_haem5"] for pt in cohort}) > 1:
         notes.append("В когорте несколько нозологий — выберите нозологию в фильтре: их выживаемость несопоставима")
     groups: dict[str, list] = defaultdict(list)
@@ -338,6 +409,21 @@ def explore(db: Database, p: Principal, endpoint: str = "OS", line_no: int = 1, 
         if "excluded" in e:
             excluded.append({"patient_id": pt["patient_id"], "reason": e["excluded"]})
             continue
+        if regimen_mode and endpoint not in core.LINE_ENDPOINTS:    # OS — от начала линии N
+            line = _line(pt, line_no)
+            if line is None or not line.get("start_date"):
+                not_applicable += 1
+                continue
+            ls = core.impute_date(line["start_date"], line.get("start_precision"))
+            if e["end"] < ls:
+                excluded.append({"patient_id": pt["patient_id"], "reason": "окончание раньше начала линии"})
+                continue
+            e = {**e, "start": ls, "days": (e["end"] - ls).days}
+        if sub_by:
+            sv = _group(pt, sub_by, e["start"], None, None, line_no)
+            sub_counts[sv] += 1
+            if sub_val and sv != sub_val:
+                continue
         if landmark is not None:
             mark = LANDMARKS[grouping][0](pt)
             if mark is None:
@@ -350,7 +436,7 @@ def explore(db: Database, p: Principal, endpoint: str = "OS", line_no: int = 1, 
                     continue
                 e = {**e, "start": lm, "days": (e["end"] - lm).days}
         else:
-            g = _group(pt, grouping, e["start"], lab_loinc, threshold)
+            g = _group(pt, grouping, e["start"], lab_loinc, threshold, line_no)
         groups[g].append(e)
         rows.append({"patient_id": pt["patient_id"], "group": g, **e})
 
@@ -374,6 +460,8 @@ def explore(db: Database, p: Principal, endpoint: str = "OS", line_no: int = 1, 
         })
         if km["n"] < 10 or km["events"] < 5:
             notes.append(f"Группа «{name}»: n={km['n']}, событий {km['events']} — оценки неустойчивы")
+    if sub_by and sub_val and sub_val not in sub_counts:
+        notes.append(f"В подгруппе «{GROUPINGS[sub_by]}: {sub_val}» нет пациентов для этой конечной точки")
     ticks = km_ticks(result_groups) if result_groups else []
     for g in result_groups:
         g["at_risk"] = core.at_risk_table(g.pop("durations"), [t * DAYS_PER_MONTH for t in ticks])
@@ -381,7 +469,12 @@ def explore(db: Database, p: Principal, endpoint: str = "OS", line_no: int = 1, 
             "ticks": ticks, "excluded": excluded, "not_applicable": not_applicable, "notes": notes,
             "rows": rows, "n_cohort": len(cohort), "lab_loinc": lab_loinc, "threshold": threshold,
             "window_days": WINDOW_DAYS, "landmark": landmark, "nosology": filters.get("nosology"),
-            "baseline_grouping": grouping not in NOT_BASELINE}
+            "baseline_grouping": grouping not in NOT_BASELINE, "regimen_mode": regimen_mode,
+            "subgroup": {"by": sub_by, "label": GROUPINGS[sub_by], "value": sub_val,
+                         "values": sorted(sub_counts.items(), key=lambda kv: (kv[0] == UNDEFINED, -kv[1]))}
+            if sub_by else None,
+            "labs_available": sorted({l["loinc"] for pt in cohort for l in pt["labs"]} & {
+                k for k in core.LAB_UNITS if not k.startswith("_")})}
 
 
 def _node_name(node_id: str) -> str:

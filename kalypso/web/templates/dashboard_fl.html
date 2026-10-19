@@ -15,12 +15,12 @@
   {{ tile('Наблюдение без лечения', d.watch_wait[0], d.watch_wait[1], 'watch & wait') }}
   <div class="tile"><div class="label">Медиана времени до 1-й терапии</div>
     <div class="value">{{ d.ttft_median_months if d.ttft_median_months is not none else 'не достигнута' }}{% if d.ttft_median_months is not none %} мес.{% endif %}</div>
-    <div class="sub">TTFT, n={{ d.ttft_n }} · <a href="/survival?endpoint=TTFT&amp;nosology=follicular">кривая</a></div></div>
+    <div class="sub">TTFT, n={{ d.ttft_n }} · <a href="/survival?nosology=follicular&amp;endpoint=TTFT">кривая</a></div></div>
   {{ tile('POD24', d.pod24_known[0], d.pod24_known[1], 'среди известных') }}
   {{ tile('Трансформация в ДВКЛ', d.transformed[0], d.transformed[1]) }}
   <div class="tile"><div class="label">Медиана общей выживаемости</div>
     <div class="value">{{ d.os_median_months if d.os_median_months is not none else 'не достигнута' }}{% if d.os_median_months is not none %} мес.{% endif %}</div>
-    <div class="sub">OS, n={{ d.os_n }} · <a href="/survival?endpoint=OS&amp;grouping=pod24">по POD24</a></div></div>
+    <div class="sub">OS, n={{ d.os_n }} · <a href="/survival?nosology=follicular&amp;endpoint=OS&amp;grouping=pod24">по POD24</a></div></div>
 </section>
 
 <div class="two">
@@ -36,7 +36,7 @@
     {{ charts.bar_chart(d.prima_pi, 'PRIMA-PI', d.n)|safe }}{{ dist_table(d.prima_pi, d.n) }}</section>
   <section class="card"><h2>POD24</h2>
     {{ charts.bar_chart(d.pod24, 'POD24', d.n)|safe }}{{ dist_table(d.pod24, d.n) }}
-    <small>Прогрессия ≤ 24 мес. от начала 1-й линии иммунохимиотерапии. Кривые — <a href="/survival?endpoint=OS&amp;grouping=pod24">анализ от ориентира</a>.</small></section>
+    <small>Прогрессия ≤ 24 мес. от начала 1-й линии иммунохимиотерапии. Кривые — <a href="/survival?nosology=follicular&amp;endpoint=OS&amp;grouping=pod24">анализ от ориентира</a>.</small></section>
 
   <section class="card"><h2>Число линий терапии</h2>
     {{ charts.bar_chart(d.lines_per, 'Линии', d.n)|safe }}{{ dist_table(d.lines_per, d.n) }}</section>

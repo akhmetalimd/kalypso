@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Исследователь выживаемости{% endblock %}
+{% block content %}
+<h1>Исследователь выживаемости</h1>
+<p class="muted">Сначала выберите нозологию. Выживаемость разных лимфопролиферативных заболеваний несопоставима,
+  поэтому кривые смешанной когорты не строятся. Группировки, анализы для порога и подгруппы будут только те,
+  что применимы к выбранной нозологии.</p>
+{% if only %}<div class="note">Выбранная группировка есть у нескольких нозологий — выберите одну из них.</div>{% endif %}
+<section class="nos-groups">
+  {% for title, nodes in nosology_groups() %}
+  {% set shown = nodes|selectattr('id', 'in', only)|list if only else nodes %}
+  {% if shown %}
+  <div class="nos-group"><h3>{{ title }}</h3>
+    <div class="nos-links">{% for n in shown %}<a class="button" href="/survival?nosology={{ n.id }}{{ '&' ~ rest if rest else '' }}">{{ n.name }}</a>{% endfor %}</div>
+  </div>
+  {% endif %}
+  {% endfor %}
+</section>
+{% endblock %}

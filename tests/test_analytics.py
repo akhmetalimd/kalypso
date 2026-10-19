@@ -118,7 +118,7 @@ def test_p3_pages(app, world, cohort):
     assert "Тезисы" in page
     card = c.get(f"/patients/{cohort['a']}").text
     assert "Таймлайн" in card and '<svg class="viz"' in card
-    r = c.get("/survival.csv?endpoint=OS")
+    r = c.get("/survival.csv?endpoint=OS&nosology=cll_sll")
     assert r.headers["content-type"].startswith("text/csv") and r.text.count("\n") == 3   # заголовок + 2 своих
     assert c.get(f"/patients/{cohort['c']}/docs/tumor-board").status_code == 404        # чужой филиал
 

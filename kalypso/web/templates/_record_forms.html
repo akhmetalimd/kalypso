@@ -74,7 +74,8 @@
     placeholder="{{ {'genetics': 'del(17p), t(11;14), 46,XY,+12…', 'flow': 'фенотип клона', 'virology': 'генотип, серотип…', 'autoimmune': 'тип антител…'}[kind] }}">{{ err("qual_detail") }}</label>
   <label>Количественный результат
     <span class="pair"><input name="value" inputmode="decimal" value="{{ fv.get('value') if fv.get('value') is not none else '' }}" placeholder="число">
-      <input name="unit" value="{{ fv.get('unit') or '' }}" maxlength="30" placeholder="единица (по умолчанию — из справочника)"></span></label>
+      {% set units = {} %}{% for t in inv.tests(kind) %}{% if t.unit %}{% set _ = units.update({t.code: t.unit}) %}{% endif %}{% endfor %}
+      <input name="unit" value="{{ fv.get('unit') or '' }}" maxlength="30" placeholder="единица (по умолчанию — из справочника)" data-units='{{ units|tojson }}'></span></label>
   {% if kind == 'flow' %}
   <label class="wide">Маркеры (как в заключении)
     <input name="markers" value="{{ fv.get('markers') or '' }}" placeholder="CD5+ CD19+ CD20 dim CD23+ CD10−">{{ err("markers") }}

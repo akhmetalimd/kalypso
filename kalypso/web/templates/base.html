@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}KALYPSO{% endblock %} · KALYPSO</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/kalypso.js"></script>
 </head>
 <body id="top">
 <header class="top">
@@ -38,6 +39,7 @@
     {% endif %}
   </div>
   {% endif %}
+  <button type="button" id="theme-toggle" class="link theme-toggle" hidden>◐ Тема</button>
 </header>
 <main>
   <div class="synthetic">Пилот на синтетических данных. Реальные данные пациентов не вносить.{% if demo_mode %} Демо-режим: вход без пароля, роль — в шапке.{% endif %}</div>

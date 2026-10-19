@@ -82,7 +82,7 @@ def column_chart(items: list[tuple[str, int]], title: str) -> str:
         x = 20 + i * band + (band - thick) / 2
         length = (base - top) * v / peak
         body.append(f'<g><title>{escape(label)}: {v}</title>'
-                    f'<path class="bar s1" d="{_bar_path(x, base, max(length, 0.5), thick, horizontal=False)}"/>'
+                    f'<path class="bar s1 col" d="{_bar_path(x, base, max(length, 0.5), thick, horizontal=False)}"/>'
                     f'{_text(x + thick / 2, base - length - 5, v, "viz-muted", "middle")}'
                     f'{_text(x + thick / 2, base + 16, label, "viz-muted", "middle", 11)}</g>')
     return _svg(h, "".join(body), title, f"{len(items)} значений")
@@ -176,7 +176,7 @@ def km_chart(groups: list[dict], title: str, x_max_months: float | None = None) 
             d.append(f"H{sx(s['t']):.1f}V{sy(s['survival']):.1f}")
             s_prev = s["survival"]
         d.append(f"H{sx(last_t):.1f}")
-        body.append(f'<path class="line {cls}" d="{"".join(d)}"><title>{escape(g["label"])}: n={g["km"]["n"]}, '
+        body.append(f'<path class="line {cls}" pathLength="1" d="{"".join(d)}"><title>{escape(g["label"])}: n={g["km"]["n"]}, '
                     f'событий {g["km"]["events"]}</title></path>')
         for c in g["km"]["censored"]:
             x, y = sx(c["t"]), sy(c["survival"])

@@ -1,6 +1,6 @@
 {# Фильтры когорты и табличные двойники графиков. #}
-{% macro nosology_select(f) %}
-  <label>Нозология <select name="nosology"><option value="">все</option>
+{% macro nosology_select(f, required=False) %}
+  <label>Нозология <select name="nosology"{% if required %} required{% endif %}>{% if not required %}<option value="">все</option>{% endif %}
     {% for title, nodes in nosology_groups() %}<optgroup label="{{ title }}">
       {% for n in nodes %}<option value="{{ n.id }}"{% if f.nosology == n.id %} selected{% endif %}>{{ n.name }}</option>{% endfor %}
     </optgroup>{% endfor %}</select></label>
@@ -9,18 +9,20 @@
 {% macro stage_select(f, nos) %}
   {% set prof = profile(nos) if nos else none %}
   {% if prof and prof.stages %}
-  <label>Стадия <select name="stage"><option value="">все</option>
+  <label class="stage-pick">Стадия <select name="stage"><option value="">все</option>
     {% for system, values in prof.stages.items() %}<optgroup label="{{ system }}">
       {% for v in values %}{% set code = system ~ ':' ~ v %}<option value="{{ code }}"{% if f.stage == code %} selected{% endif %}>{{ system }} {{ v }}</option>{% endfor %}
     </optgroup>{% endfor %}</select></label>
   {% elif not nos %}
-  <label>Стадия <select disabled><option>— выберите нозологию</option></select></label>
+  <label class="stage-pick">Стадия <select name="stage" disabled><option value="">— выберите нозологию</option></select></label>
+  {% else %}
+  <label class="stage-pick" hidden>Стадия <select name="stage" disabled></select></label>
   {% endif %}
 {% endmacro %}
 
-{% macro filters(action, f, branches, nosology=True, fixed=None) %}
-<form method="get" action="{{ action }}" class="filters">
-  {% if nosology %}{{ nosology_select(f) }}{% endif %}
+{% macro filters(action, f, branches, nosology=True, fixed=None, nosology_required=False) %}
+<form method="get" action="{{ action }}" class="filters"{% if nosology %} data-stages='{{ stage_map()|tojson }}'{% endif %}{% if nosology_required %} data-resubmit{% endif %}>
+  {% if nosology %}{{ nosology_select(f, nosology_required) }}{% endif %}
   {{ stage_select(f, fixed or f.nosology) }}
   {% set bopts = {} %}{% for b in branches %}{% set _ = bopts.update({b.branch_code: b.name_ru}) %}{% endfor %}
   <label>Филиал <select name="branch"><option value="">все доступные</option>

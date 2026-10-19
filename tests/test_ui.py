@@ -1,4 +1,7 @@
-"""Демо-режим (вход без пароля, переключатель роли), главная, фильтры «Пациентов», группы нозологий."""
+"""Демо-режим (вход без пароля, переключатель роли), главная, фильтры «Пациентов», группы нозологий;
+тема, небольшой JS и анимации (прогрессивное улучшение)."""
+import html
+import json
 import re
 
 import pytest
@@ -178,3 +181,45 @@ def test_dashboards_hide_details_under_more(demo, world):
     assert "Ещё: поля модуля" in c.get("/dashboard/m/mcl").text
     dl = c.get("/dashboard/dlbcl").text
     assert dl.count("<section") == dl.count("</section>")
+
+
+def test_theme_toggle_script_and_no_inline_js(demo, world):
+    """Тема: по системе + переключатель (виден только с JS); скрипт — внешний файл (CSP default-src 'self')."""
+    c = enter(demo)
+    r = c.get("/patients")
+    page = r.text
+    assert '<script src="/static/kalypso.js"></script>' in page
+    assert re.findall(r"<script(?![^>]*\bsrc=)", page) == [] and " onclick=" not in page   # без встроенного JS
+    assert re.search(r'<button type="button" id="theme-toggle"[^>]*hidden', page)
+    assert "'unsafe-inline'" not in r.headers["content-security-policy"]
+    js = c.get("/static/kalypso.js")
+    assert js.status_code == 200 and "localStorage" in js.text and "IntersectionObserver" in js.text
+    css = c.get("/static/style.css").text
+    assert "var(--card)" not in css
+    assert css.count(':root[data-theme="dark"]') >= 2 and css.count(':root:not([data-theme="light"])') == 2
+    assert "@media (prefers-reduced-motion: no-preference)" in css and "[hidden] { display: none !important; }" in css
+
+
+def test_charts_are_marked_for_draw_in_animation():
+    import registry_core as core
+    from kalypso import charts
+    km = core.km_estimate([30, 60, 90], [1, 0, 1])
+    svg = charts.km_chart([{"label": "A", "km": km}], "KM")
+    assert '<path class="line s1" pathLength="1"' in svg
+    assert 'class="bar s1 col"' in charts.column_chart([("2021", 3)], "Годы")
+
+
+def test_home_art_and_progressive_filters(demo, world):
+    c = enter(demo)
+    home = c.get("/").text
+    assert 'class="home-art"' in home and 'aria-hidden="true"' in home and 'class="km a" pathLength="1"' in home
+    page = c.get("/patients").text
+    stages = json.loads(html.unescape(re.search(r"data-stages='([^']+)'", page).group(1)))
+    assert stages["follicular"]["Lugano"][0] == "I" and stages["hcl"] == {}
+    assert 'class="stage-pick"' in page                                   # без нозологии — подсказка
+    pid = world.register().record_id
+    form = c.get(f"/patients/{pid}").text
+    units = {}
+    for raw in re.findall(r"data-units='([^']+)'", form):
+        units.update(json.loads(html.unescape(raw)))
+    assert units["hbv_dna"] == "МЕ/мл" and units["flow_panel"] == "%"

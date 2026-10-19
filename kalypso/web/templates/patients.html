@@ -17,7 +17,7 @@
 
 <details class="filters-box"{% if pl.chips %} open{% endif %}>
 <summary>Фильтры{% if pl.chips %} · {{ pl.chips|length }}{% endif %}</summary>
-<form method="get" action="/patients" class="filters">
+<form method="get" action="/patients" class="filters" data-stages='{{ stage_map()|tojson }}'>
   {% if pl.sort %}<input type="hidden" name="sort" value="{{ pl.sort }}">{% endif %}
   {{ nosology_select(f) }}
   {{ stage_select(f, f.nosology) }}
