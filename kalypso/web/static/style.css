@@ -156,3 +156,16 @@ textarea.doc-text { font-family: ui-monospace, Consolas, monospace; font-size: .
 .nos-links { display: flex; flex-wrap: wrap; gap: 6px; }
 .nos-links .button { white-space: normal; text-align: left; }
 .pager { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin: 10px 0; }
+/* Ошибка у поля формы */
+.field-err { display: block; color: var(--err, #ff8a80); font-size: .8rem; margin-top: 2px; }
+[aria-invalid="true"] { outline: 2px solid var(--err, #ff8a80); outline-offset: 1px; }
+/* Шапка: текущий раздел и «Новый пациент» */
+nav a.active { color: var(--text); font-weight: 600; border-bottom: 2px solid var(--accent); }
+nav .nav-new { margin-left: 8px; padding: 4px 12px; }
+/* Карточка: сводка, оглавление, «Наверх», подсказка индекса */
+.summary { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 8px 0 12px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.summary div { min-width: 120px; } .summary dt { font-size: .75rem; color: var(--muted); } .summary dd { margin: 0; font-weight: 600; }
+.toc { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 8px 0; margin-bottom: 8px; background: var(--bg); border-bottom: 1px solid var(--line); font-size: .9rem; }
+section[id^="s-"] { scroll-margin-top: 56px; }
+.to-top { position: fixed; right: 18px; bottom: 18px; padding: 6px 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); font-size: .85rem; text-decoration: none; }
+.info { cursor: help; color: var(--muted); font-size: .85em; }

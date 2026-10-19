@@ -8,7 +8,7 @@
   <tr>
     <td><a href="/patients/{{ r.patient_id }}" class="mono">{{ r.patient_id|short }}</a></td>
     {% if p.can('patient.iin') %}<td class="mono">{{ r.iin }}</td>{% endif %}
-    <td>{{ r.branch }}</td>
+    <td title="{{ r.branch }}">{{ branch_names.get(r.branch, r.branch) }}</td>
     {% if show_nosology %}<td>{{ r.who_haem5|nosology }}</td>{% endif %}
     <td>{{ r.mkb }}{% if r.dx_version > 1 %} <span class="badge" title="Диагноз пересматривался">v{{ r.dx_version }}</span>{% endif %}</td>
     <td>{{ r.dx_date|d }}</td>

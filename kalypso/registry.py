@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from datetime import date
 from typing import Any
 from uuid import UUID
@@ -25,6 +26,13 @@ from kalypso.indices import (  # noqa: F401 — _age, _tp53_abnormal, pod24_stat
 from kalypso.rbac import NotFound, Principal, visible_patients_sql
 
 CLL = "cll_sll"
+REGISTRY_START = date.fromisoformat(
+    json.loads((Path(core.CONFIG_DIR) / "registry.json").read_text(encoding="utf-8"))["registry_start"])
+
+
+def provenance_for(dx_date: date) -> str:
+    """Ретро/проспектив — автоматически: диагноз до запуска регистра — ретроспективно."""
+    return "prospective" if dx_date >= REGISTRY_START else "retrospective"
 MISSING = sorted(core.MISSING_CODES)
 PRECISIONS = ("day", "month", "year")
 # «Условные» поля пациента: пусто без кода пропуска -> флаг полноты.
@@ -36,9 +44,10 @@ DX_FIELDS = ("who_haem5", "icd_o_3_2", "mkb", "dx_date", "dx_date_precision")
 
 
 class ValidationError(Exception):
-    def __init__(self, errors: list[str]):
+    def __init__(self, errors: list[str], fields: dict[str, str] | None = None):
         super().__init__("; ".join(errors))
         self.errors = errors
+        self.fields = fields or {}             # ошибки по полям формы
 
 
 @dataclass
@@ -126,6 +135,11 @@ class Form:
     def __init__(self, data: dict):
         self.data = {k: (v.strip() if isinstance(v, str) else v) for k, v in data.items()}
         self.errors: list[str] = []
+        self.fields: dict[str, str] = {}      # поле -> ошибка (показывается у поля в форме)
+
+    def _err(self, name: str, message: str) -> None:
+        self.errors.append(message)
+        self.fields.setdefault(name, message)
 
     def raw(self, name: str):
         v = self.data.get(name)
@@ -135,21 +149,21 @@ class Form:
         v = self.raw(name)
         if v is None:
             if required:
-                self.errors.append(f"{label}: обязательное поле")
+                self._err(name, f"{label}: обязательное поле")
             return None
         v = str(v)
         if len(v) > maxlen:
-            self.errors.append(f"{label}: не длиннее {maxlen} символов")
+            self._err(name, f"{label}: не длиннее {maxlen} символов")
         return v
 
     def choice(self, name: str, label: str, allowed, required=False, default=None) -> str | None:
         v = self.raw(name)
         if v is None:
             if required and default is None:
-                self.errors.append(f"{label}: выберите значение")
+                self._err(name, f"{label}: выберите значение")
             return default
         if v not in allowed:
-            self.errors.append(f"{label}: недопустимое значение")
+            self._err(name, f"{label}: недопустимое значение")
             return None
         return v
 
@@ -157,12 +171,12 @@ class Form:
         v = self.raw(name)
         if v is None:
             if required:
-                self.errors.append(f"{label}: обязательное поле")
+                self._err(name, f"{label}: обязательное поле")
             return None
         try:
             return core._as_date(v)
         except ValueError:
-            self.errors.append(f"{label}: дата в формате ГГГГ-ММ-ДД")
+            self._err(name, f"{label}: дата в формате ГГГГ-ММ-ДД")
             return None
 
     def precision(self, name: str) -> str:
@@ -175,10 +189,10 @@ class Form:
         try:
             n = int(v)
         except (TypeError, ValueError):
-            self.errors.append(f"{label}: целое число")
+            self._err(name, f"{label}: целое число")
             return None
         if (lo is not None and n < lo) or (hi is not None and n > hi):
-            self.errors.append(f"{label}: от {lo} до {hi}")
+            self._err(name, f"{label}: от {lo} до {hi}")
             return None
         return n
 
@@ -186,12 +200,12 @@ class Form:
         v = self.raw(name)
         if v is None:
             if required:
-                self.errors.append(f"{label}: обязательное поле")
+                self._err(name, f"{label}: обязательное поле")
             return None
         try:
             return float(str(v).replace(",", "."))
         except ValueError:
-            self.errors.append(f"{label}: число")
+            self._err(name, f"{label}: число")
             return None
 
     def free_text(self, name: str, label: str) -> str | None:
@@ -200,12 +214,12 @@ class Form:
         found = find_identifiers(v)
         if found:
             kinds = {"iin": "ИИН (12 цифр)", "phone": "номер телефона", "email": "e-mail"}
-            self.errors.append(f"{label}: удалите идентификаторы — " + ", ".join(kinds[k] for k in found))
+            self._err(name, f"{label}: удалите идентификаторы — " + ", ".join(kinds[k] for k in found))
         return v
 
     def check(self) -> None:
         if self.errors:
-            raise ValidationError(self.errors)
+            raise ValidationError(self.errors, self.fields)
 
 
 def _db_call(fn):
@@ -235,7 +249,7 @@ def _patient_fields(f: Form) -> dict:
         "first_visit_precision": f.precision("first_visit_precision"),
         "last_contact_date": f.date("last_contact_date", "Последний контакт", required=True),
         "last_contact_precision": f.precision("last_contact_precision"),
-        "provenance": f.choice("provenance", "Ретро/проспектив", ("retrospective", "prospective"), required=True),
+        "provenance": f.choice("provenance", "Ретро/проспектив", ("retrospective", "prospective")),
         "status_last_contact": f.choice("status_last_contact", "Статус",
                                         ("alive", "dead", "lost_to_follow_up"), required=True),
         "ecog": f.int("ecog", "ECOG", 0, 4),
@@ -247,6 +261,8 @@ def _patient_fields(f: Form) -> dict:
         "histology_scan": f.text("histology_scan", "Ссылка на скан", maxlen=500),
     }
     row.update(_stage_and_index(f, profile(who)))
+    if row["provenance"] is None and row["dx_date"]:
+        row["provenance"] = provenance_for(row["dx_date"])
     for flag in core.validate_codes(row):
         f.errors.append({
             "icd_o_mismatch": "Код ICD-O-3.2 не соответствует выбранной нозологии",
@@ -305,6 +321,13 @@ def _death_fields(f: Form, row: dict) -> dict:
     if d["event_date"] and row["last_contact_date"] and d["event_date"] > row["last_contact_date"]:
         f.errors.append("Дата смерти позже последнего контакта")
     return d
+
+
+def _inherit(row: dict, patient: dict) -> dict:
+    """Ретро/проспектив записи — как у пациента, если не указано явно."""
+    if not row.get("provenance"):
+        row["provenance"] = patient["provenance"]
+    return row
 
 
 def _insert(cur, table: str, row: dict, returning: str):
@@ -619,7 +642,7 @@ def _line_row(f: Form) -> dict:
         "end_date": f.date("end_date", "Окончание"),
         "end_precision": f.precision("end_precision"),
         "stop_reason": f.text("stop_reason", "Причина окончания", maxlen=300),
-        "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES, required=True),
+        "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES),
     }
     if row["start_date"] and row["end_date"] and row["end_date"] < row["start_date"]:
         f.errors.append("Окончание линии раньше начала")
@@ -639,7 +662,9 @@ def add_line(db: Database, p: Principal, pid, data: dict) -> Result:
 
     def write():
         with db.tx(p.user_id) as cur:
-            _check_line_start(row, _load_visible(cur, p, pid, "patient.write"))
+            patient = _load_visible(cur, p, pid, "patient.write")
+            _check_line_start(row, patient)
+            _inherit(row, patient)
             cur.execute("SELECT coalesce(max(line_no), 0) + 1 AS n FROM therapy_line WHERE patient_id = %s", (pid,))
             row.update(patient_id=pid, line_no=cur.fetchone()["n"], source="manual")
             return _insert(cur, "therapy_line", row, "line_id")
@@ -654,8 +679,9 @@ def update_line(db: Database, p: Principal, pid, rid, data: dict) -> Result:
 
     def write():
         with db.tx(p.user_id, reason=reason) as cur:
-            _check_line_start(row, _load_visible(cur, p, pid, "patient.write"))
-            _update(cur, "therapy_line", "line_id", rid, pid, row)
+            patient = _load_visible(cur, p, pid, "patient.write")
+            _check_line_start(row, patient)
+            _update(cur, "therapy_line", "line_id", rid, pid, _inherit(row, patient))
     _db_call(write)
     return Result("saved", rid)
 
@@ -676,7 +702,7 @@ def _obs_row(f: Form, prof: dict) -> dict:
         "pet_ct_report": f.free_text("pet_ct_report", "Заключение ПЭТ-КТ"),
         "deauville": f.int("deauville", "Deauville", 1, 5),
         "pacs_accession": f.text("pacs_accession", "PACS accession", maxlen=200),
-        "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES, required=True),
+        "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES),
     }
     if row["line_id"]:
         try:
@@ -737,7 +763,7 @@ def add_observation(db: Database, p: Principal, pid, data: dict) -> Result:
     def write():
         with db.tx(p.user_id) as cur:
             patient = _load_visible(cur, p, pid, perm)
-            row = _obs_row(f, profile(patient["who_haem5"]))
+            row = _inherit(_obs_row(f, profile(patient["who_haem5"])), patient)
             f.check()
             oid = _insert(cur, "observation", {**row, "patient_id": pid, "source": "manual"}, "obs_id")
             _obs_effects(cur, pid, patient, row)
@@ -755,7 +781,7 @@ def update_observation(db: Database, p: Principal, pid, rid, data: dict) -> Resu
     def write():
         with db.tx(p.user_id, reason=reason) as cur:
             patient = _load_visible(cur, p, pid, perm)
-            row = _obs_row(f, profile(patient["who_haem5"]))
+            row = _inherit(_obs_row(f, profile(patient["who_haem5"])), patient)
             f.check()
             cur.execute("SELECT event_type FROM observation WHERE obs_id = %s AND patient_id = %s "
                         "AND deleted_at IS NULL", (rid, pid))
@@ -778,7 +804,7 @@ def _lab_row(f: Form) -> tuple[dict, list[str]]:
     unit = f.text("unit", "Единица", required=True, maxlen=30)
     row = {"obs_date": f.date("obs_date", "Дата анализа", required=True), "loinc": loinc,
            "value_raw": value, "unit_raw": unit,
-           "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES, required=True)}
+           "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES)}
     if f.errors:
         return row, []
     c = core.canonicalize_lab(loinc, value, unit)  # исходное значение сохраняется рядом
@@ -795,7 +821,7 @@ def add_lab(db: Database, p: Principal, pid, data: dict) -> Result:
 
     def write():
         with db.tx(p.user_id) as cur:
-            _load_visible(cur, p, pid, perm)
+            _inherit(row, _load_visible(cur, p, pid, perm))
             return _insert(cur, "lab", {**row, "patient_id": pid, "source": "manual"}, "lab_id")
     return Result("saved", _db_call(write), warnings)
 
@@ -809,8 +835,7 @@ def update_lab(db: Database, p: Principal, pid, rid, data: dict) -> Result:
 
     def write():
         with db.tx(p.user_id, reason=reason) as cur:
-            _load_visible(cur, p, pid, perm)
-            _update(cur, "lab", "lab_id", rid, pid, row)
+            _update(cur, "lab", "lab_id", rid, pid, _inherit(row, _load_visible(cur, p, pid, perm)))
     _db_call(write)
     return Result("saved", rid, warnings)
 
@@ -827,7 +852,7 @@ def _marker_row(f: Form, fields_list: list[dict], key: str | None = None) -> dic
     test_date = f.date("test_date", "Дата теста")
     return {"field_key": key, "value": value, "missing": missing, "test_date": test_date,
             "test_date_precision": f.precision("test_date_precision") if test_date else None,
-            "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES, required=True)}
+            "provenance": f.choice("provenance", "Ретро/проспектив", PROVENANCES)}
 
 
 def add_marker(db: Database, p: Principal, pid, data: dict) -> Result:
@@ -837,8 +862,9 @@ def add_marker(db: Database, p: Principal, pid, data: dict) -> Result:
 
     def write():
         with db.tx(p.user_id) as cur:
-            prof = profile(_load_visible(cur, p, pid, perm)["who_haem5"])
-            row = _marker_row(f, prof["fields"])
+            patient = _load_visible(cur, p, pid, perm)
+            prof = profile(patient["who_haem5"])
+            row = _inherit(_marker_row(f, prof["fields"]), patient)
             f.check()
             return _insert(cur, "module_data", {**row, "patient_id": pid, "module": prof["module"],
                                                 "source": "manual"}, "md_id")
@@ -855,8 +881,7 @@ def update_marker(db: Database, p: Principal, pid, rid, data: dict) -> Result:
 
     def write():
         with db.tx(p.user_id, reason=reason) as cur:
-            _load_visible(cur, p, pid, "patient.write")
-            _update(cur, "module_data", "md_id", rid, pid, row)
+            _update(cur, "module_data", "md_id", rid, pid, _inherit(row, _load_visible(cur, p, pid, "patient.write")))
     _db_call(write)
     return Result("saved", rid)
 
@@ -872,7 +897,7 @@ def add_investigation(db: Database, p: Principal, pid, data: dict) -> Result:
 
     def write():
         with db.tx(p.user_id) as cur:
-            _load_visible(cur, p, pid, "patient.write")
+            _inherit(row, _load_visible(cur, p, pid, "patient.write"))
             return _insert(cur, "investigation", {**row, "patient_id": pid, "source": "manual"}, "inv_id")
     return Result("saved", _db_call(write))
 
@@ -888,8 +913,7 @@ def update_investigation(db: Database, p: Principal, pid, rid, data: dict) -> Re
 
     def write():
         with db.tx(p.user_id, reason=reason) as cur:
-            _load_visible(cur, p, pid, "patient.write")
-            _update(cur, "investigation", "inv_id", rid, pid, row)
+            _update(cur, "investigation", "inv_id", rid, pid, _inherit(row, _load_visible(cur, p, pid, "patient.write")))
     _db_call(write)
     return Result("saved", rid)
 

@@ -106,3 +106,48 @@ def test_nosology_groups_cover_all_active():
     grouped = [n["id"] for _, nodes in registry.nosology_groups() for n in nodes]
     assert sorted(grouped) == sorted(n["id"] for n in registry.active_nodes())
     assert [t for t, _ in registry.nosology_groups()][:2] == ["Индолентные B-клеточные", "Агрессивные B-клеточные"]
+
+
+# --- ретро/проспектив автоматически, ошибки у полей, шапка, сводка карточки ---------
+def _form(world, **kw):
+    f = world.patient_form(**kw)
+    f.pop("provenance", None)                              # в формах этого поля больше нет
+    return f
+
+
+def test_provenance_is_derived_and_inherited(world):
+    old = registry.register_patient(world.db, world.doc_a, _form(world, dx_date="2021-03-01")).record_id
+    new = registry.register_patient(world.db, world.doc_a, _form(world, dx_date="2024-02-01",
+                                                                 last_contact_date="2025-01-01")).record_id
+    get = lambda pid: registry.get_card(world.db, world.doc_a, pid)  # noqa: E731
+    assert get(old)["patient"]["provenance"] == "retrospective" and get(new)["patient"]["provenance"] == "prospective"
+    registry.add_line(world.db, world.doc_a, new, {"regimen": "BR", "start_date": "2024-03-01"})
+    registry.add_lab(world.db, world.doc_a, new, {"loinc": "8302-2", "value": "120", "unit": "g/L", "obs_date": "2024-02-02"})
+    card = get(new)
+    assert card["lines"][0]["provenance"] == card["labs"][0]["provenance"] == "prospective"
+    assert registry.REGISTRY_START.isoformat() == "2024-01-01"
+
+
+def test_validation_errors_are_bound_to_fields(world, demo):
+    from kalypso.registry import ValidationError
+    with pytest.raises(ValidationError) as e:
+        registry.register_patient(world.db, world.doc_a, _form(world, ecog="9", sex=""))
+    assert {"ecog", "sex"} <= set(e.value.fields) and "ECOG: от 0 до 4" in e.value.fields["ecog"]
+    c = enter(demo)
+    page = c.get("/patients/new?who=cll_sll").text
+    r = c.post("/patients/new", data={**_form(world, ecog="9"), "who_haem5": "cll_sll", "csrf": csrf(page)})
+    assert r.status_code == 422
+    assert re.search(r'name="ecog"[^>]*>\{?\{?[^<]*<small class="field-err" role="alert">ECOG: от 0 до 4', r.text) or \
+        '<small class="field-err" role="alert">ECOG: от 0 до 4</small>' in r.text
+    assert 'name="provenance"' not in page
+
+
+def test_header_card_summary_and_index_help(demo, world):
+    pid = world.register(index_score="3").record_id
+    c = enter(demo)
+    patients = c.get("/patients").text
+    assert '<a href="/patients" class="active" aria-current="page">Пациенты</a>' in patients
+    assert "Синт. A" in patients and 'class="button primary nav-new"' in patients
+    card = c.get(f"/patients/{pid}").text
+    assert 'class="summary"' in card and 'class="toc"' in card and 'href="#s-inv"' in card and 'id="s-inv"' in card
+    assert 'class="info" title="TP53 — 4' in card and 'class="to-top"' in card

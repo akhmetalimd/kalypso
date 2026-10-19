@@ -6,30 +6,31 @@
   <title>{% block title %}KALYPSO{% endblock %} · KALYPSO</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body id="top">
 <header class="top">
   <a class="brand" href="/">KALYPSO <span>регистр ЛПЗ · пилот</span></a>
   {% if p %}
+  {% macro nav(href, text, prefix=None) %}<a href="{{ href }}"{% if current_path is defined and (current_path == href or current_path.startswith((prefix or href) ~ '/')) and not (href == '/patients' and current_path.startswith('/patients/new')) %} class="active" aria-current="page"{% endif %}>{{ text }}</a>{% endmacro %}
   <nav>
-    <a href="/patients">Пациенты</a>
-    {% if p.can('patient.write') %}<a href="/patients/new">Новый пациент</a>{% endif %}
-    {% if p.can('access.decide') %}<a href="/requests">Запросы доступа</a>{% endif %}
-    {% if p.can('patient.read') %}<a href="/dashboard">Дашборды</a><a href="/survival">Выживаемость</a><a href="/quality">Полнота</a>{% endif %}
-    {% if p.can('export.deid') %}<a href="/export">Выгрузка</a>{% endif %}
-    {% if p.can('audit.read') %}<a href="/audit">Аудит</a>{% endif %}
-    {% if p.can('users.manage') %}<a href="/admin/users">Пользователи</a>{% endif %}
+    {{ nav('/patients', 'Пациенты') }}
+    {% if p.can('access.decide') %}{{ nav('/requests', 'Запросы доступа') }}{% endif %}
+    {% if p.can('patient.read') %}{{ nav('/dashboard', 'Дашборды') }}{{ nav('/survival', 'Выживаемость') }}{{ nav('/quality', 'Полнота') }}{% endif %}
+    {% if p.can('export.deid') %}{{ nav('/export', 'Выгрузка') }}{% endif %}
+    {% if p.can('audit.read') %}{{ nav('/audit', 'Аудит') }}{% endif %}
+    {% if p.can('users.manage') %}{{ nav('/admin/users', 'Пользователи', '/admin') }}{% endif %}
+    {% if p.can('patient.write') %}<a href="/patients/new" class="button primary nav-new">+ Новый пациент</a>{% endif %}
   </nav>
   <div class="who">
     {% if demo_mode %}
     <form method="post" action="/demo/role" class="inline demo-role">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ current_path }}">
       <label>Роль <select name="login">
-        {% for u in demo_users %}<option value="{{ u.login }}"{% if u.login == p.login %} selected{% endif %}>{{ label('role', u.role) }}{% if u.branch_code %} · {{ u.branch_code }}{% endif %} ({{ u.login }})</option>{% endfor %}
+        {% for u in demo_users %}<option value="{{ u.login }}"{% if u.login == p.login %} selected{% endif %}>{{ label('role', u.role) }}{% if u.branch_code %} · {{ branch_names.get(u.branch_code, u.branch_code) }}{% endif %}</option>{% endfor %}
       </select></label>
       <button class="link">Сменить</button>
     </form>
     {% else %}
-    {{ p.display_name }} · {{ label('role', p.role) }}{% if p.branch_code %} · {{ p.branch_code }}{% endif %}
+    {{ p.display_name }} · {{ label('role', p.role) }}{% if p.branch_code %} · {{ branch_names.get(p.branch_code, p.branch_code) }}{% endif %}
     <form method="post" action="/logout" class="inline">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="link">Выйти</button>

@@ -1,5 +1,5 @@
 {# Поля форм клинических записей: одни и те же для добавления (карточка) и правки. #}
-{% from "_macros.html" import select, codes, date_field with context %}
+{% from "_macros.html" import err, select, codes, date_field with context %}
 
 {% macro marker_fields(fv, pt, fixed_key=None) %}
   {% set all = profile(pt.who_haem5).fields %}
@@ -20,21 +20,19 @@
     {% if not fixed_key %}<small>Результат — из группы выбранного маркера.</small>{% endif %}</label>
   <label>или код пропуска {{ codes('missing', missing_codes, 'missing', fv.get('missing')) }}</label>
   {{ date_field('test_date', 'test_date_precision', fv, 'Дата теста') }}
-  <label>Данные * {{ select('provenance', options('provenance'), fv.get('provenance') or pt.provenance, blank=None) }}</label>
 {% endmacro %}
 
 {% macro line_fields(fv, pt) %}
-  <label>Режим * <input name="regimen" list="regimens" value="{{ fv.get('regimen') or '' }}" required maxlength="200">
+  <label>Режим * <input name="regimen" list="regimens" value="{{ fv.get('regimen') or '' }}" required maxlength="200">{{ err("regimen") }}
     <small>Выберите из списка или введите свой.</small></label>
   <datalist id="regimens">{% for r in profile(pt.who_haem5).regimens %}<option value="{{ r }}">{% endfor %}</datalist>
   <label>Препараты <input name="drug" value="{{ fv.get('drug') or '' }}" maxlength="500"></label>
   <label>Доза <input name="dose" value="{{ fv.get('dose') or '' }}" maxlength="200"></label>
-  <label>Циклов <input type="number" name="cycles" min="0" max="100" value="{{ fv.get('cycles') if fv.get('cycles') is not none else '' }}"></label>
+  <label>Циклов <input type="number" name="cycles" min="0" max="100" value="{{ fv.get('cycles') if fv.get('cycles') is not none else '' }}">{{ err("cycles") }}</label>
   <label>Путь введения <input name="route" value="{{ fv.get('route') or '' }}" maxlength="100"></label>
   {{ date_field('start_date', 'start_precision', fv, 'Начало', required=True) }}
   {{ date_field('end_date', 'end_precision', fv, 'Окончание') }}
   <label>Причина окончания <input name="stop_reason" value="{{ fv.get('stop_reason') or '' }}" maxlength="300"></label>
-  <label>Данные * {{ select('provenance', options('provenance'), fv.get('provenance') or pt.provenance, blank=None) }}</label>
 {% endmacro %}
 
 {% macro obs_fields(fv, pt, lines) %}
@@ -48,21 +46,19 @@
   <label>Событие {{ select('event_type', options('event_type'), fv.get('event_type') or 'none', blank=None) }}</label>
   <label>Дата события <input type="date" name="event_date" value="{{ fv.get('event_date') or '' }}"><small>по умолчанию — дата наблюдения</small></label>
   <label>Причина смерти {{ select('death_cause', options('death_cause'), fv.get('death_cause')) }}</label>
-  <label class="wide">Заключение ПЭТ-КТ (текст) <textarea name="pet_ct_report" rows="3">{{ fv.get('pet_ct_report') or '' }}</textarea></label>
-  <label>Deauville <input type="number" name="deauville" min="1" max="5" value="{{ fv.get('deauville') or '' }}"></label>
+  <label class="wide">Заключение ПЭТ-КТ (текст) <textarea name="pet_ct_report" rows="3">{{ fv.get('pet_ct_report') or '' }}</textarea>{{ err("pet_ct_report") }}</label>
+  <label>Deauville <input type="number" name="deauville" min="1" max="5" value="{{ fv.get('deauville') or '' }}">{{ err("deauville") }}</label>
   <label>PACS accession / Study UID <input name="pacs_accession" value="{{ fv.get('pacs_accession') or '' }}" maxlength="200"></label>
-  <label>Данные * {{ select('provenance', options('provenance'), fv.get('provenance') or pt.provenance, blank=None) }}</label>
 {% endmacro %}
 
 {% macro lab_fields(fv, pt) %}
   {% set lab_opts = {} %}{% for code, spec in lab_units.items() if not code.startswith('_') %}{% set _ = lab_opts.update({code: spec.name ~ ' (' ~ spec.conversions|join(', ') ~ ')'}) %}{% endfor %}
   <label>Показатель * {{ select('loinc', lab_opts, fv.get('loinc'), required=True) }}</label>
-  <label>Значение * <input name="value" inputmode="decimal" value="{{ fv.get('value') if fv.get('value') is not none else '' }}" required></label>
-  <label>Единица (UCUM) * <input name="unit" list="units" value="{{ fv.get('unit') or '' }}" required maxlength="30">
+  <label>Значение * <input name="value" inputmode="decimal" value="{{ fv.get('value') if fv.get('value') is not none else '' }}" required>{{ err("value") }}</label>
+  <label>Единица (UCUM) * <input name="unit" list="units" value="{{ fv.get('unit') or '' }}" required maxlength="30">{{ err("unit") }}
     <small>Приводится к канонической; исходное значение сохраняется.</small></label>
   <datalist id="units">{% for u in ['g/L','g/dL','10*9/L','10*3/uL','/uL','U/L','mg/L','ug/mL','mmol/L','mg/dL','umol/L'] %}<option value="{{ u }}">{% endfor %}</datalist>
   <label>Дата анализа * <input type="date" name="obs_date" value="{{ fv.get('obs_date') or '' }}" required></label>
-  <label>Данные * {{ select('provenance', options('provenance'), fv.get('provenance') or pt.provenance, blank=None) }}</label>
 {% endmacro %}
 
 {% macro inv_fields(fv, pt, kind) %}
@@ -75,16 +71,15 @@
     {{ select('qual_result', {'positive': 'есть (положительно)', 'negative': 'нет (отрицательно)', 'equivocal': 'сомнительно'}, fv.get('qual_result')) }}
     <small>Для IGHV «есть» = мутирован; кариотип «есть» = аномальный.</small></label>
   <label>Что именно <input name="qual_detail" value="{{ fv.get('qual_detail') or '' }}" maxlength="300"
-    placeholder="{{ {'genetics': 'del(17p), t(11;14), 46,XY,+12…', 'flow': 'фенотип клона', 'virology': 'генотип, серотип…', 'autoimmune': 'тип антител…'}[kind] }}"></label>
+    placeholder="{{ {'genetics': 'del(17p), t(11;14), 46,XY,+12…', 'flow': 'фенотип клона', 'virology': 'генотип, серотип…', 'autoimmune': 'тип антител…'}[kind] }}">{{ err("qual_detail") }}</label>
   <label>Количественный результат
     <span class="pair"><input name="value" inputmode="decimal" value="{{ fv.get('value') if fv.get('value') is not none else '' }}" placeholder="число">
       <input name="unit" value="{{ fv.get('unit') or '' }}" maxlength="30" placeholder="единица (по умолчанию — из справочника)"></span></label>
   {% if kind == 'flow' %}
   <label class="wide">Маркеры (как в заключении)
-    <input name="markers" value="{{ fv.get('markers') or '' }}" placeholder="CD5+ CD19+ CD20 dim CD23+ CD10−">
+    <input name="markers" value="{{ fv.get('markers') or '' }}" placeholder="CD5+ CD19+ CD20 dim CD23+ CD10−">{{ err("markers") }}
     <small>Маркеры той панели, что использовалась: «+», «−», «dim» / «слаб.», «bright» / «ярк.», «частично».</small></label>
   {% endif %}
-  <label class="wide">Заключение <textarea name="conclusion" rows="2">{{ fv.get('conclusion') or '' }}</textarea>
+  <label class="wide">Заключение <textarea name="conclusion" rows="2">{{ fv.get('conclusion') or '' }}</textarea>{{ err("conclusion") }}
     <small>Без ФИО, ИИН и телефонов.</small></label>
-  <label>Данные * {{ select('provenance', options('provenance'), fv.get('provenance') or pt.provenance, blank=None) }}</label>
 {% endmacro %}

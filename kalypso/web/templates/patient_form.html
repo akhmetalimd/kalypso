@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import csrf_field, select, codes, date_field, missing_select with context %}
+{% from "_macros.html" import csrf_field, err, select, codes, date_field, missing_select with context %}
 {% block title %}{{ 'Новый пациент' if is_new else 'Правка карточки' }}{% endblock %}
 {% block content %}
 {% set prof = profile(v.get('who_haem5') or who) %}
@@ -11,7 +11,7 @@
   <fieldset>
     <legend>Идентификация</legend>
     <label>ИИН *
-      <input name="iin" inputmode="numeric" autocomplete="off" maxlength="14" required>
+      <input name="iin" inputmode="numeric" autocomplete="off" maxlength="14" required>{{ err("iin") }}
       <small>Проверяется контрольная цифра. Если пациент уже есть в регистре, данные повторно не вносятся.</small>
     </label>
     <label>Филиал <input value="{{ p.branch_code }}" disabled></label>
@@ -49,7 +49,6 @@
     <div>{{ date_field('birth_date', 'birth_date_precision', v, 'Дата рождения') }}{{ missing_select('birth_date', missing) }}</div>
     {{ date_field('first_visit_date', 'first_visit_precision', v, 'Первый визит') }}
     {{ date_field('last_contact_date', 'last_contact_precision', v, 'Последний контакт', required=True) }}
-    <label>Данные * {{ select('provenance', options('provenance'), v.get('provenance'), required=True) }}</label>
     <label>Статус на последний контакт * {{ select('status_last_contact', options('status_last_contact'), v.get('status_last_contact'), required=True) }}</label>
     {% if is_new or not has_death %}
     <div class="sub">
@@ -62,8 +61,8 @@
 
   <fieldset>
     <legend>Прогностическое ядро</legend>
-    <div><label>ECOG <input type="number" name="ecog" min="0" max="4" value="{{ v.get('ecog') if v.get('ecog') is not none else '' }}"></label>{{ missing_select('ecog', missing) }}</div>
-    <div><label>CIRS-G (0–56) <input type="number" name="cirs_score" min="0" max="56" value="{{ v.get('cirs_score') if v.get('cirs_score') is not none else '' }}"></label>{{ missing_select('cirs_score', missing) }}</div>
+    <div><label>ECOG <input type="number" name="ecog" min="0" max="4" value="{{ v.get('ecog') if v.get('ecog') is not none else '' }}">{{ err("ecog") }}</label>{{ missing_select('ecog', missing) }}</div>
+    <div><label>CIRS-G (0–56) <input type="number" name="cirs_score" min="0" max="56" value="{{ v.get('cirs_score') if v.get('cirs_score') is not none else '' }}">{{ err("cirs_score") }}</label>{{ missing_select('cirs_score', missing) }}</div>
     <label>Fitness {{ select('cirs_fitness', options('cirs_fitness'), v.get('cirs_fitness')) }}</label>
     <label>Charlson <input type="number" name="charlson_score" min="0" max="40" value="{{ v.get('charlson_score') if v.get('charlson_score') is not none else '' }}"></label>
     <div><label>B-симптомы {{ select('b_symptoms', options('b_symptoms'), v.get('b_symptoms')) }}</label>{{ missing_select('b_symptoms', missing) }}</div>
@@ -88,7 +87,7 @@
     <div>
       <label>{{ prof.index }}
         <span class="pair">
-          <input type="number" name="index_score" min="0" max="{{ spec.max }}" placeholder="балл 0–{{ spec.max }}" value="{{ v.get('index_score') if v.get('index_score') is not none else '' }}">
+          <input type="number" name="index_score" min="0" max="{{ spec.max }}" placeholder="балл 0–{{ spec.max }}" value="{{ v.get('index_score') if v.get('index_score') is not none else '' }}">{{ err("index_score") }}
           {% set groups = {} %}{% for upper, g in spec.groups %}{% set _ = groups.update({g: label('index_group', g)}) %}{% endfor %}
           {{ select('index_group', groups, v.get('index_group'), blank='группа') }}
         </span>
@@ -101,7 +100,7 @@
   <fieldset>
     <legend>Первичные документы</legend>
     <label class="wide">Заключение гистологии (текст)
-      <textarea name="histology_report" rows="5">{{ v.get('histology_report') or '' }}</textarea>
+      <textarea name="histology_report" rows="5">{{ v.get('histology_report') or '' }}</textarea>{{ err("histology_report") }}
       <small>Без ФИО, ИИН, телефонов и адресов: текст с идентификаторами не сохраняется.</small>
     </label>
     <label class="wide">Скан заключения (ссылка) <input name="histology_scan" value="{{ v.get('histology_scan') or '' }}" maxlength="500" placeholder="путь или URL во внутренней сети"></label>

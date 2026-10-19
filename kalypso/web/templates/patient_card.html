@@ -21,14 +21,28 @@
     {% if p.can('audit.read') %}<a class="button" href="/audit?table=patient&row_id={{ pid }}">История изменений</a>{% endif %}
   </div>
 </div>
-<p class="muted">Филиал регистрации: {{ pt.branch }} · ведётся в: {{ c.branches|join(', ') }} ·
+<dl class="summary">
+  <div><dt>Нозология</dt><dd>{{ pt.who_haem5|nosology }}</dd></div>
+  <div><dt>Диагноз</dt><dd>{{ pt.dx_date|d(pt.dx_date_precision) }}</dd></div>
+  <div><dt>Стадия</dt><dd>{% if pt.stage_system %}{{ pt.stage_system }} {{ pt.stage_value }}{% else %}—{% endif %}</dd></div>
+  {% for ix in c.indices if ix.stored %}<div><dt>{{ ix.name }}</dt><dd>{% if pt.index_name == ix.name %}{{ pt.index_score }} · {{ label('index_group', pt.index_group) }}{% elif ix.result %}{{ ix.result.score }} · {{ label('index_group', ix.result.group) }} <small>(расчёт)</small>{% else %}—{% endif %}</dd></div>{% endfor %}
+  <div><dt>Линий терапии</dt><dd>{{ c.lines|length }}</dd></div>
+  <div><dt>Последний контакт</dt><dd>{{ pt.last_contact_date|d(pt.last_contact_precision) }}</dd></div>
+  {% if c.flags.completeness or c.flags.quality %}<div><dt>Проверки</dt><dd><a href="#s-flags">{{ c.flags.completeness|length }} пропуск. · {{ c.flags.quality|length }} предупр.</a></dd></div>{% endif %}
+</dl>
+<nav class="toc" aria-label="Разделы карточки">
+  {% if timeline_svg %}<a href="#s-timeline">Таймлайн</a>{% endif %}<a href="#s-flags">Проверки и индексы</a><a href="#s-core">Ядро</a>
+  <a href="#s-dx">История диагноза</a><a href="#s-markers">Маркеры</a><a href="#s-inv">Исследования</a>
+  <a href="#s-lines">Линии</a><a href="#s-obs">Наблюдения</a><a href="#s-labs">Анализы</a>
+</nav>
+<p class="muted">Филиал регистрации: {{ branch_names.get(pt.branch, pt.branch) }} · ведётся в: {% for b in c.branches %}{{ branch_names.get(b, b) }}{% if not loop.last %}, {% endif %}{% endfor %} ·
   {{ label('provenance', pt.provenance) }} · источник: {{ label('source', pt.source) }} ·
   внесён {{ pt.entry_date.strftime('%d.%m.%Y') }}</p>
 
-{% if timeline_svg %}<section class="card"><h2>Таймлайн</h2>{{ timeline_svg|safe }}
+{% if timeline_svg %}<section class="card" id="s-timeline"><h2>Таймлайн</h2>{{ timeline_svg|safe }}
   <small>▲ прогрессия · △ рецидив · ◆ старт новой линии · ✕ смерть · точки — оценка ответа. Подробности — в таблицах ниже.</small></section>{% endif %}
 
-<section class="panels">
+<section class="panels" id="s-flags">
   <div class="panel {{ 'warn' if c.flags.completeness else 'ok' }}">
     <h2>Полнота ядра</h2>
     {% if c.flags.completeness %}<ul>{% for f in c.flags.completeness %}<li>{{ flag(f) }}</li>{% endfor %}</ul>
@@ -48,7 +62,7 @@
                       'plaque': 'бляшки', 'follicular': 'фолликулотропный', 'IgM': 'IgM', 'MIPI': 'MIPI'} %}
   {% for ix in c.indices %}
   <div class="panel">
-    <h2>{{ ix.name }}</h2>
+    <h2>{{ ix.name }} {% if index_help(ix.name) %}<span class="info" title="{{ index_help(ix.name) }}" aria-label="{{ index_help(ix.name) }}">ⓘ</span>{% endif %}</h2>
     {% if ix.stored %}
     <p>В карточке: {% if pt.index_name == ix.name %}<strong>{{ pt.index_score }}</strong> · {{ label('index_group', pt.index_group) }}{% else %}—{% endif %}{% if c.missing.index_score %} <span class="badge">{{ label('missing', c.missing.index_score) }}</span>{% endif %}</p>
     {% endif %}
@@ -68,7 +82,7 @@
   {% endfor %}
 </section>
 
-<section class="card">
+<section class="card" id="s-core">
   <h2>Ядро</h2>
   <dl class="facts">
     {% if pt.iin %}<dt>ИИН</dt><dd class="mono">{{ pt.iin }}</dd>{% endif %}
@@ -89,7 +103,7 @@
   {% if pt.histology_scan %}<p>Скан: <span class="mono">{{ pt.histology_scan }}</span></p>{% endif %}
 </section>
 
-<section class="card">
+<section class="card" id="s-dx">
   <h2>История диагноза</h2>
   <table class="grid">
     <thead><tr><th>Версия</th><th>ICD-O</th><th>МКБ</th><th>Дата диагноза</th><th>Причина пересмотра</th><th>Когда</th></tr></thead>
@@ -100,7 +114,7 @@
   </table>
 </section>
 
-<section class="card">
+<section class="card" id="s-markers">
   <h2>Маркеры и признаки модуля <small>{{ c.profile.name }}</small></h2>
   {% set field_names = {} %}{% for f in c.profile.fields %}{% set _ = field_names.update({f.key: f.label_ru}) %}{% endfor %}
   <table class="grid">
@@ -125,7 +139,7 @@
   {% endif %}
 </section>
 
-<section class="card">
+<section class="card" id="s-inv">
   <h2>Исследования <small>есть не у всех пациентов — добавляйте проведённые</small></h2>
   {% for kind in inv.KINDS %}
   {% set rows = c.inv[kind] %}
@@ -157,7 +171,7 @@
   {% endfor %}
 </section>
 
-<section class="card">
+<section class="card" id="s-lines">
   <h2>Линии терапии</h2>
   <table class="grid">
     <thead><tr><th>№</th><th>Режим</th><th>Препараты / доза</th><th>Циклов</th><th>Начало</th><th>Окончание</th><th>Дней</th><th>Причина окончания</th><th></th></tr></thead>
@@ -181,7 +195,7 @@
   {% endif %}
 </section>
 
-<section class="card">
+<section class="card" id="s-obs">
   <h2>Наблюдения: ответ, события, ПЭТ-КТ</h2>
   <table class="grid">
     <thead><tr><th>Дата</th><th>Линия</th><th>Ответ</th><th>Событие</th><th>ПЭТ-КТ</th><th>Данные</th><th></th></tr></thead>
@@ -209,7 +223,7 @@
   {% endif %}
 </section>
 
-<section class="card">
+<section class="card" id="s-labs">
   <h2>Лабораторные</h2>
   <table class="grid">
     <thead><tr><th>Дата</th><th>Показатель (LOINC)</th><th>Как введено</th><th>Каноническое</th><th></th></tr></thead>
@@ -232,4 +246,5 @@
   </details>
   {% endif %}
 </section>
+<a href="#top" class="to-top" aria-label="Наверх">↑ Наверх</a>
 {% endblock %}

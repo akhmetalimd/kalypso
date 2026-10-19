@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import registry_core as core
-from kalypso import admin, analytics, auth, charts, docgen, export, i18n, investigations, registry
+from kalypso import admin, analytics, auth, charts, docgen, export, i18n, indices, investigations, registry
 from kalypso.config import Settings
 from kalypso.db import Database
 from kalypso.rbac import AccessDenied, NotFound, Principal
@@ -77,7 +77,8 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
                        active_nodes=registry.active_nodes, missing_codes=registry.MISSING,
                        conditional_fields=registry.CONDITIONAL_FIELDS,
                        profile=registry.profile, indexes=core.INDEXES, dashboard_url=dashboard_url,
-                       nosology_groups=registry.nosology_groups, inv=investigations)
+                       nosology_groups=registry.nosology_groups, inv=investigations,
+                       index_help=indices.index_help)
     env.filters.update(d=_fmt_date, short=_short,
                        nosology=lambda node_id: (core.find_node(core.NOSOLOGY_TREE, node_id or "") or {}).get("name", node_id))
 
@@ -112,10 +113,17 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         token = request.cookies.get(COOKIE)
         ctx.update(p=p, csrf=auth.csrf_token(settings.session_secret, token) if token else "",
                    demo_mode=settings.demo_mode, demo_users=auth.demo_users(db) if settings.demo_mode and p else [],
+                   branch_names=_branch_names(),
                    current_path=request.url.path,
                    message=i18n.msg(request.query_params.get("m")),
                    warnings=[w for w in request.query_params.get("w", "").split(",") if w])
         return templates.TemplateResponse(request, name, ctx, status_code=status_code)
+
+    def _branch_names() -> dict[str, str]:
+        """Названия филиалов вместо кодов (synth_a -> «Синтетический филиал A»)."""
+        with db.tx() as cur:
+            cur.execute("SELECT branch_code, name_ru FROM branch")
+            return {r["branch_code"]: r["name_ru"] for r in cur.fetchall()}
 
     def back(url: str, m: str | None = None, warnings: list[str] | None = None) -> RedirectResponse:
         q = {}
@@ -302,7 +310,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             pid = registry.find_by_iin(db, p, form.get("iin", ""))
         except ValidationError as e:
             f = analytics.parse_filters({})
-            return render(request, "patients.html", p, 422, errors=e.errors, f=f, pl=_patient_page(request, p, f),
+            return render(request, "patients.html", p, 422, errors=e.errors, field_errors=e.fields, f=f, pl=_patient_page(request, p, f),
                           branches=admin.list_branches(db, p))
         if pid is None:
             return back("/patients", "not_found_iin")
@@ -328,7 +336,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             res = registry.register_patient(db, p, form)
         except ValidationError as e:
             form.pop("iin", None)  # ИИН в ответ не возвращаем — пользователь вводит заново
-            return render(request, "patient_form.html", p, 422, errors=e.errors, v=form,
+            return render(request, "patient_form.html", p, 422, errors=e.errors, field_errors=e.fields, v=form,
                           missing=_missing_from_form(form), is_new=True)
         if res.status == "exists_requested":
             return back("/patients", "exists_requested")
@@ -355,7 +363,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         try:
             res = registry.update_patient(db, p, pid_of(pid), form)
         except ValidationError as e:
-            return render(request, "patient_form.html", p, 422, errors=e.errors, v=form,
+            return render(request, "patient_form.html", p, 422, errors=e.errors, field_errors=e.fields, v=form,
                           missing=_missing_from_form(form), is_new=False, pid=pid)
         return back(f"/patients/{pid}", "saved", res.warnings)
 
@@ -387,7 +395,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             except ValidationError as e:
                 card = registry.get_card(db, p, pid_of(pid))
                 return render(request, "patient_card.html", p, 422, c=card, pt=card["patient"],
-                              errors=e.errors, open_form=path, v=form)
+                              errors=e.errors, field_errors=e.fields, open_form=path, v=form)
             return back(f"/patients/{pid}", "saved", res.warnings)
 
     _record_route("lines", registry.add_line)
@@ -439,7 +447,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             registry.soft_delete(db, p, pid_of(pid), kind, pid_of(rid))
         except ValidationError as e:
             card = registry.get_card(db, p, pid_of(pid))
-            return render(request, "patient_card.html", p, 422, c=card, pt=card["patient"], errors=e.errors)
+            return render(request, "patient_card.html", p, 422, c=card, pt=card["patient"], errors=e.errors, field_errors=e.fields)
         return back(f"/patients/{pid}", "deleted")
 
     # --- П3: дашборды и «Исследователь выживаемости» --------------------------
@@ -598,7 +606,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
             admin.create_user(db, p, form)
         except ValidationError as e:
             form.pop("password", None)
-            return render(request, "users.html", p, 422, errors=e.errors, v=form,
+            return render(request, "users.html", p, 422, errors=e.errors, field_errors=e.fields, v=form,
                           users=admin.list_users(db, p), branches=admin.list_branches(db, p))
         return back("/admin/users", "user_created")
 
@@ -609,7 +617,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         try:
             admin.set_active(db, p, pid_of(uid), form.get("active") == "1")
         except ValidationError as e:
-            return render(request, "users.html", p, 422, errors=e.errors,
+            return render(request, "users.html", p, 422, errors=e.errors, field_errors=e.fields,
                           users=admin.list_users(db, p), branches=admin.list_branches(db, p))
         return back("/admin/users", "saved")
 
@@ -620,7 +628,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         try:
             admin.reset_password(db, p, pid_of(uid), form.get("password", ""))
         except ValidationError as e:
-            return render(request, "users.html", p, 422, errors=e.errors,
+            return render(request, "users.html", p, 422, errors=e.errors, field_errors=e.fields,
                           users=admin.list_users(db, p), branches=admin.list_branches(db, p))
         return back("/admin/users", "saved")
 
@@ -631,7 +639,7 @@ def create_app(settings: Settings, db: Database | None = None) -> FastAPI:
         try:
             admin.create_branch(db, p, form)
         except ValidationError as e:
-            return render(request, "users.html", p, 422, errors=e.errors,
+            return render(request, "users.html", p, 422, errors=e.errors, field_errors=e.fields,
                           users=admin.list_users(db, p), branches=admin.list_branches(db, p))
         return back("/admin/users", "saved")
 

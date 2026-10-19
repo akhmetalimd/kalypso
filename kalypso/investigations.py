@@ -92,7 +92,7 @@ def row_from_form(f, kind: str) -> dict:
         "value": value, "unit": unit if value is not None else None,
         "markers": json.dumps(markers, ensure_ascii=False) if markers else None,
         "conclusion": f.free_text("conclusion", "Заключение") if f.raw("conclusion") else None,
-        "provenance": f.choice("provenance", "Ретро/проспектив", ("retrospective", "prospective"), required=True),
+        "provenance": f.choice("provenance", "Ретро/проспектив", ("retrospective", "prospective")),
     }
     if row["qual_detail"] and len(row["qual_detail"]) > 300:
         f.errors.append("Что именно: не длиннее 300 символов")
