@@ -29,7 +29,10 @@ KALYPSO (KAzakhstan LYmphoma Patients Survival and Outcomes) — пробная 
 6. **Два рубежа доступа.** Права проверяют сервисы (`config/roles.json`), и то же
    самое повторяет RLS в БД (миграция 0004). Новая клиническая таблица с `patient_id`
    получает такие же политики; функции, которым нужно видеть всё (проверки, дедупликация),
-   — SECURITY DEFINER и отдают минимум.
+   — SECURITY DEFINER и отдают минимум. Политика **чтения** — `patient_id IN (SELECT
+   app_visible_patient_ids())` (0019: список видимых считается один раз на запрос), а не
+   `app_patient_visible(patient_id)` на каждую строку — та в 7–8 раз медленнее на когорте.
+   Запись — `app_patient_writable(patient_id)`.
 7. **Аудит — на триггерах БД.** Приложение в каждой транзакции делает
    `SET LOCAL app.user_id = '<uuid>'` (и `app.change_reason` при пересмотре диагноза).
    `audit_log` и `diagnosis_version` неизменяемы.
@@ -70,7 +73,8 @@ KALYPSO (KAzakhstan LYmphoma Patients Survival and Outcomes) — пробная 
   0006 — чтение `schema_migrations` для `check`; 0007 — FLIPI; 0008 — sMIPI; 0009 — IPS;
   0010 — IPSS-WM и ответ IWWM-11; 0011 — MALT-IPI; 0012 — aaIPI; 0013 — BL-IPI; 0014 — IELSG, IPCG, МРТ;
   0015 — ответ ВКЛ; 0016 — стадирование ISCL/EORTC и ответ ISCL; 0017 — ответ T-LGLL;
-  0018 — исследования карточки (таблица `investigation`, RLS, аудит) и перенос вирусных полей модулей. Миграции не должны требовать суперпользователя:
+  0018 — исследования карточки (таблица `investigation`, RLS, аудит) и перенос вирусных полей модулей;
+  0019 — быстрые политики чтения RLS (`app_visible_patient_ids`, те же права). Миграции не должны требовать суперпользователя:
   их применяет владелец схемы (`tests/test_deploy.py` репетирует это на чистом кластере).
 - В БД хранятся **коды**, а не русские подписи (`alive`, `death`, `M`…). Подписи на
   русском/казахском — в слое локализации. Названия систем и критериев (`Rai`, `Binet`,
