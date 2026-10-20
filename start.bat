@@ -11,6 +11,8 @@ where py >nul 2>nul && set "PY=py -3"
 if not defined PY where python >nul 2>nul && set "PY=python"
 if not defined PY goto nopython
 %PY% -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)" || goto oldpython
+rem Встроенный PostgreSQL содержит глубокие пути: без «длинных путей» Windows папка проекта — до ~135 символов
+%PY% -c "import os,sys,ctypes;lp=getattr(ctypes.windll.ntdll,'RtlAreLongPathsEnabled',lambda:0)();sys.exit(1 if len(os.getcwd())>135 and not lp else 0)" || goto longpath
 
 echo [KALYPSO] Создаю окружение Python (.venv) и ставлю зависимости...
 if not exist ".venv\Scripts\python.exe" %PY% -m venv .venv || goto fail
@@ -32,6 +34,11 @@ echo [KALYPSO] Не найден Python. Установите Python 3.12+ с py
 goto end
 :oldpython
 echo [KALYPSO] Нужен Python 3.12 или новее.
+goto end
+:longpath
+echo [KALYPSO] Слишком длинный путь к папке проекта для Windows:
+echo   %CD%
+echo [KALYPSO] Переложите папку ближе к корню диска, например C:\kalypso, и запустите start.bat снова.
 goto end
 :fail
 echo [KALYPSO] Не удалось установить зависимости. Удалите папку .venv и запустите снова (нужен интернет).
