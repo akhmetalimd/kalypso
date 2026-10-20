@@ -82,6 +82,22 @@ def seed_if_empty(db: Database) -> dict | None:
     return summary or None
 
 
+def _start_postgres(pgserver, attempts: int = 6, pause: float = 10.0):
+    """После аварийной остановки PostgreSQL восстанавливается дольше таймаута pgserver (10 с):
+    pgserver бросает TimeoutExpired или AssertionError (сервер ещё «не готов») — ждём и пробуем снова."""
+    import time
+    for attempt in range(1, attempts + 1):
+        try:
+            srv = pgserver.get_server(DEVDIR / "pg", cleanup_mode="stop")
+            srv.get_uri()                       # тот же AssertionError, если сервер ещё не готов
+            return srv
+        except (subprocess.TimeoutExpired, AssertionError):
+            if attempt == attempts:
+                raise
+            print(f"PostgreSQL восстанавливается после аварийной остановки — повторная попытка {attempt + 1}/{attempts}…")
+            time.sleep(pause)
+
+
 def main() -> None:
     import pgserver
     import uvicorn
@@ -89,12 +105,7 @@ def main() -> None:
 
     DEVDIR.mkdir(exist_ok=True)
     sec = _dev_secrets()
-    try:
-        srv = pgserver.get_server(DEVDIR / "pg", cleanup_mode="stop")
-    except subprocess.TimeoutExpired:
-        # После аварийной остановки PostgreSQL восстанавливается дольше таймаута pgserver (10 с).
-        print("PostgreSQL восстанавливается после аварийной остановки — повторная попытка…")
-        srv = pgserver.get_server(DEVDIR / "pg", cleanup_mode="stop")
+    srv = _start_postgres(pgserver)
     with psycopg.connect(srv.get_uri(), autocommit=True) as con:
         if not con.execute("SELECT 1 FROM pg_database WHERE datname = 'kalypso_dev'").fetchone():
             con.execute("CREATE DATABASE kalypso_dev")
