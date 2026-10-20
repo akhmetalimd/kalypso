@@ -22,3 +22,7 @@ exports/
 # Развёртывание: сертификаты и секреты сервера
 deploy/certs/
 deploy/.env
+
+# Браузерная версия (в работе): пакеты npm и кэш сборки
+web-demo/node_modules/
+web-demo/.cache/

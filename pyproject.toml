@@ -31,4 +31,4 @@ py-modules = ["registry_core"]
 include = ["kalypso*"]
 
 [tool.setuptools.package-data]
-kalypso = ["locales/*.json", "web/templates/*.html", "web/static/*", "dev_seed.json"]
+kalypso = ["locales/*.json", "web/templates/*.html", "web/static/*", "web/static/img/*", "dev_seed.json"]
