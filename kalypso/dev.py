@@ -83,19 +83,33 @@ def seed_if_empty(db: Database) -> dict | None:
 
 
 def _start_postgres(pgserver, attempts: int = 6, pause: float = 10.0):
-    """После аварийной остановки PostgreSQL восстанавливается дольше таймаута pgserver (10 с):
-    pgserver бросает TimeoutExpired или AssertionError (сервер ещё «не готов») — ждём и пробуем снова."""
+    """После аварийной остановки PostgreSQL восстанавливается дольше таймаута pgserver (10 с;
+    на Windows антивирус ещё держит журнал до 30 с): pgserver бросает TimeoutExpired или
+    AssertionError (сервер ещё «не готов») — ждём и пробуем снова.
+
+    pgserver кладёт объект сервера в свой кэш (PostgresServer._instances) ещё до проверки запуска,
+    и get_server потом возвращает тот же неудачный объект — перед повтором его убираем из кэша."""
     import time
+    pgdata = (DEVDIR / "pg").resolve()
     for attempt in range(1, attempts + 1):
         try:
-            srv = pgserver.get_server(DEVDIR / "pg", cleanup_mode="stop")
+            srv = pgserver.get_server(pgdata, cleanup_mode="stop")
             srv.get_uri()                       # тот же AssertionError, если сервер ещё не готов
             return srv
         except (subprocess.TimeoutExpired, AssertionError):
+            _forget_server(pgserver, pgdata)
             if attempt == attempts:
                 raise
             print(f"PostgreSQL восстанавливается после аварийной остановки — повторная попытка {attempt + 1}/{attempts}…")
             time.sleep(pause)
+
+
+def _forget_server(pgserver, pgdata) -> None:
+    """Убирает неудачный объект сервера из кэша pgserver, чтобы следующая попытка проверила заново."""
+    cls = getattr(getattr(pgserver, "postgres_server", None), "PostgresServer", None)
+    cache = getattr(cls, "_instances", None)
+    if isinstance(cache, dict):
+        cache.pop(pgdata, None)
 
 
 def main() -> None:
